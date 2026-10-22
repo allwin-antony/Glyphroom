@@ -1,0 +1,59 @@
+{
+  "name": "@enterprise-blogger/shared",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./schema": {
+      "types": "./dist/schema/index.d.ts",
+      "import": "./dist/schema/index.js"
+    },
+    "./suggestion": {
+      "types": "./dist/suggestion/index.d.ts",
+      "import": "./dist/suggestion/index.js"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./dist/validation/index.js"
+    },
+    "./export": {
+      "types": "./dist/export/index.d.ts",
+      "import": "./dist/export/index.js"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./dist/types/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -b",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true }); try { fs.unlinkSync('tsconfig.tsbuildinfo'); } catch {}\""
+  },
+  "dependencies": {
+    "diff": "8.0.2",
+    "katex": "0.16.21",
+    "mermaid": "11.4.1",
+    "prosemirror-model": "1.24.1",
+    "prosemirror-state": "1.4.3",
+    "prosemirror-transform": "1.10.3",
+    "yjs": "13.6.33",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@types/jsdom": "21.1.7",
+    "@types/katex": "0.16.7",
+    "@types/node": "22.13.4",
+    "jsdom": "26.0.0",
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
+  }
+}

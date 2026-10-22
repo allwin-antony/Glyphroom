@@ -1,0 +1,16 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": "./",
+    "outDir": "./dist",
+    "noEmit": true
+  },
+  "references": [
+    { "path": "../packages/shared" },
+    { "path": "../apps/collab" },
+    { "path": "../apps/mcp-server" }
+  ],
+  "include": [
+    "**/*.ts"
+  ]
+}

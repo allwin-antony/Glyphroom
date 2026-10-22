@@ -1,0 +1,26 @@
+{
+  "name": "@enterprise-blogger/mcp-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true });\""
+  },
+  "dependencies": {
+    "@enterprise-blogger/shared": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.1",
+    "dotenv": "16.4.7",
+    "pino": "9.6.0",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.4",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3"
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@enterprise-blogger/collab",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -b",
+    "dev": "tsx src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true });\""
+  },
+  "dependencies": {
+    "@enterprise-blogger/shared": "workspace:*",
+    "@hocuspocus/extension-database": "4.7.1",
+    "@hocuspocus/extension-redis": "4.7.1",
+    "@hocuspocus/server": "4.7.1",
+    "dotenv": "16.4.7",
+    "fastify": "5.2.1",
+    "pg": "8.13.1",
+    "pino": "9.6.0",
+    "ws": "8.18.0",
+    "y-prosemirror": "1.3.7",
+    "y-protocols": "1.0.6",
+    "yjs": "13.6.33",
+    "zod": "3.24.2"
+  },
+  "devDependencies": {
+    "@types/node": "22.13.4",
+    "@types/pg": "8.11.11",
+    "@types/ws": "8.5.14",
+    "tsx": "4.19.2",
+    "typescript": "5.7.3"
+  }
+}
