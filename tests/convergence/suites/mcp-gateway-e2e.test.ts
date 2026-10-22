@@ -111,8 +111,8 @@ describe('Milestone M4 End-to-End: MCP Tool -> Agent Gateway -> Collab Server ->
 
     // Track live awareness state on the human editor side
     let observedAgentAwareness = false;
-    humanProvider.awareness.on('update', () => {
-      const states = Array.from(humanProvider.awareness.getStates().values());
+    humanProvider.awareness?.on('update', () => {
+      const states = Array.from(humanProvider.awareness?.getStates().values() || []);
       for (const s of states) {
         if (s?.user?.name === '[Agent: agent-devops-copilot]') {
           observedAgentAwareness = true;
