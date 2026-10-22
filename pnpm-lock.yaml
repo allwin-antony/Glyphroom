@@ -169,7 +169,6 @@ overrides:
   prosemirror-state: 1.4.3
   prosemirror-view: 1.38.1
   prosemirror-transform: 1.10.3
-  zod: 3.24.2
   ws: 8.18.0
 
 importers:
@@ -188,9 +187,6 @@ importers:
       '@hocuspocus/server':
         specifier: 4.7.1
         version: 4.7.1(y-protocols@1.0.6(yjs@13.6.33))(yjs@13.6.33)
-      '@modelcontextprotocol/sdk':
-        specifier: 1.32.1
-        version: 1.32.1(zod@3.24.2)
       '@tiptap/core':
         specifier: 3.32.0
         version: 3.32.0(@tiptap/pm@3.32.0)
@@ -288,6 +284,9 @@ importers:
       '@hocuspocus/extension-redis':
         specifier: 4.7.1
         version: 4.7.1(y-protocols@1.0.6(yjs@13.6.33))(yjs@13.6.33)
+      '@hocuspocus/provider':
+        specifier: 4.7.1
+        version: 4.7.1(y-protocols@1.0.6(yjs@13.6.33))(yjs@13.6.33)
       '@hocuspocus/server':
         specifier: 4.7.1
         version: 4.7.1(y-protocols@1.0.6(yjs@13.6.33))(yjs@13.6.33)
@@ -319,9 +318,6 @@ importers:
         specifier: 3.24.2
         version: 3.24.2
     devDependencies:
-      '@hocuspocus/provider':
-        specifier: 4.7.1
-        version: 4.7.1(y-protocols@1.0.6(yjs@13.6.33))(yjs@13.6.33)
       '@types/node':
         specifier: 22.13.4
         version: 22.13.4
@@ -351,7 +347,7 @@ importers:
         version: link:../../packages/shared
       '@modelcontextprotocol/sdk':
         specifier: 1.32.1
-        version: 1.32.1(zod@3.24.2)
+        version: 1.32.1(zod@4.6.7)
       dotenv:
         specifier: 16.4.7
         version: 16.4.7
@@ -359,8 +355,8 @@ importers:
         specifier: 9.6.0
         version: 9.6.0
       zod:
-        specifier: 3.24.2
-        version: 3.24.2
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@types/node':
         specifier: 22.13.4
@@ -371,6 +367,9 @@ importers:
       typescript:
         specifier: 5.7.3
         version: 5.7.3
+      vitest:
+        specifier: 3.0.5
+        version: 3.0.5(@types/node@22.13.4)(jsdom@26.0.0)(tsx@4.19.2)
 
   packages/shared:
     dependencies:
@@ -922,7 +921,7 @@ packages:
     engines: {node: '>=18'}
     peerDependencies:
       '@cfworker/json-schema': ^4.1.1
-      zod: 3.24.2
+      zod: ^3.25 || ^4.0
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
@@ -2742,10 +2741,13 @@ packages:
   zod-to-json-schema@3.25.2:
     resolution: {integrity: sha512-O/PgfnpT1xKSDeQYSCfRI5Gy3hPf91mKVDuYLUHZJMiDFptvP41MSnWofm8dnCm0256ZNfZIM7DSzuSMAFnjHA==}
     peerDependencies:
-      zod: 3.24.2
+      zod: ^3.25.28 || ^4
 
   zod@3.24.2:
     resolution: {integrity: sha512-lY7CDW43ECgW9u1TcT3IoXHflywfVqDYze4waEz812jR/bZ8FHDsl7pFQoSZTz5N+2NqRXs8GBwnAwo3ZNxqhQ==}
+
+  zod@4.6.7:
+    resolution: {integrity: sha512-g8W2D2kU6a8untc053fX1uVBKzM7yqAxW/3zwk83+6RyF2+SKOuV+c0wBDhUwzV1PaGapmZH+rmcUzPf+3CGwg==}
 
 snapshots:
 
@@ -3052,7 +3054,7 @@ snapshots:
     dependencies:
       langium: 3.0.0
 
-  '@modelcontextprotocol/sdk@1.32.1(zod@3.24.2)':
+  '@modelcontextprotocol/sdk@1.32.1(zod@4.6.7)':
     dependencies:
       '@hono/node-server': 2.1.5(hono@4.13.13)
       ajv: 8.20.0
@@ -3069,8 +3071,8 @@ snapshots:
       json-schema-typed: 8.0.2
       pkce-challenge: 5.0.1
       raw-body: 3.0.2
-      zod: 3.24.2
-      zod-to-json-schema: 3.25.2(zod@3.24.2)
+      zod: 4.6.7
+      zod-to-json-schema: 3.25.2(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
 
@@ -4965,8 +4967,10 @@ snapshots:
     dependencies:
       lib0: 0.2.119
 
-  zod-to-json-schema@3.25.2(zod@3.24.2):
+  zod-to-json-schema@3.25.2(zod@4.6.7):
     dependencies:
-      zod: 3.24.2
+      zod: 4.6.7
 
   zod@3.24.2: {}
+
+  zod@4.6.7: {}

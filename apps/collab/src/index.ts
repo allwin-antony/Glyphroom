@@ -5,6 +5,7 @@ import { InMemoryPersistenceAdapter } from './persistence/in-memory.js';
 export * from './server.js';
 export * from './persistence/index.js';
 export * from './auth/index.js';
+export * from './gateway/index.js';
 
 export const COLLAB_APP_NAME = 'enterprise-blogger-collab';
 

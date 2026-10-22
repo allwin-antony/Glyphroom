@@ -6,6 +6,7 @@ import type { DocumentPersistenceAdapter } from './persistence/adapter.js';
 import { InMemoryPersistenceAdapter } from './persistence/in-memory.js';
 import { PostgresPersistenceAdapter } from './persistence/postgres.js';
 import { createAuthHooks, type CollabAuthOptions } from './auth/hooks.js';
+import { registerAgentGatewayRoutes } from './gateway/routes.js';
 
 export interface CollabServerOptions {
   port?: number;
@@ -13,6 +14,7 @@ export interface CollabServerOptions {
   adapter?: DocumentPersistenceAdapter;
   redisUrl?: string;
   authOptions?: CollabAuthOptions;
+  gatewaySecret?: string;
   debounceMs?: number;
   maxDebounceMs?: number;
   quiet?: boolean;
@@ -87,6 +89,11 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
   app.get('/health', async (_req, reply) => reply.redirect('/healthz'));
   app.get('/readyz', async (_req, reply) => reply.redirect('/healthz'));
 
+  let serverInstance: Server | null = null;
+  registerAgentGatewayRoutes(app, () => serverInstance, {
+    gatewaySecret: options.gatewaySecret,
+  });
+
   await app.ready();
 
   // 2. Configure Hocuspocus Extensions
@@ -142,6 +149,7 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
   };
 
   const server = new Server(serverConfig);
+  serverInstance = server;
 
   let destroyed = false;
   const destroy = async () => {

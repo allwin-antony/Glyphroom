@@ -51,12 +51,20 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
 
   async fetch(documentName: string): Promise<Uint8Array | null> {
     const id = this.normalizeDocId(documentName);
-    const query = `
-      SELECT yjs_state
-      FROM ${this.tableName}
-      WHERE id::text = $1 OR slug = $1 OR slug = $2
-      LIMIT 1
-    `;
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+    const query = isUuid
+      ? `
+        SELECT yjs_state
+        FROM ${this.tableName}
+        WHERE id = $1::uuid OR slug = $2
+        LIMIT 1
+      `
+      : `
+        SELECT yjs_state
+        FROM ${this.tableName}
+        WHERE slug = $1 OR slug = $2
+        LIMIT 1
+      `;
     const result = await this.pool.query<{ yjs_state: Buffer | Uint8Array | null }>(query, [id, documentName]);
 
     if (result.rows.length === 0 || !result.rows[0].yjs_state) {
@@ -85,19 +93,28 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
       }
     }
 
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
     // 1. Try to update existing record matching id or slug
-    const updateSql = `
-      UPDATE ${this.tableName}
-      SET yjs_state = decode($1, 'hex'),
-          working_markdown = COALESCE($2, working_markdown),
-          updated_at = NOW()
-      WHERE id::text = $3 OR slug = $3 OR slug = $4
-    `;
+    const updateSql = isUuid
+      ? `
+        UPDATE ${this.tableName}
+        SET yjs_state = decode($1, 'hex'),
+            working_markdown = COALESCE($2, working_markdown),
+            updated_at = NOW()
+        WHERE id = $3::uuid OR slug = $4
+      `
+      : `
+        UPDATE ${this.tableName}
+        SET yjs_state = decode($1, 'hex'),
+            working_markdown = COALESCE($2, working_markdown),
+            updated_at = NOW()
+        WHERE slug = $3 OR slug = $4
+      `;
     const updateRes = await this.pool.query(updateSql, [hex, workingMarkdown, id, documentName]);
 
     // 2. If no record was updated, auto-insert for development/test seeding
     if (updateRes.rowCount === 0) {
-      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
       const rowId = isUuid ? id : randomUUID();
 
       try {

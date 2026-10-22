@@ -7,6 +7,7 @@
   "types": "./dist/index.d.ts",
   "scripts": {
     "build": "tsc -b",
+    "test": "vitest run",
     "dev": "tsx src/index.ts",
     "typecheck": "tsc --noEmit",
     "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true });\""
@@ -16,11 +17,12 @@
     "@modelcontextprotocol/sdk": "1.32.1",
     "dotenv": "16.4.7",
     "pino": "9.6.0",
-    "zod": "3.24.2"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/node": "22.13.4",
     "tsx": "4.19.2",
-    "typescript": "5.7.3"
+    "typescript": "5.7.3",
+    "vitest": "3.0.5"
   }
 }

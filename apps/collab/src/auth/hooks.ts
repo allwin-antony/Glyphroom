@@ -70,7 +70,9 @@ export function createAuthHooks(options: CollabAuthOptions = {}) {
       }
 
       // 4. Enforce read-only access for readers and reviewers
-      if (
+      if (user.role !== 'reader' && user.permissions.includes('edit')) {
+        data.connectionConfig.readOnly = false;
+      } else if (
         user.role === 'reader' ||
         user.permissions.includes('view') ||
         user.permissions.includes('review')

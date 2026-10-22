@@ -16,6 +16,7 @@
     "@enterprise-blogger/shared": "workspace:*",
     "@hocuspocus/extension-database": "4.7.1",
     "@hocuspocus/extension-redis": "4.7.1",
+    "@hocuspocus/provider": "4.7.1",
     "@hocuspocus/server": "4.7.1",
     "dotenv": "16.4.7",
     "fastify": "5.2.1",
@@ -28,7 +29,6 @@
     "zod": "3.24.2"
   },
   "devDependencies": {
-    "@hocuspocus/provider": "4.7.1",
     "@types/node": "22.13.4",
     "@types/pg": "8.11.11",
     "@types/ws": "8.5.14",

@@ -10,7 +10,6 @@ overrides:
   prosemirror-state: 1.4.3
   prosemirror-view: 1.38.1
   prosemirror-transform: 1.10.3
-  zod: 3.24.2
   ws: 8.18.0
 
 allowBuilds:
