@@ -1,0 +1,175 @@
+# Enterprise Blogger 2.0 — Production Docker Compose
+# Turnkey, 100% self-contained deployment topology.
+# Requires ONLY Docker Engine and Docker Compose on the host Linux VM.
+#
+# Usage:
+#   docker compose -f docker-compose.prod.yml up -d --build
+# Or via automated turnkey launch script:
+#   ./scripts/deploy.sh
+
+name: enterprise-blogger
+
+services:
+  # =========================================================================
+  # 1. PostgreSQL 16 (Relational & Yjs Binary CRDT Storage)
+  # =========================================================================
+  postgres:
+    image: postgres:16-alpine
+    container_name: enterprise-blogger-postgres
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-enterprise_blogger}
+      POSTGRES_USER: ${POSTGRES_USER:-blogger}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blogger_secure_password_2026}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/01-init-schema.sql:ro
+    ports:
+      - "${POSTGRES_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-blogger} -d ${POSTGRES_DB:-enterprise_blogger}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - blogger_network
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 256M
+
+  # =========================================================================
+  # 2. Collaboration Engine (Hocuspocus + standard ws + Agent Gateway)
+  # =========================================================================
+  collab:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.collab
+    image: enterprise-blogger-collab:latest
+    container_name: enterprise-blogger-collab
+    restart: always
+    environment:
+      PORT: 4000
+      HOST: 0.0.0.0
+      DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-enterprise_blogger}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,https://blog.corp.internal}
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-blogger_gateway_secret_key_32bytes}
+      COLLAB_GATEWAY_SECRET: ${GATEWAY_SECRET:-blogger_gateway_secret_key_32bytes}
+      FLUSH_DEBOUNCE_MS: ${FLUSH_DEBOUNCE_MS:-3000}
+      FLUSH_MAX_DEBOUNCE_MS: ${FLUSH_MAX_DEBOUNCE_MS:-10000}
+      REDIS_URL: ${REDIS_URL:-}
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${COLLAB_PORT:-4000}:4000"
+    volumes:
+      - logs_data:/app/logs
+      - attachments_data:/app/attachments
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - blogger_network
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 256M
+
+  # =========================================================================
+  # 3. Model Context Protocol Server (MCP Interface)
+  # =========================================================================
+  mcp-server:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.mcp
+    image: enterprise-blogger-mcp-server:latest
+    container_name: enterprise-blogger-mcp-server
+    restart: always
+    environment:
+      PORT: 5000
+      HOST: 0.0.0.0
+      AGENT_GATEWAY_URL: http://collab:4000/internal/agent-gateway/edit
+      GATEWAY_SECRET: ${GATEWAY_SECRET:-blogger_gateway_secret_key_32bytes}
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${MCP_PORT:-5000}:5000"
+    volumes:
+      - logs_data:/app/logs
+    depends_on:
+      collab:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:5000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - blogger_network
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+
+  # =========================================================================
+  # 4. Optional: Redis Pub/Sub (for horizontal multi-node collab clustering)
+  # Activated via: docker compose -f docker-compose.prod.yml --profile cluster up -d
+  # =========================================================================
+  redis:
+    image: redis:7-alpine
+    container_name: enterprise-blogger-redis
+    restart: always
+    command: redis-server --appendonly yes
+    profiles:
+      - cluster
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - blogger_network
+
+# ===========================================================================
+# Persistent Storage Volumes
+# Mapped cleanly to survive container rebuilds, upgrades, and host restarts
+# ===========================================================================
+volumes:
+  postgres_data:
+    name: enterprise_blogger_postgres_data
+    driver: local
+  attachments_data:
+    name: enterprise_blogger_attachments_data
+    driver: local
+  logs_data:
+    name: enterprise_blogger_logs_data
+    driver: local
+  redis_data:
+    name: enterprise_blogger_redis_data
+    driver: local
+
+# ===========================================================================
+# Internal Isolated Network
+# Prevents exposing unauthenticated internal endpoints to external networks
+# ===========================================================================
+networks:
+  blogger_network:
+    name: enterprise_blogger_network
+    driver: bridge

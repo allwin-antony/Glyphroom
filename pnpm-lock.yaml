@@ -319,6 +319,9 @@ importers:
         specifier: 3.24.2
         version: 3.24.2
     devDependencies:
+      '@hocuspocus/provider':
+        specifier: 4.7.1
+        version: 4.7.1(y-protocols@1.0.6(yjs@13.6.33))(yjs@13.6.33)
       '@types/node':
         specifier: 22.13.4
         version: 22.13.4
@@ -328,12 +331,18 @@ importers:
       '@types/ws':
         specifier: 8.5.14
         version: 8.5.14
+      pg-mem:
+        specifier: 3.0.5
+        version: 3.0.5
       tsx:
         specifier: 4.19.2
         version: 4.19.2
       typescript:
         specifier: 5.7.3
         version: 5.7.3
+      vitest:
+        specifier: 3.0.5
+        version: 3.0.5(@types/node@22.13.4)(jsdom@26.0.0)(tsx@4.19.2)
 
   apps/mcp-server:
     dependencies:

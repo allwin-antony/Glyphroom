@@ -80,8 +80,8 @@ Enterprise_Blogger/
 | # | Name | Scope | Dependencies | Status |
 |---|------|-------|-------------|--------|
 | M1 | Monorepo Foundation & Shared Schemas | pnpm monorepo setup, packages/shared, ProseMirror schemas, marks, Zod contracts, license verification | none | DONE |
-| M2 | Suggestion-Mode Engine & Export Rules | Suggestion operations (diff/additive), accept/reject, typing collision, UndoManager filter, Markdown export serializer | M1 | IN_PROGRESS |
-| M3 | Hocuspocus Collab Server & Persistence | Hocuspocus server (standard ws), PostgreSQL bytea snapshot persistence hook, pg-mem test harness, auth hooks, turnkey Docker Compose prod setup (docker-compose.prod.yml, ./scripts/deploy.sh, .env.example, migrations, volumes) | M1 | PLANNED |
+| M2 | Suggestion-Mode Engine & Export Rules | Suggestion operations (diff/additive), accept/reject, typing collision, UndoManager filter, Markdown export serializer | M1 | DONE |
+| M3 | Hocuspocus Collab Server & Persistence | Hocuspocus server (standard ws), PostgreSQL bytea snapshot persistence hook, pg-mem test harness, auth hooks, turnkey Docker Compose prod setup (docker-compose.prod.yml, ./scripts/deploy.sh, .env.example, migrations, volumes) | M1 | DONE |
 | M4 | In-Process Agent Gateway & MCP Server | Fastify Agent Gateway endpoint, openDirectConnection in-process write path, awareness broadcast, MCP server | M2, M3 | PLANNED |
 | M5 | Final Milestone: E2E Integration, Convergence & Hardening | Full system integration, 10,000-op convergence test, schema round-trip tests, typing collision, undo isolation, Tier 5 adversarial hardening | M4, TEST_READY.md | PLANNED |
 
