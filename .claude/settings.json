@@ -1,0 +1,26 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Grep",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/santo/AppData/Roaming/uv/tools/graphifyy/Scripts/graphify.exe hook-guard search",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "C:/Users/santo/AppData/Roaming/uv/tools/graphifyy/Scripts/graphify.exe hook-guard read",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

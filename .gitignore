@@ -3,6 +3,7 @@ legacy_docs/
 
 # AI & Agent artifacts
 .agents/
+graphify-out/
 
 # Dependencies
 node_modules/

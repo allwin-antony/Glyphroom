@@ -1,6 +1,7 @@
 import { Node as ProseMirrorNode } from 'prosemirror-model';
 import { MARK_SUGGESTION_INSERT, MARK_SUGGESTION_DELETE } from '../schema/marks/constants.js';
-import { ProseMirrorNodeJSON } from '../schema/json.js';
+import { ProseMirrorNodeJSON, nodeFromJSON } from '../schema/json.js';
+import { blogSchema } from '../schema/index.js';
 
 /**
  * Derives a clean Markdown representation of a document for public reader view,
@@ -12,13 +13,22 @@ import { ProseMirrorNodeJSON } from '../schema/json.js';
  * - Accepted insertions: RETAINED as normal text.
  * - Accepted deletions: DROPPED (already deleted).
  * - Standard marks (strong, em, link, code) are serialized to markdown equivalents.
+ * - Raw JSON inputs are normalized via nodeFromJSON(blogSchema, input) for uniform AST handling.
+ * - Blocks containing only pending insertions export cleanly as empty without dangling syntax prefixes.
  */
 export function exportDerivedMarkdown(input: ProseMirrorNode | ProseMirrorNodeJSON): string {
-  // If it's a ProseMirror Node, convert to JSON for uniform handling or walk directly
+  if (!input || typeof input !== 'object') {
+    return '';
+  }
   if (input instanceof ProseMirrorNode) {
     return serializeNodeToMarkdown(input);
   }
-  return serializeJsonToMarkdown(input);
+  try {
+    const node = nodeFromJSON(blogSchema, input);
+    return serializeNodeToMarkdown(node);
+  } catch {
+    return serializeJsonToMarkdown(input);
+  }
 }
 
 function serializeNodeToMarkdown(node: ProseMirrorNode): string {
@@ -47,11 +57,17 @@ function serializeNodeToMarkdown(node: ProseMirrorNode): string {
       node.forEach((child) => {
         content += serializeInlineNode(child);
       });
+      if (!content.trim()) {
+        return '';
+      }
       return prefix + content;
     }
 
     case 'blockquote': {
       const inner = serializeBlockChildren(node);
+      if (!inner.trim()) {
+        return '';
+      }
       return inner
         .split('\n')
         .map((line) => `> ${line}`)
@@ -59,8 +75,11 @@ function serializeNodeToMarkdown(node: ProseMirrorNode): string {
     }
 
     case 'callout_alert': {
-      const type = node.attrs.alertType || 'NOTE';
       const inner = serializeBlockChildren(node);
+      if (!inner.trim()) {
+        return '';
+      }
+      const type = node.attrs.alertType || 'NOTE';
       const header = `> [!${type}]`;
       const body = inner
         ? '\n' +
@@ -88,7 +107,8 @@ function serializeNodeToMarkdown(node: ProseMirrorNode): string {
     case 'bullet_list': {
       const items: string[] = [];
       node.forEach((child) => {
-        items.push(serializeListItem(child, '- '));
+        const item = serializeListItem(child, '- ');
+        if (item) items.push(item);
       });
       return items.join('\n');
     }
@@ -98,8 +118,11 @@ function serializeNodeToMarkdown(node: ProseMirrorNode): string {
       const start = node.attrs.order || 1;
       let idx = start;
       node.forEach((child) => {
-        items.push(serializeListItem(child, `${idx}. `));
-        idx++;
+        const item = serializeListItem(child, `${idx}. `);
+        if (item) {
+          items.push(item);
+          idx++;
+        }
       });
       return items.join('\n');
     }
@@ -129,24 +152,18 @@ function serializeBlockChildren(node: ProseMirrorNode): string {
 function serializeListItem(itemNode: ProseMirrorNode, prefix: string): string {
   const parts: string[] = [];
   itemNode.forEach((child) => {
-    parts.push(serializeNodeToMarkdown(child));
+    const text = serializeNodeToMarkdown(child);
+    if (text) parts.push(text);
   });
   const content = parts.join('\n');
+  if (!content.trim()) {
+    return '';
+  }
   return prefix + content;
 }
 
 function serializeInlineNode(node: ProseMirrorNode): string {
-  if (node.type.name === 'math_inline') {
-    return `$${node.attrs.tex || ''}$`;
-  }
-
-  if (!node.isText) {
-    return '';
-  }
-
-  let text = node.text || '';
-
-  // Inspect marks for suggestion rules
+  // Inspect marks for suggestion rules (applies to both text and math_inline)
   for (const mark of node.marks) {
     if (mark.type.name === MARK_SUGGESTION_INSERT) {
       const status = mark.attrs.status || 'pending';
@@ -167,6 +184,19 @@ function serializeInlineNode(node: ProseMirrorNode): string {
         return '';
       }
     }
+  }
+
+  if (node.type.name === 'math_inline') {
+    return `$${node.attrs.tex || ''}$`;
+  }
+
+  if (!node.isText) {
+    return '';
+  }
+
+  let text = node.text || '';
+  if (!text) {
+    return '';
   }
 
   // Apply standard markdown marks
@@ -218,6 +248,9 @@ function serializeTableNode(tableNode: ProseMirrorNode): string {
 
 // Fallback JSON-based serializer
 function serializeJsonToMarkdown(json: ProseMirrorNodeJSON): string {
+  if (!json || typeof json !== 'object') {
+    return '';
+  }
   if (json.type === 'doc' && json.content) {
     return json.content.map(serializeJsonToMarkdown).filter(Boolean).join('\n\n');
   }
@@ -226,7 +259,21 @@ function serializeJsonToMarkdown(json: ProseMirrorNodeJSON): string {
   }
   if (json.type === 'heading' && json.content) {
     const level = json.attrs?.level || 1;
-    return '#'.repeat(level) + ' ' + json.content.map(serializeJsonInline).join('');
+    const content = json.content.map(serializeJsonInline).join('');
+    if (!content.trim()) {
+      return '';
+    }
+    return '#'.repeat(level) + ' ' + content;
+  }
+  if (json.type === 'blockquote' && json.content) {
+    const inner = json.content.map(serializeJsonToMarkdown).filter(Boolean).join('\n\n');
+    if (!inner.trim()) {
+      return '';
+    }
+    return inner
+      .split('\n')
+      .map((line) => `> ${line}`)
+      .join('\n');
   }
   if (json.type === 'code_block') {
     const lang = json.attrs?.language || '';
@@ -237,10 +284,9 @@ function serializeJsonToMarkdown(json: ProseMirrorNodeJSON): string {
 }
 
 function serializeJsonInline(child: ProseMirrorNodeJSON): string {
-  if (child.type === 'math_inline') {
-    return `$${child.attrs?.tex || ''}$`;
+  if (!child || typeof child !== 'object') {
+    return '';
   }
-  let text = child.text || '';
   const marks = child.marks || [];
 
   for (const mark of marks) {
@@ -256,6 +302,15 @@ function serializeJsonInline(child: ProseMirrorNodeJSON): string {
         return '';
       }
     }
+  }
+
+  if (child.type === 'math_inline') {
+    return `$${child.attrs?.tex || ''}$`;
+  }
+
+  let text = child.text || '';
+  if (!text) {
+    return '';
   }
 
   for (const mark of marks) {
