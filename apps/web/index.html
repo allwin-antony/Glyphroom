@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Enterprise Blogger 2.0</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.21/dist/katex.min.css" />
+    <style>
+      body {
+        margin: 0;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        background: #f8fafc;
+        color: #0f172a;
+      }
+      .ProseMirror {
+        outline: none;
+        min-height: 400px;
+        font-size: 16px;
+        line-height: 1.6;
+      }
+      .ProseMirror p {
+        margin: 0.75em 0;
+      }
+      .suggestion-insert {
+        background-color: rgba(34, 197, 94, 0.15);
+        color: #15803d;
+        border-bottom: 2px solid #22c55e;
+        border-radius: 2px;
+        padding: 1px 2px;
+      }
+      .suggestion-delete {
+        background-color: rgba(239, 68, 68, 0.15);
+        color: #b91c1c;
+        text-decoration: line-through;
+        border-radius: 2px;
+        padding: 1px 2px;
+        opacity: 0.75;
+      }
+      .enterprise-alert {
+        border-left: 4px solid;
+        padding: 12px 16px;
+        margin: 16px 0;
+        border-radius: 0 4px 4px 0;
+        background: #f1f5f9;
+      }
+      .enterprise-alert-note { border-color: #3b82f6; background: #eff6ff; }
+      .enterprise-alert-tip { border-color: #10b981; background: #ecfdf5; }
+      .enterprise-alert-important { border-color: #8b5cf6; background: #f5f3ff; }
+      .enterprise-alert-warning { border-color: #f59e0b; background: #fffbeb; }
+      .enterprise-alert-caution { border-color: #ef4444; background: #fef2f2; }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

@@ -10,6 +10,7 @@
     "test": "pnpm --filter @enterprise-blogger/shared test",
     "test:shared": "pnpm --filter @enterprise-blogger/shared test",
     "test:api": "pnpm --filter @enterprise-blogger/api test",
+    "test:web": "pnpm --filter @enterprise-blogger/web test",
     "test:collab": "pnpm --filter @enterprise-blogger/collab test",
     "test:mcp": "pnpm --filter @enterprise-blogger/mcp-server test",
     "test:tests": "pnpm --filter @enterprise-blogger/tests test",
