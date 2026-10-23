@@ -164,6 +164,7 @@ verify_health() {
     local RETRY_COUNT=0
     local COLLAB_HEALTHY=false
     local MCP_HEALTHY=false
+    local API_HEALTHY=false
 
     while [ ${RETRY_COUNT} -lt ${MAX_RETRIES} ]; do
         RETRY_COUNT=$((RETRY_COUNT + 1))
@@ -176,6 +177,14 @@ verify_health() {
             fi
         fi
 
+        # Check API /health
+        if ! ${API_HEALTHY}; then
+            if curl -fs "http://127.0.0.1:4001/health" > /dev/null 2>&1; then
+                API_HEALTHY=true
+                log_success "REST API Engine is healthy (port 4001)."
+            fi
+        fi
+
         # Check MCP /healthz
         if ! ${MCP_HEALTHY}; then
             if curl -fs "http://127.0.0.1:5000/healthz" > /dev/null 2>&1; then
@@ -184,7 +193,7 @@ verify_health() {
             fi
         fi
 
-        if ${COLLAB_HEALTHY} && ${MCP_HEALTHY}; then
+        if ${COLLAB_HEALTHY} && ${API_HEALTHY} && ${MCP_HEALTHY}; then
             break
         fi
 
@@ -193,7 +202,7 @@ verify_health() {
     done
     echo ""
 
-    if ! ${COLLAB_HEALTHY} || ! ${MCP_HEALTHY}; then
+    if ! ${COLLAB_HEALTHY} || ! ${API_HEALTHY} || ! ${MCP_HEALTHY}; then
         log_error "Health checks timed out after 60 seconds."
         log_warn "Recent container logs:"
         ${COMPOSE_CMD} -f "${COMPOSE_FILE}" logs --tail=40
@@ -213,6 +222,8 @@ show_summary() {
     echo -e "  ${BOLD}Collaboration WebSocket:${NC}  ws://127.0.0.1:4000"
     echo -e "  ${BOLD}Collab HTTP Gateway:${NC}      http://127.0.0.1:4000"
     echo -e "  ${BOLD}Collab Healthcheck:${NC}       http://127.0.0.1:4000/healthz"
+    echo -e "  ${BOLD}REST API Engine:${NC}          http://127.0.0.1:4001"
+    echo -e "  ${BOLD}API Healthcheck:${NC}          http://127.0.0.1:4001/health"
     echo -e "  ${BOLD}MCP Agent Server:${NC}         http://127.0.0.1:5000"
     echo -e "  ${BOLD}MCP Healthcheck:${NC}          http://127.0.0.1:5000/healthz"
     echo -e "  ${BOLD}PostgreSQL 16:${NC}            127.0.0.1:5432 (Internal)"

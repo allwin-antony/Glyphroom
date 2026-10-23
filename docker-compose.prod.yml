@@ -43,7 +43,49 @@ services:
           memory: 256M
 
   # =========================================================================
-  # 2. Collaboration Engine (Hocuspocus + standard ws + Agent Gateway)
+  # 2. REST API & Identity Engine (Fastify + Drizzle ORM + OIDC/SAML SSO)
+  # =========================================================================
+  api:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.api
+    image: enterprise-blogger-api:latest
+    container_name: enterprise-blogger-api
+    restart: always
+    environment:
+      PORT: 4001
+      API_PORT: 4001
+      HOST: 0.0.0.0
+      API_HOST: 0.0.0.0
+      DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-enterprise_blogger}
+      SESSION_SECRET: ${SESSION_SECRET:-blogger_session_secret_key_32bytes_min}
+      COOKIE_SECRET: ${COOKIE_SECRET:-blogger_cookie_secret_key_32bytes_min}
+      NODE_ENV: production
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    ports:
+      - "${API_PORT:-4001}:4001"
+    volumes:
+      - logs_data:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4001/health').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    networks:
+      - blogger_network
+    deploy:
+      resources:
+        limits:
+          memory: 1024M
+        reservations:
+          memory: 256M
+
+  # =========================================================================
+  # 3. Collaboration Engine (Hocuspocus + standard ws + Agent Gateway)
   # =========================================================================
   collab:
     build:
