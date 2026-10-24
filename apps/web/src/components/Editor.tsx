@@ -42,35 +42,9 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   const [activeSuggestion, setActiveSuggestion] = useState<ActiveSuggestionInfo | null>(null);
   const [allSuggestions, setAllSuggestions] = useState<ActiveSuggestionInfo[]>([]);
 
-  const editor = useEditor({
-    extensions: [
-      StarterKit,
-      SuggestionInsert,
-      SuggestionDelete,
-      Alert,
-      Collaboration.configure({
-        fragment,
-        provider,
-        user,
-      }),
-    ],
-    editorProps: {
-      attributes: {
-        class: 'enterprise-editor-content',
-        style: 'outline: none; padding: 24px; min-height: 500px;',
-      },
-    },
-    onUpdate: ({ editor }) => {
-      onDocChange?.(editor.getJSON());
-      scanSuggestions(editor);
-    },
-    onSelectionUpdate: ({ editor }) => {
-      detectActiveSuggestion(editor);
-    },
-  });
-
   // Detect if cursor is currently within a suggestion mark
-  const detectActiveSuggestion = (ed: any) => {
+  const detectActiveSuggestion = useCallback((ed: any) => {
+    if (!ed || !ed.state) return;
     const { from, to } = ed.state.selection;
     let found: ActiveSuggestionInfo | null = null;
 
@@ -107,10 +81,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     });
 
     setActiveSuggestion(found);
-  };
+  }, []);
 
   // Collect all suggestions across the entire document
   const scanSuggestions = useCallback((ed: any) => {
+    if (!ed || !ed.state) return;
     const list: ActiveSuggestionInfo[] = [];
 
     ed.state.doc.descendants((node: any, pos: number) => {
@@ -148,6 +123,33 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
     setAllSuggestions(list);
   }, []);
+
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      SuggestionInsert,
+      SuggestionDelete,
+      Alert,
+      Collaboration.configure({
+        fragment,
+        provider,
+        user,
+      }),
+    ],
+    editorProps: {
+      attributes: {
+        class: 'enterprise-editor-content',
+        style: 'outline: none; padding: 24px; min-height: 500px;',
+      },
+    },
+    onUpdate: ({ editor }) => {
+      onDocChange?.(editor.getJSON());
+      scanSuggestions(editor);
+    },
+    onSelectionUpdate: ({ editor }) => {
+      detectActiveSuggestion(editor);
+    },
+  });
 
   useEffect(() => {
     if (editor) {
