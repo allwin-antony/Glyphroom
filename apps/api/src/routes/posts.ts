@@ -1,11 +1,12 @@
 import type { FastifyPluginAsync } from 'fastify';
+import fs from 'fs';
 import { z } from 'zod';
-import { eq, and, desc, or } from 'drizzle-orm';
+import { eq, and, desc, or, ne } from 'drizzle-orm';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
 import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
 import type { Database } from '../db/index.js';
-import { posts, postViewCounts, postVersions, users, centersOfExcellence } from '../db/schema.js';
+import { posts, postViewCounts, postVersions, users, centersOfExcellence, postAttachments } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 import type { BufferedViewCounter } from '../services/view-counter.js';
@@ -253,7 +254,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
 
   const createH = (level: number, text: string) => {
     const h = new Y.XmlElement('heading');
-    h.setAttribute('level', level);
+    h.setAttribute('level', String(level));
     const pText = new Y.XmlText(text);
     h.insert(0, [pText]);
     return h;
@@ -272,7 +273,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     const statusBlock = new Y.XmlElement('projectStatusBlock');
     statusBlock.setAttribute('ragStatus', 'green');
     statusBlock.setAttribute('milestoneTitle', 'Sprint Milestone Deliverables');
-    statusBlock.setAttribute('completionPercent', 65);
+    statusBlock.setAttribute('completionPercent', '65');
     statusBlock.setAttribute('targetDate', '2026-11-30');
     statusBlock.setAttribute('blockers', 'None currently');
     fragment.insert(fragment.length, [statusBlock]);
@@ -460,6 +461,59 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     });
 
     return reply.send({ post: updatedPost });
+  });
+
+  // 4b. Delete Post
+  fastify.delete('/:id', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const isAuthor = user.userId === post.authorId;
+    const isAdmin = user.role === 'admin';
+
+    if (!isAuthor && !isAdmin) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Only the author or an administrator can delete this post' });
+    }
+
+    // Clean up associated file attachments on disk if any
+    try {
+      const attachments = await db.select().from(postAttachments).where(eq(postAttachments.postId, id));
+      for (const att of attachments) {
+        if (att.storagePath && fs.existsSync(att.storagePath)) {
+          // Check if any other attachment references the same file (content-hash deduplication)
+          const [otherRef] = await db
+            .select({ id: postAttachments.id })
+            .from(postAttachments)
+            .where(and(eq(postAttachments.sha256, att.sha256), ne(postAttachments.postId, id)))
+            .limit(1);
+          if (!otherRef) {
+            await fs.promises.unlink(att.storagePath).catch(() => {});
+          }
+        }
+      }
+    } catch (cleanupErr) {
+      request.log.warn({ cleanupErr }, 'Attachment disk cleanup encountered an error');
+    }
+
+    // Delete post row (cascades to all foreign-key tables in DB)
+    await db.delete(posts).where(eq(posts.id, id));
+
+    await auditService.appendLog({
+      actorUserId: user.userId,
+      actorType: 'human',
+      action: 'post_deleted',
+      entityType: 'post',
+      entityId: id,
+      metadata: { title: post.title, slug: post.slug },
+      ipAddress: request.ip,
+    });
+
+    return reply.status(200).send({ success: true, message: 'Post deleted successfully' });
   });
 
   // 5. Submit Post for Review

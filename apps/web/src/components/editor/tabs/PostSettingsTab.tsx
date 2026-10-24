@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { 
   Settings, 
   Save, 
@@ -7,16 +8,24 @@ import {
   Check, 
   Sparkles, 
   X, 
-  Plus,
-  Users,
-  UserPlus,
-  Trash2,
-  HelpCircle,
-  ShieldCheck,
-  Edit3,
-  Eye
+  Plus, 
+  Users, 
+  UserPlus, 
+  Trash2, 
+  HelpCircle, 
+  ShieldCheck, 
+  Edit3, 
+  Eye 
 } from 'lucide-react';
 import { api, ApiError } from '../../../lib/api.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../../ui/dialog.js';
 
 export interface PostSettingsTabProps {
   postId: string;
@@ -44,12 +53,30 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
   postMetadata,
   onMetadataUpdate,
 }) => {
+  const navigate = useNavigate();
   const [title, setTitle] = useState(postMetadata?.title || '');
   const [slug, setSlug] = useState(postMetadata?.slug || '');
   const [excerpt, setExcerpt] = useState(postMetadata?.excerpt || '');
   const [coeId, setCoeId] = useState(postMetadata?.coeId || '');
   const [tags, setTags] = useState<string[]>(['engineering', 'collaborative']);
   const [tagInput, setTagInput] = useState('');
+
+  // Delete document state
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const handleDeletePost = async () => {
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.delete(`/posts/${postId}`);
+      navigate('/my-work', { replace: true });
+    } catch (err: any) {
+      setDeleteError(err?.message || 'Failed to delete post. Author or admin permission required.');
+      setIsDeleting(false);
+    }
+  };
 
   // Dynamic COEs from backend
   const [coeOptions, setCoeOptions] = useState<Array<{ id: string; label: string }>>([
@@ -562,6 +589,75 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
             </div>
           </form>
         </div>
+
+        {/* Danger Zone: Post Deletion */}
+        <div className="p-4 rounded-xl border border-status-danger/30 bg-status-danger/5 space-y-3">
+          <div className="flex items-center gap-2 text-status-danger">
+            <Trash2 className="w-4 h-4 shrink-0" />
+            <h4 className="font-bold text-xs uppercase tracking-wider">Danger Zone</h4>
+          </div>
+          <p className="text-[11px] text-text-secondary leading-relaxed">
+            Permanently delete this document, all historical revision snapshots, and file attachments. This action cannot be undone.
+          </p>
+          <button
+            type="button"
+            onClick={() => setIsDeleteDialogOpen(true)}
+            className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-status-danger text-white font-semibold text-xs hover:opacity-90 transition-opacity"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+            <span>Delete This Document</span>
+          </button>
+        </div>
+
+        {/* Delete Confirmation Dialog */}
+        <Dialog open={isDeleteDialogOpen} onOpenChange={(open) => !open && setIsDeleteDialogOpen(false)}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-status-danger">
+                <Trash2 className="w-4 h-4" />
+                <span>Delete Document</span>
+              </DialogTitle>
+              <DialogDescription className="text-xs text-text-secondary mt-1">
+                Are you sure you want to delete <strong className="text-foreground">{title || 'this post'}</strong>? This will permanently delete the post, all version history, and attachments. This action cannot be undone.
+              </DialogDescription>
+            </DialogHeader>
+
+            {deleteError && (
+              <div className="p-3 rounded-lg bg-status-danger/10 text-status-danger border border-status-danger/30 text-xs">
+                {deleteError}
+              </div>
+            )}
+
+            <DialogFooter className="flex items-center gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => setIsDeleteDialogOpen(false)}
+                disabled={isDeleting}
+                className="px-3 py-1.5 rounded-lg border border-border bg-canvas text-xs font-semibold text-foreground hover:bg-elevated transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleDeletePost}
+                disabled={isDeleting}
+                className="px-3 py-1.5 rounded-lg bg-status-danger text-white text-xs font-semibold hover:opacity-90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+              >
+                {isDeleting ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Deleting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Confirm Delete</span>
+                  </>
+                )}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
     </div>
   );

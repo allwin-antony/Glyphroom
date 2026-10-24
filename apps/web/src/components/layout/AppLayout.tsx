@@ -62,8 +62,6 @@ export const AppLayout: React.FC = () => {
         <TopBar
           onOpenCommandSearch={handleOpenSearch}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
-          isSidebarCollapsed={isSidebarCollapsed}
-          onToggleDesktopSidebar={toggleSidebarCollapse}
         />
 
         {/* Dynamic Route Content Area */}

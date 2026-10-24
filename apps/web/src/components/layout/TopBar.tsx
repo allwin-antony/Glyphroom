@@ -12,22 +12,16 @@ import {
   Sliders,
   ChevronDown,
   UserCheck,
-  PanelLeftClose,
-  PanelLeftOpen,
 } from 'lucide-react';
 
 export interface TopBarProps {
   onOpenCommandSearch: () => void;
   onToggleMobileSidebar: () => void;
-  isSidebarCollapsed?: boolean;
-  onToggleDesktopSidebar?: () => void;
 }
 
 export const TopBar: React.FC<TopBarProps> = ({
   onOpenCommandSearch,
   onToggleMobileSidebar,
-  isSidebarCollapsed,
-  onToggleDesktopSidebar,
 }) => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
@@ -65,21 +59,6 @@ export const TopBar: React.FC<TopBarProps> = ({
         >
           <Menu className="w-5 h-5" />
         </button>
-
-        {onToggleDesktopSidebar && (
-          <button
-            onClick={onToggleDesktopSidebar}
-            className="hidden md:flex p-2 rounded-lg text-text-muted hover:text-foreground hover:bg-canvas transition-colors"
-            aria-label={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-            title={isSidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
-          >
-            {isSidebarCollapsed ? (
-              <PanelLeftOpen className="w-4 h-4" />
-            ) : (
-              <PanelLeftClose className="w-4 h-4" />
-            )}
-          </button>
-        )}
 
         {/* Global Search Trigger Pill */}
         <button

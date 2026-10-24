@@ -373,4 +373,52 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     expect(verifyBody.valid).toBe(true);
     expect(verifyBody.totalRows).toBeGreaterThanOrEqual(1);
   });
+
+  it('allows author or admin to delete a post and cascades deletions', async () => {
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        email: 'admin@enterprise-blogger.local',
+        password: 'admin2026!',
+      },
+    });
+    const sessionCookie = loginRes.cookies.find((c: any) => c.name === 'blogger_session')?.value;
+    const csrfToken = loginRes.json().csrfToken;
+
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/posts',
+      headers: {
+        cookie: `blogger_session=${sessionCookie}`,
+        'x-csrf-token': csrfToken,
+      },
+      payload: {
+        title: 'Post To Delete',
+        slug: 'post-to-delete',
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    const postId = createRes.json().post.id;
+
+    const deleteRes = await app.inject({
+      method: 'DELETE',
+      url: `/api/v1/posts/${postId}`,
+      headers: {
+        cookie: `blogger_session=${sessionCookie}`,
+        'x-csrf-token': csrfToken,
+      },
+    });
+    expect(deleteRes.statusCode).toBe(200);
+    expect(deleteRes.json().success).toBe(true);
+
+    const getRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/posts/${postId}`,
+      headers: {
+        cookie: `blogger_session=${sessionCookie}`,
+      },
+    });
+    expect(getRes.statusCode).toBe(404);
+  });
 });

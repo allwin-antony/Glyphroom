@@ -11,9 +11,19 @@ import {
   Send,
   AlertCircle,
   Calendar,
+  Trash2,
+  Loader2,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../components/ui/dialog.js';
 import type { CatalogPost } from './CatalogView.js';
 
 export const MyWorkView: React.FC = () => {
@@ -25,6 +35,11 @@ export const MyWorkView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
   const [submittingPostId, setSubmittingPostId] = useState<string | null>(null);
+
+  // Post Deletion state
+  const [postToDelete, setPostToDelete] = useState<CatalogPost | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   const fetchMyPosts = () => {
     setIsLoading(true);
@@ -78,6 +93,22 @@ export const MyWorkView: React.FC = () => {
       setActionError(err.message || 'Unable to submit post for review.');
     } finally {
       setSubmittingPostId(null);
+    }
+  };
+
+  const handleDeletePost = async () => {
+    if (!postToDelete) return;
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+      await api.delete(`/posts/${postToDelete.id}`);
+      setPostToDelete(null);
+      fetchMyPosts();
+    } catch (err: any) {
+      console.error('Failed to delete post:', err);
+      setDeleteError(err.message || 'Unable to delete post. Author or Admin permission required.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -236,6 +267,15 @@ export const MyWorkView: React.FC = () => {
                         <span>{submittingPostId === post.id ? 'Submitting...' : 'Submit'}</span>
                       </button>
                     )}
+
+                    <button
+                      onClick={() => setPostToDelete(post)}
+                      className="px-2.5 py-1 rounded bg-status-danger/10 text-status-danger border border-status-danger/25 hover:bg-status-danger/20 text-[11px] font-semibold transition-colors inline-flex items-center gap-1"
+                      title="Delete Post"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                      <span>Delete</span>
+                    </button>
                   </td>
                 </tr>
               ))}
@@ -243,6 +283,54 @@ export const MyWorkView: React.FC = () => {
           </table>
         )}
       </div>
+
+      {/* Delete Post Confirmation Dialog */}
+      <Dialog open={!!postToDelete} onOpenChange={(open) => !open && setPostToDelete(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-status-danger">
+              <Trash2 className="w-4 h-4" />
+              <span>Delete Document</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-text-secondary mt-1">
+              Are you sure you want to delete <strong className="text-foreground">{postToDelete?.title}</strong>? This will permanently delete the post, all version history, and attachments. This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+
+          {deleteError && (
+            <div className="p-3 rounded-lg bg-status-danger/10 text-status-danger border border-status-danger/30 text-xs">
+              {deleteError}
+            </div>
+          )}
+
+          <DialogFooter className="flex items-center gap-2 pt-2">
+            <button
+              onClick={() => setPostToDelete(null)}
+              disabled={isDeleting}
+              className="px-3 py-1.5 rounded-lg border border-border bg-canvas text-xs font-semibold text-foreground hover:bg-elevated transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleDeletePost}
+              disabled={isDeleting}
+              className="px-3 py-1.5 rounded-lg bg-status-danger text-white text-xs font-semibold hover:opacity-90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Deleting...</span>
+                </>
+              ) : (
+                <>
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>Confirm Delete</span>
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

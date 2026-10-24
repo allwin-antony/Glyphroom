@@ -126,6 +126,36 @@ describe('Phase F & G: My Work Dashboard & Moderator Review Queue Suite', () => 
         expect(api.post).toHaveBeenCalledWith('/posts/post-2/submit-review');
       });
     });
+
+    it('opens confirmation modal and deletes a post when Delete is clicked', async () => {
+      (api.get as any).mockResolvedValue({ posts: mockPosts });
+      (api.delete as any).mockResolvedValueOnce({ success: true });
+
+      render(
+        <AuthContext.Provider value={createMockAuth('author', 'author-alice')}>
+          <MemoryRouter>
+            <MyWorkView />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('CRDT Fuzz Testing')).toBeDefined();
+      });
+
+      const deleteBtn = screen.getByTitle('Delete Post');
+      fireEvent.click(deleteBtn);
+
+      // Confirmation dialog opens
+      expect(screen.getByText(/Are you sure you want to delete/i)).toBeDefined();
+
+      const confirmBtn = screen.getByText('Confirm Delete');
+      fireEvent.click(confirmBtn);
+
+      await waitFor(() => {
+        expect(api.delete).toHaveBeenCalledWith('/posts/post-2');
+      });
+    });
   });
 
   describe('ReviewQueueView Component', () => {

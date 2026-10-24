@@ -86,27 +86,43 @@ export const Sidebar: React.FC<SidebarProps> = ({
       >
         {/* Brand Header */}
         <div className={`h-16 flex items-center border-b border-border ${isCollapsed ? 'justify-center px-2' : 'justify-between px-4'}`}>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="p-2 rounded-xl bg-gradient-to-tr from-accent to-accent-dark text-white shadow-sm shrink-0">
-              <Sparkles className="w-4 h-4" />
-            </div>
-            {!isCollapsed && (
-              <div className="font-bold text-base tracking-tight text-foreground truncate">
-                Glyphroom
+          {!isCollapsed ? (
+            <>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="p-2 rounded-xl bg-gradient-to-tr from-accent to-accent-dark text-white shadow-sm shrink-0">
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div className="font-bold text-base tracking-tight text-foreground truncate">
+                  Glyphroom
+                </div>
               </div>
-            )}
-          </div>
 
-          {/* Desktop collapse toggle button */}
-          {!isCollapsed && onToggleCollapse && (
-            <button
-              onClick={onToggleCollapse}
-              className="p-1.5 rounded-lg text-text-muted hover:text-foreground hover:bg-canvas transition-colors hidden md:flex items-center justify-center"
-              aria-label="Collapse sidebar"
-              title="Collapse sidebar"
-            >
-              <PanelLeftClose className="w-4 h-4" />
-            </button>
+              {/* Desktop collapse toggle button */}
+              {onToggleCollapse && (
+                <button
+                  onClick={onToggleCollapse}
+                  className="p-1.5 rounded-lg text-text-muted hover:text-foreground hover:bg-canvas transition-colors hidden md:flex items-center justify-center"
+                  aria-label="Collapse sidebar"
+                  title="Collapse sidebar"
+                >
+                  <PanelLeftClose className="w-4 h-4" />
+                </button>
+              )}
+            </>
+          ) : (
+            <div className="flex items-center justify-center w-full">
+              {/* When collapsed, keep the expand toggle right here at the top */}
+              {onToggleCollapse && (
+                <button
+                  onClick={onToggleCollapse}
+                  className="p-2 rounded-xl text-text-muted hover:text-foreground hover:bg-canvas transition-colors hidden md:flex items-center justify-center group"
+                  aria-label="Expand sidebar"
+                  title="Expand sidebar"
+                >
+                  <PanelLeftOpen className="w-5 h-5 text-accent group-hover:scale-105 transition-transform" />
+                </button>
+              )}
+            </div>
           )}
 
           {/* Mobile close button */}
@@ -184,16 +200,6 @@ export const Sidebar: React.FC<SidebarProps> = ({
           {isCollapsed ? (
             <div className="flex flex-col items-center gap-2">
               <ThemeToggle />
-              {onToggleCollapse && (
-                <button
-                  onClick={onToggleCollapse}
-                  className="p-1.5 rounded-lg text-text-muted hover:text-foreground hover:bg-canvas transition-colors hidden md:flex"
-                  title="Expand sidebar"
-                  aria-label="Expand sidebar"
-                >
-                  <PanelLeftOpen className="w-4 h-4" />
-                </button>
-              )}
             </div>
           ) : (
             <div className="flex items-center justify-between text-xs text-text-secondary">
