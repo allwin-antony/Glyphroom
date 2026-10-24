@@ -242,7 +242,7 @@ VALUES (
     '00000000-0000-0000-0000-000000000001',
     'admin@blogger.corp.internal',
     'System Administrator',
-    '$2b$10$PR02NRd01smAzSK7AM/01Ood3X2qMyyxHcja.l9FwDP.5.7SQh4/q',
+    '$2a$10$wYNBVWEHmj6BkDKsMjwwEuAfvPY2WS7ausLRXg613Nnls10A3/8Re',
     'admin',
     true
 )
@@ -257,7 +257,7 @@ VALUES (
     '00000000-0000-0000-0000-000000000002',
     'admin@enterprise-blogger.local',
     'Break-Glass System Administrator',
-    '$2b$10$PR02NRd01smAzSK7AM/01Ood3X2qMyyxHcja.l9FwDP.5.7SQh4/q',
+    '$2a$10$wYNBVWEHmj6BkDKsMjwwEuAfvPY2WS7ausLRXg613Nnls10A3/8Re',
     'admin',
     true
 )
