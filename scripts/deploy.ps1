@@ -19,12 +19,75 @@ function Write-Warn($msg) { Write-Host "[WARN] $msg" -ForegroundColor Yellow }
 function Write-Err($msg) { Write-Host "[ERROR] $msg" -ForegroundColor Red }
 
 # 1. Prerequisite Validation
+function Test-DockerDaemon {
+    try {
+        $null = & docker info 2>&1
+        return ($LASTEXITCODE -eq 0)
+    } catch {
+        return $false
+    }
+}
+
 function Check-Prerequisites {
     Write-Info 'Validating Windows Docker prerequisites...'
+    
+    # Auto-detect docker paths if not already in PATH
     if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
-        Write-Err 'Docker is not installed or not in PATH.'
-        Write-Host 'Please start or install Docker Desktop for Windows from https://docker.com'
+        $candidatePaths = @(
+            "$env:LOCALAPPDATA\Programs\DockerDesktop\resources\bin",
+            "$env:ProgramFiles\Docker\Docker\resources\bin",
+            "C:\Program Files\Docker\Docker\resources\bin",
+            "C:\Program Files\Docker\Docker",
+            "$env:ProgramFiles\Docker\Docker"
+        )
+        foreach ($p in $candidatePaths) {
+            if (Test-Path (Join-Path $p 'docker.exe')) {
+                Write-Info "Found Docker CLI at: $p. Adding to session PATH."
+                $env:PATH = "$p;$env:PATH"
+                break
+            }
+        }
+    }
+
+    if (-not (Get-Command docker -ErrorAction SilentlyContinue)) {
+        Write-Err 'Docker CLI is not found in PATH or standard installation directories.'
+        Write-Host 'Please ensure Docker Desktop is installed from https://docker.com'
         exit 1
+    }
+
+    # Verify if Docker Daemon is running
+    $isRunning = Test-DockerDaemon
+    if (-not $isRunning) {
+        Write-Warn 'Docker CLI was found, but the Docker daemon is not running.'
+        $desktopApp = @(
+            "$env:LOCALAPPDATA\Programs\DockerDesktop\Docker Desktop.exe",
+            "$env:ProgramFiles\Docker\Docker\Docker Desktop.exe",
+            "C:\Program Files\Docker\Docker\Docker Desktop.exe"
+        ) | Where-Object { Test-Path $_ } | Select-Object -First 1
+
+        if ($desktopApp) {
+            Write-Info "Attempting to start Docker Desktop ($desktopApp)..."
+            Start-Process -FilePath $desktopApp
+            Write-Info 'Waiting for Docker daemon to become responsive (this may take 30-60 seconds)...'
+            $retries = 30
+            $started = $false
+            for ($i = 0; $i -lt $retries; $i++) {
+                Start-Sleep -Seconds 2
+                if (Test-DockerDaemon) {
+                    $started = $true
+                    break
+                }
+            }
+            if (-not $started) {
+                Write-Err 'Docker Desktop has been launched, but the daemon is still initializing.'
+                Write-Host 'Please wait for the Docker whale icon in your system tray to show "Docker Desktop is running", then re-run .\scripts\deploy.ps1'
+                exit 1
+            }
+            Write-Success 'Docker daemon is now responsive!'
+        } else {
+            Write-Err 'Please launch Docker Desktop from the Start Menu and wait until it is running before proceeding.'
+            exit 1
+        }
     }
 }
 
@@ -58,7 +121,9 @@ function Ensure-Env {
     }
 }
 
-# 3. Actions
+# 3. Actions & Flow
+Check-Prerequisites
+
 if ($Stop) {
     Write-Info 'Stopping Enterprise Blogger stack...'
     docker compose -f $ComposeFile down
@@ -86,7 +151,6 @@ if ($Restart) {
 }
 
 # Default Deploy Flow
-Check-Prerequisites
 Ensure-Env
 
 Write-Info 'Building and launching Enterprise Blogger containers...'
