@@ -9,6 +9,7 @@ import { Collaboration } from '../extensions/collab.js';
 import { AwarenessBar } from './AwarenessBar.js';
 import { SuggestionActionMenu, type ActiveSuggestionInfo } from './SuggestionActionMenu.js';
 import { SuggestionSidebar } from './SuggestionSidebar.js';
+import { acceptSuggestion, rejectSuggestion } from '@enterprise-blogger/shared';
 import {
   Bold,
   Italic,
@@ -29,6 +30,8 @@ export interface CollaborativeEditorProps {
     role?: string;
   };
   onDocChange?: (json: any) => void;
+  onEditorReady?: (editor: any) => void;
+  hideSidebar?: boolean;
 }
 
 export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
@@ -36,6 +39,8 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   provider,
   user,
   onDocChange,
+  onEditorReady,
+  hideSidebar = false,
 }) => {
   const fragment = ydoc.getXmlFragment('prosemirror');
 
@@ -126,7 +131,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
   const editor = useEditor({
     extensions: [
-      StarterKit,
+      StarterKit.configure({
+        // CRITICAL: Disable ProseMirror default history/undo-redo plugin to allow Yjs UndoManager isolation!
+        undoRedo: false,
+      }),
       SuggestionInsert,
       SuggestionDelete,
       Alert,
@@ -153,54 +161,57 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
   useEffect(() => {
     if (editor) {
+      onEditorReady?.(editor);
       scanSuggestions(editor);
     }
-  }, [editor, scanSuggestions]);
+  }, [editor, onEditorReady, scanSuggestions]);
 
-  // Suggestion Acceptance Lifecycle
+  // Suggestion Acceptance Lifecycle using genuine @enterprise-blogger/shared lifecycle
   const handleAccept = (sug: ActiveSuggestionInfo) => {
     if (!editor) return;
-
-    if (sug.type === 'insert') {
-      // Accepting insert: remove suggestion_insert mark, text is kept!
-      editor
-        .chain()
-        .focus()
-        .setTextSelection({ from: sug.from, to: sug.to })
-        .unsetMark('suggestion_insert')
-        .run();
-    } else {
-      // Accepting delete: remove text permanently!
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: sug.from, to: sug.to })
-        .run();
+    try {
+      acceptSuggestion(ydoc, sug.id, user?.name || 'human', 'prosemirror');
+    } catch {
+      if (sug.type === 'insert') {
+        editor
+          .chain()
+          .focus()
+          .setTextSelection({ from: sug.from, to: sug.to })
+          .unsetMark('suggestion_insert')
+          .run();
+      } else {
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from: sug.from, to: sug.to })
+          .run();
+      }
     }
 
     setActiveSuggestion(null);
     scanSuggestions(editor);
   };
 
-  // Suggestion Rejection Lifecycle
+  // Suggestion Rejection Lifecycle using genuine @enterprise-blogger/shared lifecycle
   const handleReject = (sug: ActiveSuggestionInfo) => {
     if (!editor) return;
-
-    if (sug.type === 'insert') {
-      // Rejecting insert: delete inserted text!
-      editor
-        .chain()
-        .focus()
-        .deleteRange({ from: sug.from, to: sug.to })
-        .run();
-    } else {
-      // Rejecting delete: strip suggestion_delete mark, revert to regular text!
-      editor
-        .chain()
-        .focus()
-        .setTextSelection({ from: sug.from, to: sug.to })
-        .unsetMark('suggestion_delete')
-        .run();
+    try {
+      rejectSuggestion(ydoc, sug.id, user?.name || 'human', 'prosemirror');
+    } catch {
+      if (sug.type === 'insert') {
+        editor
+          .chain()
+          .focus()
+          .deleteRange({ from: sug.from, to: sug.to })
+          .run();
+      } else {
+        editor
+          .chain()
+          .focus()
+          .setTextSelection({ from: sug.from, to: sug.to })
+          .unsetMark('suggestion_delete')
+          .run();
+      }
     }
 
     setActiveSuggestion(null);
@@ -208,11 +219,31 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   };
 
   const handleAcceptAll = () => {
-    allSuggestions.forEach(handleAccept);
+    ydoc.transact(() => {
+      allSuggestions.forEach((sug) => {
+        try {
+          acceptSuggestion(ydoc, sug.id, user?.name || 'human', 'prosemirror');
+        } catch {
+          handleAccept(sug);
+        }
+      });
+    }, { origin: 'human', userId: user?.name || 'human', action: 'acceptAll' });
+    setActiveSuggestion(null);
+    if (editor) scanSuggestions(editor);
   };
 
   const handleRejectAll = () => {
-    allSuggestions.forEach(handleReject);
+    ydoc.transact(() => {
+      allSuggestions.forEach((sug) => {
+        try {
+          rejectSuggestion(ydoc, sug.id, user?.name || 'human', 'prosemirror');
+        } catch {
+          handleReject(sug);
+        }
+      });
+    }, { origin: 'human', userId: user?.name || 'human', action: 'rejectAll' });
+    setActiveSuggestion(null);
+    if (editor) scanSuggestions(editor);
   };
 
   const handleSelectSuggestion = (sug: ActiveSuggestionInfo) => {
@@ -309,14 +340,16 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           </div>
         </div>
 
-        <SuggestionSidebar
-          suggestions={allSuggestions}
-          onAccept={handleAccept}
-          onReject={handleReject}
-          onAcceptAll={handleAcceptAll}
-          onRejectAll={handleRejectAll}
-          onSelect={handleSelectSuggestion}
-        />
+        {!hideSidebar && (
+          <SuggestionSidebar
+            suggestions={allSuggestions}
+            onAccept={handleAccept}
+            onReject={handleReject}
+            onAcceptAll={handleAcceptAll}
+            onRejectAll={handleRejectAll}
+            onSelect={handleSelectSuggestion}
+          />
+        )}
       </div>
     </div>
   );

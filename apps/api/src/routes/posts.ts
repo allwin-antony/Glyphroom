@@ -5,7 +5,7 @@ import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
 import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
 import type { Database } from '../db/index.js';
-import { posts, postViewCounts, postVersions } from '../db/schema.js';
+import { posts, postViewCounts, postVersions, users } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 import type { BufferedViewCounter } from '../services/view-counter.js';
@@ -341,5 +341,32 @@ export const postRoutes: FastifyPluginAsync<{
     });
 
     return reply.send({ post: publishedPost, version });
+  });
+
+  // 7. Get Post Versions (Milestone M2 Feature 19)
+  fastify.get('/:id/versions', async (request, reply) => {
+    const { id } = request.params as { id: string };
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const versions = await db
+      .select({
+        id: postVersions.id,
+        postId: postVersions.postId,
+        versionNumber: postVersions.versionNumber,
+        triggerReason: postVersions.triggerReason,
+        createdAt: postVersions.createdAt,
+        createdBy: postVersions.createdBy,
+        authorName: users.fullName,
+      })
+      .from(postVersions)
+      .leftJoin(users, eq(postVersions.createdBy, users.id))
+      .where(eq(postVersions.postId, id))
+      .orderBy(desc(postVersions.versionNumber));
+
+    return reply.send({ versions });
   });
 };
