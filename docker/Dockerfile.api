@@ -60,28 +60,32 @@ RUN pnpm --filter @enterprise-blogger/api --prod deploy /app/pruned-api
 FROM base AS runner
 
 ENV NODE_ENV=production
-ENV API_PORT=4000
+ENV API_PORT=4001
 ENV API_HOST=0.0.0.0
 
 # Create dedicated non-privileged user and group for security
 RUN groupadd -g 10001 blogger && \
-    useradd -u 10001 -g blogger -s /bin/sh -m blogger
+    useradd -u 10001 -g blogger -s /bin/sh -d /app blogger && \
+    mkdir -p /app/logs && \
+    chown -R blogger:blogger /app
 
 WORKDIR /app
 
 # Copy deployed pruned workspace with compiled dist and prod node_modules
 COPY --from=builder --chown=blogger:blogger /app/pruned-api /app
+COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@enterprise-blogger/shared/dist
 
 # Switch to non-root user
 USER blogger
 
 # Expose HTTP port
-EXPOSE 4000
+EXPOSE 4001
 
 # Health check probe against /health
-HEALTHCHECK --interval=10s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://127.0.0.1:4000/health || exit 1
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=5 \
+    CMD curl -f http://127.0.0.1:4001/health || exit 1
 
 # Launch with dumb-init for graceful SIGTERM/SIGINT process handling
 ENTRYPOINT ["/usr/bin/dumb-init", "--"]
+CMD ["node", "dist/index.js"]
 CMD ["node", "dist/index.js"]
