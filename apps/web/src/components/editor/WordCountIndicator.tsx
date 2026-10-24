@@ -86,17 +86,20 @@ export const WordCountIndicator: React.FC<WordCountIndicatorProps> = ({
           )}
         </div>
       </TooltipTrigger>
-      <TooltipContent side="top" className="text-xs space-y-1">
-        <div className="font-semibold text-foreground">Document Statistics</div>
-        <div className="grid grid-cols-2 gap-x-3 text-[11px] text-text-secondary">
-          <span>Words:</span>
-          <span className="font-mono text-foreground text-right">{stats.words.toLocaleString()}</span>
-          <span>Characters:</span>
-          <span className="font-mono text-foreground text-right">{stats.characters.toLocaleString()}</span>
-          <span>Characters (no spaces):</span>
-          <span className="font-mono text-foreground text-right">{stats.charactersNoSpaces.toLocaleString()}</span>
-          <span>Est. Reading Time:</span>
-          <span className="font-mono text-foreground text-right">~{stats.readingTimeMinutes} min (200 wpm)</span>
+      <TooltipContent side="top" className="p-3 w-56 space-y-2 bg-elevated text-foreground border border-border shadow-xl rounded-xl">
+        <div className="font-semibold text-xs text-foreground border-b border-border pb-1.5 flex items-center justify-between">
+          <span>Document Statistics</span>
+          <span className="text-[10px] text-text-muted font-normal">200 wpm</span>
+        </div>
+        <div className="grid grid-cols-2 gap-y-1.5 gap-x-3 text-xs">
+          <span className="text-text-secondary">Words:</span>
+          <span className="font-mono font-semibold text-foreground text-right">{stats.words.toLocaleString()}</span>
+          <span className="text-text-secondary">Characters:</span>
+          <span className="font-mono font-semibold text-foreground text-right">{stats.characters.toLocaleString()}</span>
+          <span className="text-text-secondary">No spaces:</span>
+          <span className="font-mono font-semibold text-foreground text-right">{stats.charactersNoSpaces.toLocaleString()}</span>
+          <span className="text-text-secondary">Reading time:</span>
+          <span className="font-mono font-semibold text-foreground text-right">~{stats.readingTimeMinutes} min</span>
         </div>
       </TooltipContent>
     </Tooltip>

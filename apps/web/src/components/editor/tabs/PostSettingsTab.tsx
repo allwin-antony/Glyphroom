@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Settings, 
   Save, 
@@ -7,7 +7,14 @@ import {
   Check, 
   Sparkles, 
   X, 
-  Plus 
+  Plus,
+  Users,
+  UserPlus,
+  Trash2,
+  HelpCircle,
+  ShieldCheck,
+  Edit3,
+  Eye
 } from 'lucide-react';
 import { api, ApiError } from '../../../lib/api.js';
 
@@ -24,14 +31,13 @@ export interface PostSettingsTabProps {
   onMetadataUpdate?: (metadata: any) => void;
 }
 
-const COE_OPTIONS = [
-  { id: '', label: 'None (General)' },
-  { id: 'coe-architecture', label: 'Architecture COE' },
-  { id: 'coe-engineering', label: 'Engineering COE' },
-  { id: 'coe-security', label: 'Security COE' },
-  { id: 'coe-devops', label: 'DevOps & SRE COE' },
-  { id: 'coe-product', label: 'Product & Design COE' },
-];
+export interface CollaboratorItem {
+  userId: string;
+  permission: 'edit' | 'review' | 'view';
+  fullName?: string;
+  email: string;
+  role: string;
+}
 
 export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
   postId,
@@ -45,9 +51,67 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
   const [tags, setTags] = useState<string[]>(['engineering', 'collaborative']);
   const [tagInput, setTagInput] = useState('');
 
+  // Dynamic COEs from backend
+  const [coeOptions, setCoeOptions] = useState<Array<{ id: string; label: string }>>([
+    { id: '', label: 'None (General Publishing)' },
+  ]);
+
+  // Collaborators state
+  const [collaborators, setCollaborators] = useState<CollaboratorItem[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; email: string; fullName: string }>>([]);
+  const [selectedUserEmail, setSelectedUserEmail] = useState('');
+  const [collaboratorRole, setCollaboratorRole] = useState<'edit' | 'review' | 'view'>('edit');
+  const [isAddingCollab, setIsAddingCollab] = useState(false);
+  const [collabError, setCollabError] = useState<string | null>(null);
+  const [collabSuccess, setCollabSuccess] = useState<string | null>(null);
+
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  // 1. Fetch COEs on mount
+  useEffect(() => {
+    async function fetchCoes() {
+      try {
+        const res = await api.get<{ coes: Array<{ id: string; name: string; code: string }> }>('/posts/coe');
+        if (res?.coes && res.coes.length > 0) {
+          setCoeOptions([
+            { id: '', label: 'None (General Publishing)' },
+            ...res.coes.map((c) => ({ id: c.id, label: c.name })),
+          ]);
+        }
+      } catch (err) {
+        console.warn('Failed to load COEs:', err);
+      }
+    }
+    fetchCoes();
+  }, []);
+
+  // 2. Fetch Collaborators & Available Users
+  const fetchCollaborators = useCallback(async () => {
+    try {
+      const res = await api.get<{ collaborators: CollaboratorItem[] }>(`/posts/${postId}/collaborators`);
+      setCollaborators(res?.collaborators || []);
+    } catch (err) {
+      console.warn('Failed to load collaborators:', err);
+    }
+  }, [postId]);
+
+  const fetchAvailableUsers = useCallback(async () => {
+    try {
+      const res = await api.get<{ users: Array<{ id: string; email: string; fullName: string }> }>('/posts/collaborators/users');
+      setAvailableUsers(res?.users || []);
+    } catch (err) {
+      console.warn('Failed to load available users:', err);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (postId) {
+      fetchCollaborators();
+      fetchAvailableUsers();
+    }
+  }, [postId, fetchCollaborators, fetchAvailableUsers]);
 
   // Sync with prop updates
   useEffect(() => {
@@ -132,13 +196,48 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
     }
   };
 
+  // Add collaborator handler
+  const handleAddCollaborator = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedUserEmail.trim() || isAddingCollab) return;
+
+    setIsAddingCollab(true);
+    setCollabError(null);
+    setCollabSuccess(null);
+
+    try {
+      await api.post(`/posts/${postId}/collaborators`, {
+        email: selectedUserEmail.trim(),
+        permission: collaboratorRole,
+      });
+      setCollabSuccess(`Added collaborator with ${collaboratorRole} access.`);
+      setSelectedUserEmail('');
+      await fetchCollaborators();
+      setTimeout(() => setCollabSuccess(null), 3000);
+    } catch (err: any) {
+      setCollabError(err?.message || 'Failed to add collaborator.');
+    } finally {
+      setIsAddingCollab(false);
+    }
+  };
+
+  // Remove collaborator handler
+  const handleRemoveCollaborator = async (userId: string) => {
+    try {
+      await api.delete(`/posts/${postId}/collaborators/${userId}`);
+      await fetchCollaborators();
+    } catch (err: any) {
+      setCollabError(err?.message || 'Failed to remove collaborator.');
+    }
+  };
+
   return (
-    <div className="flex flex-col h-full bg-surface">
+    <div className="flex flex-col h-full bg-surface text-foreground overflow-y-auto">
       {/* Header */}
-      <div className="p-3 border-b border-border flex items-center justify-between bg-surface-muted/30">
-        <div className="flex items-center gap-1.5 text-xs font-semibold text-text">
+      <div className="p-3 border-b border-border flex items-center justify-between bg-surface-muted/30 sticky top-0 z-10">
+        <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
           <Settings className="w-4 h-4 text-text-secondary" />
-          <span>Post Settings</span>
+          <span>Post Settings & Co-Authors</span>
         </div>
 
         {saveSuccess && (
@@ -149,144 +248,321 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
         )}
       </div>
 
-      {/* Settings Form */}
-      <form onSubmit={handleSave} className="flex-1 overflow-y-auto p-4 space-y-4 text-xs">
-        {errorMessage && (
-          <div className="p-2.5 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
-            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-            <span>{errorMessage}</span>
-          </div>
-        )}
+      <div className="p-4 space-y-6 text-xs">
+        {/* Settings Form */}
+        <form onSubmit={handleSave} className="space-y-4">
+          {errorMessage && (
+            <div className="p-2.5 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{errorMessage}</span>
+            </div>
+          )}
 
-        {/* Title Field */}
-        <div className="space-y-1.5">
-          <label className="font-semibold text-foreground">Post Title</label>
-          <input
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            maxLength={500}
-            className="w-full px-3 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs"
-            placeholder="Enter post title..."
-          />
-        </div>
-
-        {/* Slug Field */}
-        <div className="space-y-1.5">
-          <div className="flex items-center justify-between">
-            <label className="font-semibold text-foreground">URL Slug</label>
-            <button
-              type="button"
-              onClick={handleGenerateSlug}
-              className="text-[10px] text-accent hover:underline inline-flex items-center gap-1"
-            >
-              <Sparkles className="w-2.5 h-2.5" />
-              <span>Slugify Title</span>
-            </button>
-          </div>
-          <div className="flex items-center rounded-lg bg-canvas border border-border px-3 py-1.5 focus-within:border-accent">
-            <span className="text-text-muted select-none text-[11px]">/posts/</span>
+          {/* Title Field */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-foreground">Post Title</label>
             <input
               type="text"
-              value={slug}
-              onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
               required
-              maxLength={255}
-              className="w-full bg-transparent border-none text-xs text-foreground focus:outline-none pl-0.5"
-              placeholder="my-post-slug"
+              maxLength={500}
+              className="w-full px-3 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs"
+              placeholder="Enter post title..."
             />
           </div>
-        </div>
 
-        {/* Excerpt Field */}
-        <div className="space-y-1.5">
-          <label className="font-semibold text-foreground">Excerpt / Summary</label>
-          <textarea
-            value={excerpt}
-            onChange={(e) => setExcerpt(e.target.value)}
-            rows={3}
-            className="w-full px-3 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs resize-none placeholder:text-text-muted"
-            placeholder="A brief summary for catalog cards and preview snippets..."
-          />
-        </div>
-
-        {/* Center of Excellence Dropdown */}
-        <div className="space-y-1.5">
-          <label className="font-semibold text-foreground">Center of Excellence (COE)</label>
-          <select
-            value={coeId}
-            onChange={(e) => setCoeId(e.target.value)}
-            className="w-full px-2.5 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs"
-          >
-            {COE_OPTIONS.map((opt) => (
-              <option key={opt.id} value={opt.id}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-
-        {/* Tags Chips */}
-        <div className="space-y-1.5">
-          <label className="font-semibold text-foreground">Tags</label>
-          <div className="flex flex-wrap gap-1.5 mb-1.5">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-elevated border border-border text-[11px] text-foreground font-medium"
-              >
-                <span>#{tag}</span>
-                <button
-                  type="button"
-                  onClick={() => handleRemoveTag(tag)}
-                  className="p-0.5 rounded-full hover:bg-canvas text-text-muted hover:text-foreground"
+          {/* Slug Field with Purpose Explanation */}
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1">
+                <label className="font-semibold text-foreground">URL Slug</label>
+                <div 
+                  className="text-text-muted cursor-help" 
+                  title="A URL slug is the human-readable web address (permalink) for your post, like /posts/distributed-systems instead of an obscure ID. It makes articles easy to share, read, and bookmark."
                 >
-                  <X className="w-2.5 h-2.5" />
-                </button>
-              </span>
-            ))}
+                  <HelpCircle className="w-3 h-3" />
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={handleGenerateSlug}
+                className="text-[10px] text-accent hover:underline inline-flex items-center gap-1 font-medium"
+              >
+                <Sparkles className="w-2.5 h-2.5" />
+                <span>Slugify Title</span>
+              </button>
+            </div>
+            <div className="flex items-center rounded-lg bg-canvas border border-border px-3 py-1.5 focus-within:border-accent">
+              <span className="text-text-muted select-none text-[11px]">/posts/</span>
+              <input
+                type="text"
+                value={slug}
+                onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ''))}
+                required
+                maxLength={255}
+                className="w-full bg-transparent border-none text-xs text-foreground focus:outline-none pl-0.5"
+                placeholder="clean-article-slug"
+              />
+            </div>
+            <p className="text-[10px] text-text-muted">
+              Used in permanent web links and catalog routing. Use lowercase letters, numbers, and hyphens.
+            </p>
           </div>
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleAddTag}
-              placeholder="Add tag and press Enter..."
-              className="flex-1 px-3 py-1 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs"
+
+          {/* Excerpt Field */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-foreground">Excerpt / Abstract</label>
+            <textarea
+              value={excerpt}
+              onChange={(e) => setExcerpt(e.target.value)}
+              rows={3}
+              className="w-full px-3 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs resize-none placeholder:text-text-muted"
+              placeholder="A concise summary for catalog cards, search listings, and reading previews..."
             />
-            <button
-              type="button"
-              onClick={handleAddTag}
-              className="px-2.5 py-1 rounded-lg border border-border bg-elevated hover:bg-canvas text-foreground text-xs"
+          </div>
+
+          {/* Center of Excellence (COE) with Explanation */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <label className="font-semibold text-foreground">Center of Excellence (COE)</label>
+              <div 
+                className="text-text-muted cursor-help"
+                title="Centers of Excellence group enterprise engineering knowledge by domain (e.g., Architecture, Security, DevOps) for cross-team indexing and governance."
+              >
+                <HelpCircle className="w-3 h-3" />
+              </div>
+            </div>
+            <select
+              value={coeId}
+              onChange={(e) => setCoeId(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs cursor-pointer"
             >
-              <Plus className="w-3.5 h-3.5" />
+              {coeOptions.map((opt) => (
+                <option key={opt.id} value={opt.id}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Tags Chips */}
+          <div className="space-y-1.5">
+            <label className="font-semibold text-foreground">Tags</label>
+            <div className="flex flex-wrap gap-1.5 mb-1.5">
+              {tags.map((tag) => (
+                <span
+                  key={tag}
+                  className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-canvas border border-border text-[11px] text-foreground font-medium"
+                >
+                  <span>#{tag}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(tag)}
+                    className="p-0.5 rounded-full hover:bg-elevated text-text-muted hover:text-foreground"
+                  >
+                    <X className="w-2.5 h-2.5" />
+                  </button>
+                </span>
+              ))}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={tagInput}
+                onChange={(e) => setTagInput(e.target.value)}
+                onKeyDown={handleAddTag}
+                placeholder="Add tag and press Enter..."
+                className="flex-1 px-3 py-1 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs"
+              />
+              <button
+                type="button"
+                onClick={handleAddTag}
+                className="px-2.5 py-1 rounded-lg border border-border bg-elevated hover:bg-canvas text-foreground text-xs font-medium"
+              >
+                <Plus className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Save Changes Button */}
+          <div className="pt-2">
+            <button
+              type="submit"
+              disabled={!isDirty || isSaving}
+              className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-accent text-white font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-xs cursor-pointer"
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Saving Changes...</span>
+                </>
+              ) : (
+                <>
+                  <Save className="w-3.5 h-3.5" />
+                  <span>Save Post Settings</span>
+                </>
+              )}
             </button>
           </div>
-        </div>
+        </form>
 
-        {/* Save Changes Button */}
-        <div className="pt-2">
-          <button
-            type="submit"
-            disabled={!isDirty || isSaving}
-            className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded-lg bg-primary text-primary-foreground font-semibold text-xs hover:opacity-90 transition-all disabled:opacity-50 shadow-xs"
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                <span>Saving Changes...</span>
-              </>
+        {/* ======================================================== */}
+        {/* Collaborators & Co-Authors Section */}
+        {/* ======================================================== */}
+        <div className="border-t border-border pt-5 space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users className="w-4 h-4 text-accent" />
+              <h4 className="font-semibold text-xs text-foreground">Collaborators & Co-Authors</h4>
+            </div>
+            <span className="text-[10px] text-text-muted">
+              {collaborators.length} {collaborators.length === 1 ? 'collaborator' : 'collaborators'}
+            </span>
+          </div>
+
+          <p className="text-[11px] text-text-secondary leading-relaxed">
+            Invite teammates to co-author this post. Collaborators can open this document, write simultaneously in real time, see each other's live carets, and propose suggestions.
+          </p>
+
+          {collabError && (
+            <div className="p-2.5 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{collabError}</span>
+            </div>
+          )}
+
+          {collabSuccess && (
+            <div className="p-2.5 rounded-lg bg-status-success/10 border border-status-success/30 text-status-success text-xs flex items-center gap-2">
+              <Check className="w-4 h-4 shrink-0" />
+              <span>{collabSuccess}</span>
+            </div>
+          )}
+
+          {/* Active Collaborators List */}
+          <div className="space-y-2">
+            {collaborators.length === 0 ? (
+              <div className="p-3 rounded-lg border border-dashed border-border bg-canvas text-center text-text-muted text-[11px]">
+                No external collaborators invited yet. Only you have edit access.
+              </div>
             ) : (
-              <>
-                <Save className="w-3.5 h-3.5" />
-                <span>Save Post Settings</span>
-              </>
+              collaborators.map((c) => (
+                <div
+                  key={c.userId}
+                  className="flex items-center justify-between p-2.5 rounded-lg bg-canvas border border-border shadow-xs"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-7 h-7 rounded-full bg-accent-bg border border-accent/20 flex items-center justify-center font-bold text-xs text-accent shrink-0">
+                      {(c.fullName || c.email)[0].toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="font-medium text-xs text-foreground truncate">
+                        {c.fullName || c.email}
+                      </div>
+                      <div className="text-[10px] text-text-muted truncate">
+                        {c.email}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <span 
+                      className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-semibold border ${
+                        c.permission === 'edit'
+                          ? 'bg-status-success/10 text-status-success border-status-success/30'
+                          : c.permission === 'review'
+                          ? 'bg-status-warning/10 text-status-warning border-status-warning/30'
+                          : 'bg-canvas text-text-secondary border-border'
+                      }`}
+                    >
+                      {c.permission === 'edit' && <Edit3 className="w-2.5 h-2.5" />}
+                      {c.permission === 'review' && <ShieldCheck className="w-2.5 h-2.5" />}
+                      {c.permission === 'view' && <Eye className="w-2.5 h-2.5" />}
+                      <span className="capitalize">{c.permission}</span>
+                    </span>
+
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveCollaborator(c.userId)}
+                      className="p-1 rounded-md text-text-muted hover:text-status-danger hover:bg-elevated transition-colors"
+                      title="Remove collaborator"
+                      aria-label="Remove collaborator"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                </div>
+              ))
             )}
-          </button>
+          </div>
+
+          {/* Add Collaborator Form */}
+          <form onSubmit={handleAddCollaborator} className="space-y-2 pt-2 border-t border-border">
+            <label className="font-semibold text-xs text-foreground flex items-center gap-1.5">
+              <UserPlus className="w-3.5 h-3.5 text-accent" />
+              <span>Invite Teammate</span>
+            </label>
+
+            <div className="space-y-2">
+              {/* Quick Select Teammate from Enterprise Directory */}
+              {availableUsers.length > 0 && (
+                <div className="flex gap-1.5">
+                  <select
+                    value={selectedUserEmail}
+                    onChange={(e) => setSelectedUserEmail(e.target.value)}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-canvas border border-border text-xs text-foreground focus:outline-none focus:border-accent"
+                  >
+                    <option value="">Select from organization directory...</option>
+                    {availableUsers.map((u) => (
+                      <option key={u.id} value={u.email}>
+                        {u.fullName} ({u.email})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Or manual email typing */}
+              <div className="flex gap-2">
+                <input
+                  type="email"
+                  value={selectedUserEmail}
+                  onChange={(e) => setSelectedUserEmail(e.target.value)}
+                  placeholder="Or enter teammate's corporate email..."
+                  className="flex-1 px-3 py-1.5 rounded-lg bg-canvas border border-border text-xs text-foreground focus:outline-none focus:border-accent"
+                />
+                <select
+                  value={collaboratorRole}
+                  onChange={(e) => setCollaboratorRole(e.target.value as any)}
+                  className="px-2 py-1.5 rounded-lg bg-canvas border border-border text-xs text-foreground focus:outline-none focus:border-accent"
+                >
+                  <option value="edit">Editor (Co-write)</option>
+                  <option value="review">Reviewer (Suggest)</option>
+                  <option value="view">Viewer (Read-only)</option>
+                </select>
+              </div>
+
+              <button
+                type="submit"
+                disabled={!selectedUserEmail.trim() || isAddingCollab}
+                className="w-full flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg bg-elevated border border-border hover:bg-canvas text-foreground font-semibold text-xs transition-colors disabled:opacity-50"
+              >
+                {isAddingCollab ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    <span>Adding Collaborator...</span>
+                  </>
+                ) : (
+                  <>
+                    <UserPlus className="w-3.5 h-3.5 text-accent" />
+                    <span>Add as Collaborator</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </form>
         </div>
-      </form>
+      </div>
     </div>
   );
 };

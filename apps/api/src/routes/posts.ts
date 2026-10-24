@@ -107,6 +107,21 @@ export const postRoutes: FastifyPluginAsync<{
     return reply.send({ posts: queryResult });
   });
 
+  // 1.5 Get Centers of Excellence (COE)
+  fastify.get('/coe', async (_request, reply) => {
+    const coes = await db
+      .select({
+        id: centersOfExcellence.id,
+        name: centersOfExcellence.name,
+        code: centersOfExcellence.code,
+        description: centersOfExcellence.description,
+      })
+      .from(centersOfExcellence)
+      .orderBy(centersOfExcellence.name);
+
+    return reply.send({ coes });
+  });
+
   // 2. Get Post by ID or Slug
   fastify.get('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };

@@ -7,6 +7,23 @@ import { CommandSearch } from './CommandSearch.js';
 export const AppLayout: React.FC = () => {
   const [isCommandSearchOpen, setIsCommandSearchOpen] = useState(false);
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('glyphroom_sidebar_collapsed') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  const toggleSidebarCollapse = useCallback(() => {
+    setIsSidebarCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem('glyphroom_sidebar_collapsed', String(next));
+      } catch {}
+      return next;
+    });
+  }, []);
 
   // Global keyboard listener for Cmd+K / Ctrl+K
   useEffect(() => {
@@ -35,6 +52,8 @@ export const AppLayout: React.FC = () => {
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
         onMobileClose={() => setIsMobileSidebarOpen(false)}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={toggleSidebarCollapse}
       />
 
       {/* 2. Main Application Column */}
@@ -43,6 +62,8 @@ export const AppLayout: React.FC = () => {
         <TopBar
           onOpenCommandSearch={handleOpenSearch}
           onToggleMobileSidebar={() => setIsMobileSidebarOpen((prev) => !prev)}
+          isSidebarCollapsed={isSidebarCollapsed}
+          onToggleDesktopSidebar={toggleSidebarCollapse}
         />
 
         {/* Dynamic Route Content Area */}

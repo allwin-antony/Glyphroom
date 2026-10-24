@@ -1,10 +1,13 @@
-import React, { useState } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   FileCheck, 
   Loader2, 
   Clock, 
   CheckCircle2, 
-  AlertCircle 
+  AlertCircle,
+  ChevronDown,
+  Save,
+  Check
 } from 'lucide-react';
 import { Button } from '../ui/button.js';
 import { Badge } from '../ui/badge.js';
@@ -35,7 +38,23 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSavingDraft, setIsSavingDraft] = useState(false);
+  const [draftSavedFeedback, setDraftSavedFeedback] = useState(false);
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+
+  const dropdownRef = useRef<HTMLDivElement>(null);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // If already in review or published, display descriptive badge
   if (status === 'in_review') {
@@ -83,26 +102,105 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
     }
   };
 
-  return (
-    <>
-      <Button
-        variant="default"
-        size="sm"
-        onClick={() => {
-          setErrorMessage(null);
-          setIsDialogOpen(true);
-        }}
-        className={cn("gap-1.5 text-xs font-semibold shadow-xs", className)}
-      >
-        <FileCheck className="w-3.5 h-3.5" />
-        <span>Submit for Review</span>
-      </Button>
+  const handleSaveDraft = async () => {
+    setIsDropdownOpen(false);
+    setIsSavingDraft(true);
+    try {
+      // Explicitly touch and save post as draft
+      await api.patch(`/posts/${postId}`, { status: 'draft' });
+      setDraftSavedFeedback(true);
+      onStatusChange?.('draft');
+      setTimeout(() => setDraftSavedFeedback(false), 2500);
+    } catch (err) {
+      console.warn('Failed to save draft explicitly:', err);
+    } finally {
+      setIsSavingDraft(false);
+    }
+  };
 
+  return (
+    <div className={cn("relative inline-flex items-center", className)} ref={dropdownRef}>
+      {/* Split Button Group */}
+      <div className="inline-flex rounded-lg shadow-xs overflow-hidden border border-accent divide-x divide-white/20">
+        <Button
+          variant="default"
+          size="sm"
+          onClick={() => {
+            setErrorMessage(null);
+            setIsDialogOpen(true);
+          }}
+          className="rounded-none gap-1.5 text-xs font-semibold bg-accent text-white hover:opacity-95 px-3 py-1.5"
+        >
+          <FileCheck className="w-3.5 h-3.5" />
+          <span>Submit for Review</span>
+        </Button>
+
+        {/* Dropdown trigger arrow */}
+        <button
+          type="button"
+          onClick={() => setIsDropdownOpen((prev) => !prev)}
+          className="px-2 bg-accent text-white hover:bg-accent-dark transition-colors flex items-center justify-center focus:outline-none"
+          title="Publishing options & Draft actions"
+          aria-label="Publishing options & Draft actions"
+        >
+          {isSavingDraft ? (
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+          ) : draftSavedFeedback ? (
+            <Check className="w-3.5 h-3.5 text-status-success animate-in zoom-in-75" />
+          ) : (
+            <ChevronDown className={`w-3.5 h-3.5 transition-transform ${isDropdownOpen ? 'rotate-180' : ''}`} />
+          )}
+        </button>
+      </div>
+
+      {/* Draft Saved Transient Pill */}
+      {draftSavedFeedback && (
+        <span className="absolute -bottom-6 left-0 right-0 text-center text-[10px] text-status-success font-semibold flex items-center justify-center gap-1">
+          <Check className="w-3 h-3" />
+          <span>Draft Saved</span>
+        </span>
+      )}
+
+      {/* Dropdown Menu */}
+      {isDropdownOpen && (
+        <div className="absolute right-0 top-full mt-1.5 w-48 rounded-xl bg-elevated border border-border shadow-xl z-50 p-1 animate-in fade-in-50 zoom-in-95 text-foreground">
+          <button
+            type="button"
+            onClick={handleSaveDraft}
+            disabled={isSavingDraft}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg hover:bg-canvas text-left transition-colors cursor-pointer"
+          >
+            <Save className="w-3.5 h-3.5 text-accent" />
+            <div>
+              <div className="font-semibold text-foreground">Save as Draft</div>
+              <div className="text-[10px] text-text-muted">Explicitly save current changes</div>
+            </div>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              setIsDropdownOpen(false);
+              setErrorMessage(null);
+              setIsDialogOpen(true);
+            }}
+            className="w-full flex items-center gap-2.5 px-3 py-2 text-xs font-medium rounded-lg hover:bg-canvas text-left transition-colors border-t border-border mt-1 pt-2 cursor-pointer"
+          >
+            <FileCheck className="w-3.5 h-3.5 text-accent" />
+            <div>
+              <div className="font-semibold text-foreground">Submit for Review</div>
+              <div className="text-[10px] text-text-muted">Send to editorial queue</div>
+            </div>
+          </button>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-primary" />
+              <FileCheck className="w-5 h-5 text-accent" />
               <span>Submit Post for Review</span>
             </DialogTitle>
             <DialogDescription className="pt-2 text-xs text-text-secondary leading-relaxed">
@@ -122,7 +220,7 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
           <DialogFooter className="gap-2 sm:gap-0 pt-2">
             <DialogClose asChild>
               <Button variant="outline" size="sm" disabled={isSubmitting}>
-                Cancel
+                Keep in Draft
               </Button>
             </DialogClose>
             <Button
@@ -130,7 +228,7 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
               size="sm"
               onClick={handleConfirmSubmit}
               disabled={isSubmitting}
-              className="gap-1.5"
+              className="gap-1.5 bg-accent text-white hover:opacity-95"
             >
               {isSubmitting ? (
                 <>
@@ -147,6 +245,6 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </>
+    </div>
   );
 };

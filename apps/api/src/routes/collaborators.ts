@@ -7,8 +7,11 @@ import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 
 const AddCollaboratorSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z.string().uuid().optional(),
+  email: z.string().email().optional(),
   permission: z.enum(['edit', 'review', 'view']),
+}).refine((data) => data.userId || data.email, {
+  message: 'Either userId or email must be provided',
 });
 
 export const collaboratorRoutes: FastifyPluginAsync<{
@@ -17,6 +20,21 @@ export const collaboratorRoutes: FastifyPluginAsync<{
   auditService: AuditService;
 }> = async (fastify, options) => {
   const { db, permissionService, auditService } = options;
+
+  // 0. Search / List available active users to invite as collaborators
+  fastify.get('/collaborators/users', { preHandler: (fastify as any).requireAuth }, async (_request, reply) => {
+    const activeUsers = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+      })
+      .from(users)
+      .where(eq(users.isActive, true));
+
+    return reply.send({ users: activeUsers });
+  });
 
   // 1. List Collaborators for a Post
   fastify.get('/:id/collaborators', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
@@ -74,13 +92,23 @@ export const collaboratorRoutes: FastifyPluginAsync<{
       return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
     }
 
-    const { userId: targetUserId, permission } = parseResult.data;
+    const { userId, email, permission } = parseResult.data;
 
-    // Verify target user exists and is active
-    const [targetUser] = await db.select().from(users).where(eq(users.id, targetUserId)).limit(1);
-    if (!targetUser || !targetUser.isActive) {
-      return reply.status(400).send({ error: 'Bad Request', message: 'Target user does not exist or is inactive' });
+    // Verify target user exists and is active (lookup by userId or email)
+    let targetUser: typeof users.$inferSelect | undefined;
+    if (userId) {
+      const [u] = await db.select().from(users).where(eq(users.id, userId)).limit(1);
+      targetUser = u;
+    } else if (email) {
+      const [u] = await db.select().from(users).where(eq(users.email, email.trim().toLowerCase())).limit(1);
+      targetUser = u;
     }
+
+    if (!targetUser || !targetUser.isActive) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Target user does not exist or is inactive' });
+    }
+
+    const targetUserId = targetUser.id;
 
     // Upsert collaborator
     const [existing] = await db

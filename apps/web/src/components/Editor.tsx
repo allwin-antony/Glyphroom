@@ -18,7 +18,6 @@ import {
   Heading2,
   List,
   AlertCircle,
-  Sparkles,
 } from 'lucide-react';
 
 export interface CollaborativeEditorProps {
@@ -310,13 +309,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           <List size={14} />
         </button>
 
-        <span className="text-border mx-1">|</span>
-
-        {/* Suggestion Mode Status Indicator - strictly violet for AI agents */}
-        <div className="ml-auto inline-flex items-center gap-1.5 text-xs text-agent bg-agent/10 border border-agent/25 px-2.5 py-1 rounded-full font-semibold">
-          <Sparkles size={13} />
-          <span>Agent Suggestion Engine Active</span>
-        </div>
+        {allSuggestions.length > 0 && (
+          <div className="ml-auto inline-flex items-center gap-1.5 text-xs text-text-secondary bg-elevated border border-border px-2.5 py-0.5 rounded-full font-medium shadow-xs">
+            <span>{allSuggestions.length} {allSuggestions.length === 1 ? 'suggestion' : 'suggestions'} pending</span>
+          </div>
+        )}
       </div>
 
       {/* Floating Suggestion Action Menu */}
