@@ -55,6 +55,7 @@ import {
   Loader2,
   X,
   ShieldAlert,
+  Trash2,
 } from 'lucide-react';
 
 export interface CollaborativeEditorProps {
@@ -94,7 +95,18 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
 
   // View Mode: 'document' (flow) vs 'block' (discrete foldable cards)
-  const [viewMode, setViewMode] = useState<'document' | 'block'>('document');
+  const [viewMode, setViewMode] = useState<'document' | 'block'>(() => {
+    return (localStorage.getItem('glyphroom_view_mode') as 'document' | 'block') || 'document';
+  });
+
+  const handleToggleViewMode = (mode: 'document' | 'block') => {
+    setViewMode(mode);
+    try {
+      localStorage.setItem('glyphroom_view_mode', mode);
+    } catch {
+      // ignore localstorage errors
+    }
+  };
   const [reorderConflictMessage, setReorderConflictMessage] = useState<string | null>(null);
   const [currentBlockInfo, setCurrentBlockInfo] = useState<{
     index: number;
@@ -321,6 +333,24 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         }`,
       },
       handleKeyDown: (view, event) => {
+        // Shift+Enter: In Notebook mode, split or insert a new card below
+        if (event.key === 'Enter' && event.shiftKey) {
+          event.preventDefault();
+          const { state, dispatch } = view;
+          const { from } = state.selection;
+          const $from = state.doc.resolve(from);
+          const blockIndex = $from.index(0);
+          let pos = 0;
+          for (let i = 0; i <= blockIndex; i++) {
+            pos += state.doc.child(i).nodeSize;
+          }
+          const pNode = state.schema.nodes.paragraph.create();
+          const tr = state.tr.insert(pos, pNode);
+          dispatch(tr);
+          view.focus();
+          return true;
+        }
+
         // Trigger slash menu when user presses '/' on an empty block
         if (event.key === '/') {
           const { $from } = view.state.selection;
@@ -470,6 +500,154 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
     updateCurrentBlockInfo(editor);
   };
+
+  // Split / Insert New Card Below (Notebook Cell)
+  const handleInsertCardBelow = useCallback(
+    (
+      type:
+        | 'paragraph'
+        | 'codeBlock'
+        | 'table'
+        | 'mermaidBlock'
+        | 'mathBlock'
+        | 'projectStatusBlock'
+        | 'taskList'
+        | 'heading'
+    ) => {
+      if (!editor) return;
+      const { from } = editor.state.selection;
+      const $from = editor.state.doc.resolve(from);
+      const blockIndex = $from.index(0);
+      const totalChildren = editor.state.doc.childCount;
+
+      let pos = 0;
+      for (let i = 0; i <= blockIndex && i < totalChildren; i++) {
+        pos += editor.state.doc.child(i).nodeSize;
+      }
+
+      if (type === 'paragraph') {
+        editor.chain().insertContentAt(pos, { type: 'paragraph' }).focus(pos + 1).run();
+      } else if (type === 'codeBlock') {
+        editor
+          .chain()
+          .insertContentAt(pos, { type: 'codeBlock', attrs: { language: 'typescript' } })
+          .focus(pos + 1)
+          .run();
+      } else if (type === 'heading') {
+        editor
+          .chain()
+          .insertContentAt(pos, {
+            type: 'heading',
+            attrs: { level: 2 },
+            content: [{ type: 'text', text: 'New Section' }],
+          })
+          .focus(pos + 1)
+          .run();
+      } else if (type === 'table') {
+        editor
+          .chain()
+          .insertContentAt(pos, {
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Col 1' }] }] },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Col 2' }] }] },
+                ],
+              },
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Data 1' }] }] },
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Data 2' }] }] },
+                ],
+              },
+            ],
+          })
+          .focus(pos + 1)
+          .run();
+      } else if (type === 'mermaidBlock') {
+        editor
+          .chain()
+          .insertContentAt(pos, {
+            type: 'mermaidBlock',
+            attrs: { code: 'graph TD\n  A[Start] --> B[Process]\n  B --> C[End]' },
+          })
+          .focus(pos + 1)
+          .run();
+      } else if (type === 'mathBlock') {
+        editor
+          .chain()
+          .insertContentAt(pos, {
+            type: 'mathBlock',
+            attrs: { formula: 'E = mc^2' },
+          })
+          .focus(pos + 1)
+          .run();
+      } else if (type === 'projectStatusBlock') {
+        editor
+          .chain()
+          .insertContentAt(pos, {
+            type: 'projectStatusBlock',
+            attrs: {
+              ragStatus: 'green',
+              milestoneTitle: 'Sprint Milestone',
+              completionPercent: 50,
+              targetDate: new Date().toISOString().split('T')[0],
+              blockers: 'None',
+            },
+          })
+          .focus(pos + 1)
+          .run();
+      } else if (type === 'taskList') {
+        editor
+          .chain()
+          .insertContentAt(pos, {
+            type: 'taskList',
+            content: [
+              {
+                type: 'taskItem',
+                attrs: { checked: false },
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'New deliverable' }] }],
+              },
+            ],
+          })
+          .focus(pos + 1)
+          .run();
+      }
+
+      updateCurrentBlockInfo(editor);
+    },
+    [editor, updateCurrentBlockInfo]
+  );
+
+  // Delete currently selected card (if not the sole card)
+  const handleDeleteCurrentCard = useCallback(() => {
+    if (!editor) return;
+    const totalChildren = editor.state.doc.childCount;
+    if (totalChildren <= 1) return;
+
+    const { from } = editor.state.selection;
+    const $from = editor.state.doc.resolve(from);
+    const blockIndex = $from.index(0);
+
+    let pos = 0;
+    let currentStart = 0;
+    let currentEnd = 0;
+    for (let i = 0; i < totalChildren; i++) {
+      const size = editor.state.doc.child(i).nodeSize;
+      if (i === blockIndex) {
+        currentStart = pos;
+        currentEnd = pos + size;
+        break;
+      }
+      pos += size;
+    }
+
+    editor.chain().deleteRange({ from: currentStart, to: currentEnd }).focus().run();
+    updateCurrentBlockInfo(editor);
+  }, [editor, updateCurrentBlockInfo]);
 
   // Template Scaffolding Injection
   const handleApplyTemplate = (templateId: string) => {
@@ -781,7 +959,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         {/* View Mode Toggle: Document Flow vs Block View */}
         <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas mr-1">
           <button
-            onClick={() => setViewMode('document')}
+            onClick={() => handleToggleViewMode('document')}
             className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
               viewMode === 'document'
                 ? 'bg-elevated text-foreground shadow-xs'
@@ -793,7 +971,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             <span>Doc</span>
           </button>
           <button
-            onClick={() => setViewMode('block')}
+            onClick={() => handleToggleViewMode('block')}
             className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
               viewMode === 'block'
                 ? 'bg-elevated text-accent shadow-xs'
@@ -1064,18 +1242,30 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
       {/* Block View Active Control Bar (Visible when in Block View) */}
       {viewMode === 'block' && currentBlockInfo && (
-        <div className="flex items-center justify-between px-4 py-1.5 bg-surface border-b border-border text-xs">
+        <div className="flex items-center justify-between px-4 py-1.5 bg-surface border-b border-border text-xs select-none">
           <div className="flex items-center gap-2">
             <span className="font-semibold text-text-muted">
-              Block {currentBlockInfo.index} of {currentBlockInfo.total}:
+              Card {currentBlockInfo.index} of {currentBlockInfo.total}:
             </span>
             <span className="px-2 py-0.5 rounded-md bg-canvas border border-border font-mono text-[11px] text-accent font-semibold">
               {currentBlockInfo.type}
             </span>
           </div>
 
-          <div className="flex items-center gap-1">
-            <span className="text-[11px] text-text-muted mr-1">Reorder:</span>
+          <div className="flex items-center gap-2">
+            {/* Split / Insert New Card Below */}
+            <button
+              onClick={() => handleInsertCardBelow('paragraph')}
+              className="flex items-center gap-1 px-2 py-0.5 rounded border border-border bg-canvas hover:bg-elevated text-foreground text-[11px] font-medium transition-colors"
+              title="Split / Insert New Card Below (Shift+Enter)"
+            >
+              <Plus size={12} className="text-accent" />
+              <span>+ Card Below</span>
+            </button>
+
+            <span className="text-border">|</span>
+
+            <span className="text-[11px] text-text-muted mr-0.5">Move:</span>
             <button
               onClick={() => handleMoveBlock('up')}
               disabled={currentBlockInfo.index <= 1}
@@ -1091,6 +1281,18 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
               title="Move Block Down (▼)"
             >
               <ChevronDown size={13} />
+            </button>
+
+            <span className="text-border">|</span>
+
+            {/* Delete Card */}
+            <button
+              onClick={handleDeleteCurrentCard}
+              disabled={currentBlockInfo.total <= 1}
+              className="p-1 rounded border border-border bg-canvas hover:bg-status-danger/10 text-text-muted hover:text-status-danger disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              title="Delete Card"
+            >
+              <Trash2 size={13} />
             </button>
           </div>
         </div>
@@ -1155,11 +1357,96 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       <div className="flex flex-1 overflow-hidden bg-canvas min-w-0">
         <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center min-w-0">
           <div
-            className={`w-full max-w-[780px] min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40 transition-colors my-2 ${
-              viewMode === 'block' ? 'bg-canvas border-dashed' : ''
+            className={`w-full max-w-[820px] transition-all my-2 ${
+              viewMode === 'block'
+                ? 'enterprise-block-mode pb-12'
+                : 'min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40'
             }`}
           >
             <EditorContent editor={editor} className="w-full max-w-full" />
+
+            {/* In Block View: Notebook-style "+ Add Cell" dock at the bottom of cards */}
+            {viewMode === 'block' && (
+              <div className="mt-8 pt-4 border-t border-border flex flex-col items-center gap-2 select-none">
+                <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                  + Add Notebook Card (.ipynb)
+                </div>
+                <div className="flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-xl bg-surface border border-border shadow-xs">
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('paragraph')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Text / Markdown Card"
+                  >
+                    <FileText size={12} className="text-text-muted" />
+                    <span>+ Text</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('codeBlock')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Code Cell"
+                  >
+                    <Code size={12} className="text-accent" />
+                    <span>+ Code</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('heading')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Section Header Card"
+                  >
+                    <Heading2 size={12} className="text-text-muted" />
+                    <span>+ Section</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('table')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Table Matrix Card"
+                  >
+                    <TableIcon size={12} className="text-accent" />
+                    <span>+ Table</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('mermaidBlock')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Architecture Diagram Card"
+                  >
+                    <GitGraph size={12} className="text-accent" />
+                    <span>+ Diagram</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('projectStatusBlock')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Health & Milestone Pulse Card"
+                  >
+                    <Flag size={12} className="text-success" />
+                    <span>+ Status</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('taskList')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Task Checklist Card"
+                  >
+                    <CheckSquare size={12} className="text-success" />
+                    <span>+ Tasks</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('mathBlock')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Math / KaTeX Formula Card"
+                  >
+                    <Sigma size={12} className="text-accent" />
+                    <span>+ Math</span>
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
