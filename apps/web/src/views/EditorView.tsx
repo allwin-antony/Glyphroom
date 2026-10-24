@@ -263,7 +263,7 @@ export const EditorView: React.FC = () => {
         <OutlineRail editor={editor} />
 
         {/* Center TipTap Collaborative Canvas */}
-        <main className="flex-1 overflow-hidden flex flex-col bg-canvas">
+        <main className="flex-1 overflow-hidden flex flex-col bg-canvas min-w-0">
           <CollaborativeEditor
             ydoc={ydoc}
             provider={provider || undefined}

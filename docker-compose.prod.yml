@@ -98,7 +98,7 @@ services:
       PORT: 4000
       HOST: 0.0.0.0
       DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-enterprise_blogger}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,https://blog.corp.internal}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://127.0.0.1:3000,https://blog.corp.internal}
       GATEWAY_SECRET: ${GATEWAY_SECRET:-blogger_gateway_secret_key_32bytes}
       COLLAB_GATEWAY_SECRET: ${GATEWAY_SECRET:-blogger_gateway_secret_key_32bytes}
       FLUSH_DEBOUNCE_MS: ${FLUSH_DEBOUNCE_MS:-3000}

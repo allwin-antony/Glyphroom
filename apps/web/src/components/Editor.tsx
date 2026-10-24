@@ -146,8 +146,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     ],
     editorProps: {
       attributes: {
-        class: 'enterprise-editor-content',
-        style: 'outline: none; padding: 24px; min-height: 500px;',
+        class: 'enterprise-editor-content w-full focus:outline-none',
       },
     },
     onUpdate: ({ editor }) => {
@@ -333,10 +332,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       )}
 
       {/* Main workspace layout: Editor canvas centered on paper surface + Suggestion sidebar */}
-      <div className="flex flex-1 overflow-hidden bg-canvas">
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center">
-          <div className="w-full max-w-[740px] min-h-[700px] bg-surface border border-border rounded-2xl p-8 sm:p-12 shadow-sm text-foreground focus-within:border-accent-main/40 transition-colors">
-            <EditorContent editor={editor} />
+      <div className="flex flex-1 overflow-hidden bg-canvas min-w-0">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center min-w-0">
+          <div className="w-full max-w-[780px] min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40 transition-colors my-2">
+            <EditorContent editor={editor} className="w-full max-w-full" />
           </div>
         </div>
 

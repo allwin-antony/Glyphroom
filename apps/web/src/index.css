@@ -134,15 +134,36 @@
 /* TipTap & ProseMirror Core Styles */
 .ProseMirror {
   outline: none;
-  min-height: 400px;
+  min-height: 500px;
   font-size: 16px;
-  line-height: 1.65;
+  line-height: 1.7;
   color: var(--text);
-  max-width: 720px;
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  overflow-wrap: break-word;
+  word-break: break-word;
 }
 
-.ProseMirror p {
+.ProseMirror * {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.ProseMirror p,
+.ProseMirror h1,
+.ProseMirror h2,
+.ProseMirror h3,
+.ProseMirror h4 {
   margin: 0.75em 0;
+  word-break: break-word;
+  overflow-wrap: break-word;
+}
+
+.enterprise-editor-content {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .ProseMirror pre, .ProseMirror code {
