@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Secure REST API Client
+ * Glyphroom — Secure REST API Client
  * 
  * Features:
  * - Automatic credentials: 'include' for HTTP-only cookie transport

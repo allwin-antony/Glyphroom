@@ -369,7 +369,7 @@ export const ReaderView: React.FC = () => {
           onClick={() => navigate('/catalog')}
           className="px-4 py-2 rounded-lg bg-surface border border-border hover:bg-elevated text-xs font-semibold text-foreground transition-colors"
         >
-          Return to Knowledge Catalog
+          Browse Articles
         </button>
       </div>
     );

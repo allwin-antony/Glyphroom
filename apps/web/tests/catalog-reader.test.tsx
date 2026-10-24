@@ -98,7 +98,7 @@ describe('Phase C & E: Knowledge Catalog & Reader View Suite', () => {
       );
 
       // Verify Header
-      expect(screen.getByText('Knowledge Catalog')).toBeDefined();
+      expect(screen.getByText('Catalog')).toBeDefined();
 
       // Wait for posts to load
       await waitFor(() => {

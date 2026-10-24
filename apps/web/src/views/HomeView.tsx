@@ -6,7 +6,6 @@ import {
   BookOpen,
   Sparkles,
   Clock,
-  CheckCircle2,
   TrendingUp,
   ArrowRight,
   Plus,
@@ -58,13 +57,13 @@ export const HomeView: React.FC = () => {
         <div className="max-w-2xl">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-accent-bg text-accent-main border border-accent-main/20 mb-4">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Glyphroom Knowledge Hub</span>
+            <span>Glyphroom</span>
           </div>
           <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
-            Welcome back, {user?.fullName || 'Colleague'}
+            Welcome back, {user?.fullName || 'Friend'}
           </h1>
           <p className="mt-2 text-sm text-text-secondary leading-relaxed">
-            Collaborate in real time with human peers and AI agents using Yjs CRDT suggestion mode.
+            A calm, focused space for reading, writing, and collaboration.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             {user && user.role !== 'reader' && (
@@ -73,45 +72,39 @@ export const HomeView: React.FC = () => {
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-semibold text-xs shadow-sm transition-all"
               >
                 <Plus className="w-4 h-4" />
-                <span>Draft New Post</span>
+                <span>Write Story</span>
               </button>
             )}
             <button
               onClick={() => navigate('/catalog')}
               className="px-4 py-2 rounded-lg bg-surface hover:bg-elevated text-foreground font-medium text-xs border border-border transition-all shadow-sm"
             >
-              Explore Knowledge Catalog
+              Browse Articles
             </button>
           </div>
         </div>
       </div>
 
-      {/* Metrics Row */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Metrics Row - 3 Clean Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         {[
           {
-            label: 'Published Knowledge',
-            value: `${publishedPosts.length || 0} Articles`,
+            label: 'Published Stories',
+            value: `${publishedPosts.length || 0} Stories`,
             icon: BookOpen,
             color: 'text-accent-main',
           },
           {
-            label: 'Pending Reviews',
-            value: `${inReviewPosts.length || 0} In Review`,
+            label: 'In Review',
+            value: `${inReviewPosts.length || 0} Pending`,
             icon: Clock,
             color: 'text-status-warning',
           },
           {
-            label: 'My Working Drafts',
+            label: 'Your Drafts',
             value: `${draftPosts.length || 0} Drafts`,
             icon: FileText,
             color: 'text-agent',
-          },
-          {
-            label: 'Audit Chain Status',
-            value: '100% Verified',
-            icon: CheckCircle2,
-            color: 'text-status-success',
           },
         ].map((metric) => {
           const Icon = metric.icon;
@@ -132,14 +125,14 @@ export const HomeView: React.FC = () => {
         })}
       </div>
 
-      {/* Main Grid: Pinned Posts & Pending Actions */}
+      {/* Main Grid: Featured Stories & Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Pinned Articles */}
+        {/* Featured Stories */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-base font-bold text-foreground flex items-center gap-2">
               <TrendingUp className="w-4 h-4 text-accent-main" />
-              <span>Recent & Official Architecture Posts</span>
+              <span>Recent Stories</span>
             </h2>
             <button
               onClick={() => navigate('/catalog')}
@@ -161,13 +154,13 @@ export const HomeView: React.FC = () => {
               ))
             ) : featuredPosts.length === 0 ? (
               <div className="p-8 rounded-xl bg-surface border border-border text-center space-y-2">
-                <p className="text-xs text-text-secondary">No publications published yet.</p>
+                <p className="text-xs text-text-secondary">No stories published yet.</p>
                 {user && user.role !== 'reader' && (
                   <button
                     onClick={() => navigate('/posts/new')}
                     className="text-xs text-accent-main font-semibold hover:underline"
                   >
-                    Draft your first article →
+                    Start your first story →
                   </button>
                 )}
               </div>
@@ -201,10 +194,10 @@ export const HomeView: React.FC = () => {
                   <div className="mt-3 flex items-center justify-between text-xs text-text-muted pt-3 border-t border-border">
                     <span className="flex items-center gap-1.5">
                       <User className="w-3.5 h-3.5 text-text-secondary" />
-                      <span>By {post.authorName || 'Staff Author'}</span>
+                      <span>By {post.authorName || 'Author'}</span>
                     </span>
                     <span className="text-accent-main font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
-                      Read article <ArrowRight className="w-3 h-3" />
+                      Read <ArrowRight className="w-3 h-3" />
                     </span>
                   </div>
                 </div>
@@ -213,21 +206,21 @@ export const HomeView: React.FC = () => {
           </div>
         </div>
 
-        {/* Pending Actions Widget */}
+        {/* Quick Workspace Widget */}
         <div className="space-y-4">
           <h2 className="text-base font-bold text-foreground flex items-center gap-2">
             <Clock className="w-4 h-4 text-status-warning" />
-            <span>Workflow & Collaboration</span>
+            <span>Workspace</span>
           </h2>
 
           <div className="p-5 rounded-xl bg-surface border border-border shadow-sm space-y-4">
             <div className="p-3.5 rounded-lg bg-canvas border border-border">
               <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-agent" />
-                <span>AI Agent Collaboration Active</span>
+                <FileText className="w-3.5 h-3.5 text-accent-main" />
+                <span>Your Drafts & Ideas</span>
               </div>
               <div className="text-[11px] text-text-secondary mt-1 leading-relaxed">
-                Connect MCP agent tools to review proposals or suggest edits directly into Yjs CRDT documents.
+                Pick up right where you left off, review suggestions, or start drafting your next story.
               </div>
               <button
                 onClick={() => navigate('/my-work')}
@@ -245,8 +238,8 @@ export const HomeView: React.FC = () => {
                 </div>
                 <div className="text-[11px] text-text-secondary mt-1">
                   {inReviewPosts.length > 0
-                    ? `${inReviewPosts.length} submission(s) awaiting editorial approval.`
-                    : 'All submitted posts have been reviewed.'}
+                    ? `${inReviewPosts.length} story submission(s) waiting for editorial review.`
+                    : 'All submitted stories have been reviewed.'}
                 </div>
                 <button
                   onClick={() => navigate('/reviews')}

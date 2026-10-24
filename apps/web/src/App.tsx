@@ -56,7 +56,7 @@ export const App: React.FC = () => {
             }}
           >
             <ShieldCheck size={20} color="#38bdf8" />
-            <span>Enterprise Blogger 2.0</span>
+            <span>Glyphroom</span>
           </div>
 
           <span style={{ color: '#475569' }}>|</span>

@@ -185,10 +185,10 @@ export const CatalogView: React.FC = () => {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             <BookOpen className="w-6 h-6 text-accent-main" />
-            <span>Knowledge Catalog</span>
+            <span>Catalog</span>
           </h1>
           <p className="text-xs text-text-secondary mt-1">
-            Search, filter, and discover verified enterprise publications and engineering specifications.
+            Browse, search, and discover articles and perspectives across topics.
           </p>
         </div>
 
@@ -254,7 +254,7 @@ export const CatalogView: React.FC = () => {
           onChange={(e) => setSelectedCoe(e.target.value)}
           className="px-3 py-2 rounded-lg bg-canvas border border-border-strong text-xs text-foreground focus:outline-none focus:border-accent-main"
         >
-          <option value="all">All COEs / Guilds</option>
+          <option value="all">All Topics</option>
           {coeOptions.map((coe) => (
             <option key={coe} value={coe}>
               {coe}
@@ -334,7 +334,7 @@ export const CatalogView: React.FC = () => {
             <p className="text-xs text-text-secondary mt-1 max-w-sm mx-auto">
               {searchTerm || selectedCoe !== 'all' || selectedStatus !== 'all'
                 ? 'Try broadening your search term or resetting your filter criteria.'
-                : 'The knowledge catalog is currently empty. Be the first to publish enterprise guidance!'}
+                : 'The catalog is currently empty. Be the first to write and share an article!'}
             </p>
           </div>
           <div className="flex justify-center gap-3 pt-2">

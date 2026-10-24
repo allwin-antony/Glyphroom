@@ -12,7 +12,6 @@ import {
   Settings,
   PlusCircle,
   X,
-  Radio,
 } from 'lucide-react';
 
 export interface SidebarProps {
@@ -83,13 +82,9 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <div className="font-bold text-base tracking-tight text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                <span>Glyphroom</span>
-                <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400">
-                  2.0
-                </span>
+              <div className="font-bold text-base tracking-tight text-slate-900 dark:text-slate-100">
+                Glyphroom
               </div>
-              <div className="text-[11px] text-slate-500 dark:text-slate-400">Knowledge & Publishing</div>
             </div>
           </div>
 
@@ -153,10 +148,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isMobileOpen, onMobileClose })
         {/* Footer Session Capsule */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/80">
           <div className="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400 mb-2.5">
-            <span className="flex items-center gap-1.5">
-              <Radio className="w-3 h-3 text-emerald-500 animate-pulse" />
-              <span>Core Live</span>
-            </span>
+            <span className="font-medium">Theme</span>
             <ThemeToggle />
           </div>
 

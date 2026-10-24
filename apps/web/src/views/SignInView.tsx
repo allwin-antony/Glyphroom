@@ -74,7 +74,7 @@ export const SignInView: React.FC = () => {
             Glyphroom
           </h1>
           <p className="mt-2 text-sm text-slate-400">
-            Collaborative Enterprise Knowledge Platform
+            Sign in to your account
           </p>
         </div>
 
@@ -116,7 +116,7 @@ export const SignInView: React.FC = () => {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label htmlFor="email" className="block text-xs font-medium text-slate-300 mb-1.5">
-                Corporate Email
+                Email Address
               </label>
               <input
                 id="email"
