@@ -11,18 +11,26 @@ export const AdminView: React.FC = () => {
   const handleVerifyChain = async () => {
     setIsVerifying(true);
     setVerifyError(null);
-    setVerifyStatus('Verifying SHA-256 chain...');
+    setVerifyStatus(null);
     try {
-      const res = await api.get<{ valid: boolean; totalRows: number; tamperedRowId?: string }>('/audit/verify');
-      if (res.valid) {
-        setVerifyStatus(`100% Cryptographically Verified (${res.totalRows} blocks verified, 0 discrepancies)`);
+      const result = await api.get<{ valid: boolean; totalRows?: number; tamperedRowId?: string }>('/audit/verify');
+      if (result.valid) {
+        setVerifyStatus(
+          result.totalRows !== undefined
+            ? `100% Cryptographically Verified (${result.totalRows} blocks verified, 0 discrepancies)`
+            : '100% Cryptographically Verified (Genesis chain verified, 0 discrepancies)'
+        );
       } else {
-        setVerifyError(`Tamper detected at row ID: ${res.tamperedRowId}`);
+        setVerifyError(
+          result.tamperedRowId
+            ? `Tamper detected at row ID: ${result.tamperedRowId}`
+            : 'Integrity verification detected anomalies'
+        );
         setVerifyStatus(null);
       }
-    } catch {
-      // Graceful fallback for offline / mock testing
-      setVerifyStatus('100% Cryptographically Verified (Genesis chain verified, 0 discrepancies)');
+    } catch (err: any) {
+      setVerifyError(err.message || 'Failed to communicate with audit verification service. Please verify backend status.');
+      setVerifyStatus(null);
     } finally {
       setIsVerifying(false);
     }
@@ -62,6 +70,30 @@ export const AdminView: React.FC = () => {
         })}
       </div>
 
+      {/* User Directory Tab Content */}
+      {activeTab === 'users' && (
+        <div className="space-y-4">
+          <div className="p-5 rounded-xl bg-slate-900 border border-slate-800">
+            <h2 className="text-sm font-bold text-slate-100">User Management Directory</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Manage enterprise member accounts, role assignments (admin, moderator, author, reader), and access status.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* PAT Token Inventory Tab Content */}
+      {activeTab === 'pats' && (
+        <div className="space-y-4">
+          <div className="p-5 rounded-xl bg-slate-900 border border-slate-800">
+            <h2 className="text-sm font-bold text-slate-100">Personal Access Tokens (PAT) Inventory</h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Active enterprise-wide personal access tokens, authorized scopes, and credential revocation controls.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Audit Log Tab Content */}
       {activeTab === 'audit' && (
         <div className="space-y-4">
@@ -89,18 +121,25 @@ export const AdminView: React.FC = () => {
           </div>
 
           {verifyStatus && (
-            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-semibold flex items-center gap-2" role="status">
               <CheckCircle2 className="w-4 h-4" />
               <span>{verifyStatus}</span>
             </div>
           )}
 
           {verifyError && (
-            <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold flex items-center gap-2">
+            <div className="p-4 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-400 text-xs font-semibold flex items-center gap-2" role="alert">
               <AlertCircle className="w-4 h-4" />
               <span>{verifyError}</span>
             </div>
           )}
+
+          <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-3">
+            <h3 className="text-xs font-bold text-slate-200 uppercase tracking-wider">Audit Timeline & Event Stream</h3>
+            <p className="text-xs text-slate-400">
+              Immutable append-only ledger of platform governance actions, authentication events, and document updates.
+            </p>
+          </div>
         </div>
       )}
     </div>
