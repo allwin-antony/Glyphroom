@@ -4,6 +4,7 @@ import { createDatabaseClient, type Database } from './db/index.js';
 import { AuthService } from './services/auth.js';
 import { AuditService } from './services/audit.js';
 import { PermissionService } from './services/permissions.js';
+import { BufferedViewCounter } from './services/view-counter.js';
 import { authPlugin } from './plugins/auth.js';
 import { authRoutes } from './routes/auth.js';
 import { postRoutes } from './routes/posts.js';
@@ -23,6 +24,7 @@ export interface ApiAppOptions {
 export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   app: FastifyInstance;
   db: Database;
+  viewCounter: BufferedViewCounter;
   close: () => Promise<void>;
 }> {
   let db: Database;
@@ -49,6 +51,8 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   const authService = new AuthService(db, options.sessionSecret);
   const auditService = new AuditService(db);
   const permissionService = new PermissionService(db);
+  const viewCounter = new BufferedViewCounter(db);
+  viewCounter.start();
 
   await app.register(authPlugin, { authService });
 
@@ -68,6 +72,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     db,
     permissionService,
     auditService,
+    viewCounter,
   });
 
   await app.register(collaboratorRoutes, {
@@ -104,9 +109,10 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   });
 
   const close = async () => {
+    await viewCounter.stop();
     await app.close();
     await closeDb();
   };
 
-  return { app, db, close };
+  return { app, db, viewCounter, close };
 }

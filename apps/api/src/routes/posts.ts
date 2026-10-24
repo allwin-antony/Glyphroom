@@ -2,10 +2,13 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { eq, and, desc, or } from 'drizzle-orm';
 import * as Y from 'yjs';
+import { yDocToProsemirrorJSON } from 'y-prosemirror';
+import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
 import type { Database } from '../db/index.js';
-import { posts, postViewCounts } from '../db/schema.js';
+import { posts, postViewCounts, postVersions } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
+import type { BufferedViewCounter } from '../services/view-counter.js';
 
 const CreatePostSchema = z.object({
   title: z.string().min(1).max(500),
@@ -25,30 +28,32 @@ export const postRoutes: FastifyPluginAsync<{
   db: Database;
   permissionService: PermissionService;
   auditService: AuditService;
+  viewCounter?: BufferedViewCounter;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService } = options;
+  const { db, permissionService, auditService, viewCounter } = options;
 
-  // 1. List Posts with visibility rules
+  // 1. List & Search Posts with strict visibility rules
   fastify.get('/', async (request, reply) => {
     const user = request.user;
+    const { search } = request.query as { search?: string };
 
-    // If user is admin or moderator: can see all posts (or drafts if querying)
-    // If regular author: can see published posts + their own drafts
-    // If reader or unauthenticated: can ONLY see published posts
     let queryResult;
 
     if (!user || user.role === 'reader') {
+      // Readers and public see ONLY published posts
       queryResult = await db
         .select()
         .from(posts)
         .where(eq(posts.status, 'published'))
         .orderBy(desc(posts.publishedAt), desc(posts.createdAt));
     } else if (user.role === 'admin' || user.role === 'moderator') {
+      // Admin/Moderators see all posts
       queryResult = await db
         .select()
         .from(posts)
         .orderBy(desc(posts.createdAt));
     } else {
+      // Authors see published posts + their own drafts
       queryResult = await db
         .select()
         .from(posts)
@@ -59,6 +64,18 @@ export const postRoutes: FastifyPluginAsync<{
           )
         )
         .orderBy(desc(posts.createdAt));
+    }
+
+    // Apply search filter if query string provided
+    if (search && search.trim().length > 0) {
+      const q = search.trim().toLowerCase();
+      queryResult = queryResult.filter(
+        (p) =>
+          p.title.toLowerCase().includes(q) ||
+          (p.excerpt && p.excerpt.toLowerCase().includes(q)) ||
+          (p.workingMarkdown && p.workingMarkdown.toLowerCase().includes(q)) ||
+          (p.publishedMarkdown && p.publishedMarkdown.toLowerCase().includes(q))
+      );
     }
 
     return reply.send({ posts: queryResult });
@@ -90,6 +107,9 @@ export const postRoutes: FastifyPluginAsync<{
     if (!permissionService.canView(permission)) {
       return reply.status(403).send({ error: 'Forbidden', message: 'You do not have access to view this post' });
     }
+
+    // Increment detached in-memory view counter (Task 4.5)
+    viewCounter?.increment(post.id);
 
     return reply.send({ post, userPermission: permission });
   });
@@ -237,7 +257,7 @@ export const postRoutes: FastifyPluginAsync<{
     return reply.send({ post: updatedPost });
   });
 
-  // 6. Publish Post (Requires Admin or Non-Author Moderator)
+  // 6. Publish Post with Discrete Milestone Snapshot (Task 4.3)
   fastify.post('/:id/publish', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
     const user = request.user!;
     const { id } = request.params as { id: string };
@@ -262,10 +282,48 @@ export const postRoutes: FastifyPluginAsync<{
       });
     }
 
+    // Derive markdown snapshot from canonical Yjs binary state
+    let publishedMarkdown = '';
+    try {
+      const doc = new Y.Doc();
+      if (post.yjsState && post.yjsState.length > 0) {
+        Y.applyUpdate(doc, new Uint8Array(post.yjsState));
+        const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
+        publishedMarkdown = exportDerivedMarkdown(pmJson as any);
+      }
+    } catch {
+      publishedMarkdown = `# ${post.title}\n\nPublished content.`;
+    }
+
+    // Monotonically increment version number
+    const [latestVersion] = await db
+      .select({ versionNumber: postVersions.versionNumber })
+      .from(postVersions)
+      .where(eq(postVersions.postId, id))
+      .orderBy(desc(postVersions.versionNumber))
+      .limit(1);
+
+    const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+
+    // Create immutable post_versions row
+    const [version] = await db
+      .insert(postVersions)
+      .values({
+        postId: id,
+        versionNumber: nextVersionNumber,
+        triggerReason: 'publication',
+        yjsStateSnapshot: post.yjsState,
+        markdownSnapshot: publishedMarkdown,
+        createdBy: user.userId,
+      })
+      .returning();
+
     const [publishedPost] = await db
       .update(posts)
       .set({
         status: 'published',
+        publishedVersionId: version.id,
+        publishedMarkdown,
         publishedAt: new Date(),
         updatedAt: new Date(),
       })
@@ -278,9 +336,10 @@ export const postRoutes: FastifyPluginAsync<{
       action: 'post_published',
       entityType: 'post',
       entityId: id,
+      metadata: { versionNumber: nextVersionNumber, versionId: version.id },
       ipAddress: request.ip,
     });
 
-    return reply.send({ post: publishedPost });
+    return reply.send({ post: publishedPost, version });
   });
 };
