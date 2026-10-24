@@ -136,4 +136,32 @@ describe('Tier 1: Structured Documentation, Block View & Attachment Pipeline', (
 
     ydoc.destroy();
   });
+
+  it('renders block view with block title inserter and delete cell action', async () => {
+    const ydoc = new Y.Doc();
+    render(
+      <CollaborativeEditor
+        ydoc={ydoc}
+        postId="test-post-1"
+        user={{ name: 'Lead Architect', color: '#2F57C8', role: 'author' }}
+      />
+    );
+
+    // Switch to Block View
+    const blockBtn = screen.getByTitle('Block View (Discrete foldable section cards)');
+    fireEvent.click(blockBtn);
+
+    // Verify Block Title (H1) inserter exists in the notebook dock
+    expect(screen.getByTitle('Add Major Block Title (H1)')).toBeDefined();
+
+    // Verify Delete Cell button exists in Block Control Bar
+    const deleteBtn = screen.getByTitle('Delete Current Cell');
+    expect(deleteBtn).toBeDefined();
+    expect(deleteBtn.textContent).toContain('Delete Cell');
+
+    // Click delete cell
+    fireEvent.click(deleteBtn);
+
+    ydoc.destroy();
+  });
 });

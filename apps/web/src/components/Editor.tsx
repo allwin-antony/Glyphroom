@@ -114,6 +114,40 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     type: string;
   } | null>(null);
 
+  // Layout refs for active cell positioning
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
+  const editorWrapperRef = useRef<HTMLDivElement>(null);
+  const [floatingCellPos, setFloatingCellPos] = useState<{ top: number; right: number } | null>(null);
+
+  // Position the floating action pill on the active cell in Block View
+  const updateFloatingCellPos = useCallback(
+    (ed: any) => {
+      if (!ed || !ed.state || viewMode !== 'block' || !editorWrapperRef.current) {
+        setFloatingCellPos(null);
+        return;
+      }
+      try {
+        const { from } = ed.state.selection;
+        const $from = ed.state.doc.resolve(from);
+        const blockIndex = $from.index(0);
+        const blockEl = ed.view?.dom?.children?.[blockIndex] as HTMLElement;
+        if (blockEl && editorWrapperRef.current) {
+          const wrapperRect = editorWrapperRef.current.getBoundingClientRect();
+          const blockRect = blockEl.getBoundingClientRect();
+          setFloatingCellPos({
+            top: blockRect.top - wrapperRect.top + 8,
+            right: wrapperRect.right - blockRect.right + 12,
+          });
+          return;
+        }
+      } catch {
+        // fallback
+      }
+      setFloatingCellPos(null);
+    },
+    [viewMode]
+  );
+
   // File & Image attachment upload state
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -171,7 +205,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       const child = ed.state.doc.child(index);
       let typeLabel = child.type.name;
       if (typeLabel === 'heading') {
-        typeLabel = `H${child.attrs.level} Heading`;
+        typeLabel = child.attrs.level === 1 ? 'H1 Block Title' : `H${child.attrs.level} Heading`;
       } else if (typeLabel === 'projectStatusBlock') {
         typeLabel = 'Status Pulse Block';
       } else if (typeLabel === 'mermaidBlock') {
@@ -397,10 +431,12 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       onDocChange?.(editor.getJSON());
       scanSuggestions(editor);
       updateCurrentBlockInfo(editor);
+      updateFloatingCellPos(editor);
     },
     onSelectionUpdate: ({ editor }) => {
       detectActiveSuggestion(editor);
       updateCurrentBlockInfo(editor);
+      updateFloatingCellPos(editor);
     },
   });
 
@@ -409,8 +445,32 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       onEditorReady?.(editor);
       scanSuggestions(editor);
       updateCurrentBlockInfo(editor);
+      updateFloatingCellPos(editor);
     }
-  }, [editor, onEditorReady, scanSuggestions, updateCurrentBlockInfo]);
+  }, [editor, onEditorReady, scanSuggestions, updateCurrentBlockInfo, updateFloatingCellPos]);
+
+  useEffect(() => {
+    if (editor && viewMode === 'block') {
+      updateFloatingCellPos(editor);
+    }
+  }, [viewMode, editor, updateFloatingCellPos]);
+
+  useEffect(() => {
+    const handleScrollOrResize = () => {
+      if (editor && viewMode === 'block') {
+        updateFloatingCellPos(editor);
+      }
+    };
+    const container = scrollContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScrollOrResize, { passive: true });
+    }
+    window.addEventListener('resize', handleScrollOrResize, { passive: true });
+    return () => {
+      if (container) container.removeEventListener('scroll', handleScrollOrResize);
+      window.removeEventListener('resize', handleScrollOrResize);
+    };
+  }, [editor, viewMode, updateFloatingCellPos]);
 
   // Open Slash Menu manually via toolbar button
   const handleOpenSlashMenu = (e: React.MouseEvent) => {
@@ -538,8 +598,8 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           .chain()
           .insertContentAt(pos, {
             type: 'heading',
-            attrs: { level: 2 },
-            content: [{ type: 'text', text: 'New Section' }],
+            attrs: { level: 1 },
+            content: [{ type: 'text', text: 'New Block Title' }],
           })
           .focus(pos + 1)
           .run();
@@ -622,32 +682,50 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     [editor, updateCurrentBlockInfo]
   );
 
-  // Delete currently selected card (if not the sole card)
-  const handleDeleteCurrentCard = useCallback(() => {
-    if (!editor) return;
-    const totalChildren = editor.state.doc.childCount;
-    if (totalChildren <= 1) return;
+  // Delete cell at specific index or active cell
+  const handleDeleteCardAtIndex = useCallback(
+    (indexToDelete?: number) => {
+      if (!editor) return;
+      const totalChildren = editor.state.doc.childCount;
 
-    const { from } = editor.state.selection;
-    const $from = editor.state.doc.resolve(from);
-    const blockIndex = $from.index(0);
-
-    let pos = 0;
-    let currentStart = 0;
-    let currentEnd = 0;
-    for (let i = 0; i < totalChildren; i++) {
-      const size = editor.state.doc.child(i).nodeSize;
-      if (i === blockIndex) {
-        currentStart = pos;
-        currentEnd = pos + size;
-        break;
+      let blockIndex: number;
+      if (typeof indexToDelete === 'number') {
+        blockIndex = indexToDelete;
+      } else {
+        const { from } = editor.state.selection;
+        const $from = editor.state.doc.resolve(from);
+        blockIndex = $from.index(0);
       }
-      pos += size;
-    }
 
-    editor.chain().deleteRange({ from: currentStart, to: currentEnd }).focus().run();
-    updateCurrentBlockInfo(editor);
-  }, [editor, updateCurrentBlockInfo]);
+      if (blockIndex < 0 || blockIndex >= totalChildren) return;
+
+      if (totalChildren <= 1) {
+        // If it's the sole remaining block, clear it to an empty paragraph
+        editor.chain().clearContent().insertContent({ type: 'paragraph' }).focus().run();
+        updateCurrentBlockInfo(editor);
+        updateFloatingCellPos(editor);
+        return;
+      }
+
+      let pos = 0;
+      let currentStart = 0;
+      let currentEnd = 0;
+      for (let i = 0; i < totalChildren; i++) {
+        const size = editor.state.doc.child(i).nodeSize;
+        if (i === blockIndex) {
+          currentStart = pos;
+          currentEnd = pos + size;
+          break;
+        }
+        pos += size;
+      }
+
+      editor.chain().deleteRange({ from: currentStart, to: currentEnd }).focus().run();
+      updateCurrentBlockInfo(editor);
+      updateFloatingCellPos(editor);
+    },
+    [editor, updateCurrentBlockInfo, updateFloatingCellPos]
+  );
 
   // Template Scaffolding Injection
   const handleApplyTemplate = (templateId: string) => {
@@ -1287,12 +1365,13 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
             {/* Delete Card */}
             <button
-              onClick={handleDeleteCurrentCard}
-              disabled={currentBlockInfo.total <= 1}
-              className="p-1 rounded border border-border bg-canvas hover:bg-status-danger/10 text-text-muted hover:text-status-danger disabled:opacity-30 disabled:pointer-events-none transition-colors"
-              title="Delete Card"
+              onClick={() => handleDeleteCardAtIndex()}
+              onMouseDown={(e) => e.preventDefault()}
+              className="flex items-center gap-1.5 px-2.5 py-0.5 rounded border border-status-danger/30 bg-status-danger/10 hover:bg-status-danger/20 text-status-danger text-[11px] font-semibold transition-colors shadow-2xs"
+              title="Delete Current Cell"
             >
-              <Trash2 size={13} />
+              <Trash2 size={12} />
+              <span>Delete Cell</span>
             </button>
           </div>
         </div>
@@ -1355,14 +1434,73 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
       {/* Main workspace layout: Editor canvas centered on paper surface + Suggestion sidebar */}
       <div className="flex flex-1 overflow-hidden bg-canvas min-w-0">
-        <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center min-w-0">
+        <div
+          ref={scrollContainerRef}
+          className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center min-w-0 relative"
+        >
           <div
-            className={`w-full max-w-[820px] transition-all my-2 ${
+            ref={editorWrapperRef}
+            className={`w-full max-w-[820px] transition-all my-2 relative ${
               viewMode === 'block'
                 ? 'enterprise-block-mode pb-12'
                 : 'min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40'
             }`}
           >
+            {/* Active Cell Floating Action Pill (Directly on the active cell in Block View) */}
+            {viewMode === 'block' && floatingCellPos && currentBlockInfo && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: `${floatingCellPos.top}px`,
+                  right: `${floatingCellPos.right}px`,
+                }}
+                className="z-20 flex items-center gap-1 px-2 py-1 rounded-lg bg-surface/95 border border-border shadow-md backdrop-blur-xs select-none transition-all animate-fadeIn"
+              >
+                <span className="text-[10px] font-mono text-text-muted px-1">
+                  {currentBlockInfo.type}
+                </span>
+                <span className="text-border">|</span>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleMoveBlock('up')}
+                  disabled={currentBlockInfo.index <= 1}
+                  className="p-1 rounded hover:bg-canvas text-text-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  title="Move Cell Up (▲)"
+                >
+                  <ChevronUp size={12} />
+                </button>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleMoveBlock('down')}
+                  disabled={currentBlockInfo.index >= currentBlockInfo.total}
+                  className="p-1 rounded hover:bg-canvas text-text-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                  title="Move Cell Down (▼)"
+                >
+                  <ChevronDown size={12} />
+                </button>
+                <span className="text-border">|</span>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleInsertCardBelow('paragraph')}
+                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-canvas text-accent text-[11px] font-medium transition-colors"
+                  title="Insert New Card Below (Shift+Enter)"
+                >
+                  <Plus size={11} />
+                  <span>+ Below</span>
+                </button>
+                <span className="text-border">|</span>
+                <button
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => handleDeleteCardAtIndex()}
+                  className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-status-danger/10 text-status-danger text-[11px] font-semibold transition-colors"
+                  title="Delete This Cell"
+                >
+                  <Trash2 size={11} />
+                  <span>Delete</span>
+                </button>
+              </div>
+            )}
+
             <EditorContent editor={editor} className="w-full max-w-full" />
 
             {/* In Block View: Notebook-style "+ Add Cell" dock at the bottom of cards */}
@@ -1394,10 +1532,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                     type="button"
                     onClick={() => handleInsertCardBelow('heading')}
                     className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Section Header Card"
+                    title="Add Major Block Title (H1)"
                   >
-                    <Heading2 size={12} className="text-text-muted" />
-                    <span>+ Section</span>
+                    <Heading1 size={12} className="text-accent" />
+                    <span>+ Block Title (H1)</span>
                   </button>
                   <button
                     type="button"

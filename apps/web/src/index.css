@@ -431,18 +431,51 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
   box-shadow: none !important;
 }
 
+/* In Block View, H1 is displayed OUTSIDE the grey card area as a prominent Block Title */
+.enterprise-block-mode .ProseMirror > h1 {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 2px solid var(--border) !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 1.75rem 0.25rem 0.6rem 0.25rem !important;
+  margin-top: 2.25rem !important;
+  margin-bottom: 0.75rem !important;
+  font-size: 2.15rem !important;       /* Increased size for block title */
+  line-height: 2.6rem !important;
+  font-weight: 800 !important;
+  letter-spacing: -0.03em !important;
+  color: var(--text) !important;
+  transition: border-color 0.2s ease;
+}
+
+.enterprise-block-mode .ProseMirror > h1:first-child {
+  margin-top: 0.25rem !important;
+  padding-top: 0.25rem !important;
+}
+
+.enterprise-block-mode .ProseMirror > h1:hover {
+  border-bottom-color: var(--border-strong) !important;
+  box-shadow: none !important;
+}
+
+.enterprise-block-mode .ProseMirror > h1:focus-within {
+  border-bottom-color: var(--accent) !important;
+  box-shadow: none !important;
+}
+
 /* Card Header Type Tags */
 .enterprise-block-mode .ProseMirror > h1::before {
-  content: "Header 1 • Section";
+  content: "BLOCK TITLE";
   display: table;
-  font-size: 9px;
-  font-weight: 700;
+  font-size: 10px;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
   color: var(--accent);
   background: var(--accent-bg);
   border-radius: 4px;
-  padding: 1px 6px;
+  padding: 2px 8px;
   margin-bottom: 8px;
   user-select: none;
 }
