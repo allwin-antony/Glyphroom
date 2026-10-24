@@ -30,6 +30,7 @@ COPY packages/shared/package.json ./packages/shared/
 COPY apps/collab/package.json ./apps/collab/
 COPY apps/api/package.json ./apps/api/
 COPY apps/mcp-server/package.json ./apps/mcp-server/
+COPY apps/web/package.json ./apps/web/
 COPY tests/package.json ./tests/
 
 # Install all dependencies (including devDependencies needed for build)

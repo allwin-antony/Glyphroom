@@ -155,6 +155,10 @@ Ensure-Env
 
 Write-Info 'Building and launching Enterprise Blogger containers...'
 docker compose -f $ComposeFile up -d --build --remove-orphans
+if ($LASTEXITCODE -ne 0) {
+    Write-Err "docker compose up failed with exit code $LASTEXITCODE"
+    exit 1
+}
 Write-Success 'Containers launched.'
 
 Write-Info 'Waiting for services to become healthy...'
