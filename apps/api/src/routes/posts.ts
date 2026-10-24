@@ -5,7 +5,7 @@ import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
 import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
 import type { Database } from '../db/index.js';
-import { posts, postViewCounts, postVersions, users } from '../db/schema.js';
+import { posts, postViewCounts, postVersions, users, centersOfExcellence } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 import type { BufferedViewCounter } from '../services/view-counter.js';
@@ -37,26 +37,50 @@ export const postRoutes: FastifyPluginAsync<{
     const user = request.user;
     const { search } = request.query as { search?: string };
 
+    const baseSelection = {
+      id: posts.id,
+      slug: posts.slug,
+      title: posts.title,
+      excerpt: posts.excerpt,
+      status: posts.status,
+      authorId: posts.authorId,
+      authorName: users.fullName,
+      authorEmail: users.email,
+      coeId: posts.coeId,
+      coeName: centersOfExcellence.name,
+      publishedMarkdown: posts.publishedMarkdown,
+      workingMarkdown: posts.workingMarkdown,
+      publishedAt: posts.publishedAt,
+      createdAt: posts.createdAt,
+      updatedAt: posts.updatedAt,
+    };
+
     let queryResult;
 
     if (!user || user.role === 'reader') {
       // Readers and public see ONLY published posts
       queryResult = await db
-        .select()
+        .select(baseSelection)
         .from(posts)
+        .leftJoin(users, eq(posts.authorId, users.id))
+        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
         .where(eq(posts.status, 'published'))
         .orderBy(desc(posts.publishedAt), desc(posts.createdAt));
     } else if (user.role === 'admin' || user.role === 'moderator') {
       // Admin/Moderators see all posts
       queryResult = await db
-        .select()
+        .select(baseSelection)
         .from(posts)
+        .leftJoin(users, eq(posts.authorId, users.id))
+        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
         .orderBy(desc(posts.createdAt));
     } else {
       // Authors see published posts + their own drafts
       queryResult = await db
-        .select()
+        .select(baseSelection)
         .from(posts)
+        .leftJoin(users, eq(posts.authorId, users.id))
+        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
         .where(
           or(
             eq(posts.status, 'published'),
@@ -74,21 +98,43 @@ export const postRoutes: FastifyPluginAsync<{
           p.title.toLowerCase().includes(q) ||
           (p.excerpt && p.excerpt.toLowerCase().includes(q)) ||
           (p.workingMarkdown && p.workingMarkdown.toLowerCase().includes(q)) ||
-          (p.publishedMarkdown && p.publishedMarkdown.toLowerCase().includes(q))
+          (p.publishedMarkdown && p.publishedMarkdown.toLowerCase().includes(q)) ||
+          (p.authorName && p.authorName.toLowerCase().includes(q)) ||
+          (p.coeName && p.coeName.toLowerCase().includes(q))
       );
     }
 
     return reply.send({ posts: queryResult });
   });
 
-  // 2. Get Post by ID
+  // 2. Get Post by ID or Slug
   fastify.get('/:id', async (request, reply) => {
     const { id } = request.params as { id: string };
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
     const [post] = await db
-      .select()
+      .select({
+        id: posts.id,
+        slug: posts.slug,
+        title: posts.title,
+        excerpt: posts.excerpt,
+        status: posts.status,
+        authorId: posts.authorId,
+        authorName: users.fullName,
+        authorEmail: users.email,
+        coeId: posts.coeId,
+        coeName: centersOfExcellence.name,
+        yjsState: posts.yjsState,
+        publishedMarkdown: posts.publishedMarkdown,
+        workingMarkdown: posts.workingMarkdown,
+        publishedAt: posts.publishedAt,
+        createdAt: posts.createdAt,
+        updatedAt: posts.updatedAt,
+      })
       .from(posts)
-      .where(eq(posts.id, id))
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
+      .where(isUuid ? eq(posts.id, id) : eq(posts.slug, id))
       .limit(1);
 
     if (!post) {
@@ -111,7 +157,71 @@ export const postRoutes: FastifyPluginAsync<{
     // Increment detached in-memory view counter (Task 4.5)
     viewCounter?.increment(post.id);
 
-    return reply.send({ post, userPermission: permission });
+    // Derive markdown if not already pre-rendered
+    let derivedMarkdown = post.publishedMarkdown || post.workingMarkdown || '';
+    if (!derivedMarkdown && post.yjsState && post.yjsState.length > 0) {
+      try {
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, new Uint8Array(post.yjsState));
+        const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
+        derivedMarkdown = exportDerivedMarkdown(pmJson as any);
+      } catch {
+        derivedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+      }
+    }
+
+    return reply.send({
+      post: {
+        ...post,
+        derivedMarkdown,
+      },
+      userPermission: permission,
+    });
+  });
+
+  // 2b. Export Derived Markdown
+  fastify.get('/:id/export-markdown', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+
+    const [post] = await db
+      .select()
+      .from(posts)
+      .where(isUuid ? eq(posts.id, id) : eq(posts.slug, id))
+      .limit(1);
+
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const permission = request.user
+      ? await permissionService.resolvePostPermission(
+          { id: request.user.userId, role: request.user.role },
+          { postId: post.id, authorId: post.authorId, status: post.status }
+        )
+      : post.status === 'published'
+      ? 'view'
+      : 'none';
+
+    if (!permissionService.canView(permission)) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'You do not have access to export this post' });
+    }
+
+    let markdown = post.publishedMarkdown || post.workingMarkdown || '';
+    if (!markdown && post.yjsState && post.yjsState.length > 0) {
+      try {
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, new Uint8Array(post.yjsState));
+        const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
+        markdown = exportDerivedMarkdown(pmJson as any);
+      } catch {
+        markdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+      }
+    }
+
+    reply.header('Content-Type', 'text/markdown; charset=utf-8');
+    reply.header('Content-Disposition', `attachment; filename="${post.slug}.md"`);
+    return reply.send(markdown);
   });
 
   // 3. Create Post (Requires Author, Moderator, or Admin)
