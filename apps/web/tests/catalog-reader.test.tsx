@@ -317,5 +317,47 @@ describe('Phase C & E: Knowledge Catalog & Reader View Suite', () => {
         expect(screen.getByText('Adding a peer note regarding latency SLAs.')).toBeDefined();
       });
     });
+
+    it('toggles between Flow and Notebook Blocks in ReaderView', async () => {
+      const mockPostDetails = {
+        ...mockPosts[0],
+        derivedMarkdown: '# Architecture Overview\n\nSystem paragraph.\n\n```typescript\nconst a = 1;\n```',
+      };
+
+      (api.get as any).mockImplementation((url: string) => {
+        if (url.includes('/comments')) {
+          return Promise.resolve({ comments: [] });
+        }
+        return Promise.resolve({ post: mockPostDetails, userPermission: 'view' });
+      });
+
+      render(
+        <AuthContext.Provider value={createMockAuth('reader', 'reader-charlie')}>
+          <MemoryRouter initialEntries={['/posts/distributed-systems-patterns']}>
+            <Routes>
+              <Route path="/posts/:slug" element={<ReaderView />} />
+            </Routes>
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTitle('Notebook Block Cards (.ipynb Mode)')).toBeDefined();
+      });
+
+      // Default is Notebook Blocks: verify Block Title and cells appear
+      expect(screen.getAllByText('Block Title').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Text Cell').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('Code Cell').length).toBeGreaterThan(0);
+
+      // Toggle to Flow mode
+      const flowBtn = screen.getByTitle('Continuous Article Flow');
+      fireEvent.click(flowBtn);
+
+      // Toggle back to Blocks
+      const blocksBtn = screen.getByTitle('Notebook Block Cards (.ipynb Mode)');
+      fireEvent.click(blocksBtn);
+      expect(screen.getAllByText('Block Title').length).toBeGreaterThan(0);
+    });
   });
 });

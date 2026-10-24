@@ -18,6 +18,7 @@ import { MermaidBlock } from '../extensions/mermaid.js';
 import { ProjectStatusBlock } from '../extensions/status-block.js';
 import { FileAttachmentBlock } from '../extensions/attachment.js';
 import { Collaboration } from '../extensions/collab.js';
+import { TextSelection } from '@tiptap/pm/state';
 import { AwarenessBar } from './AwarenessBar.js';
 import { SuggestionActionMenu, type ActiveSuggestionInfo } from './SuggestionActionMenu.js';
 import { SuggestionSidebar } from './SuggestionSidebar.js';
@@ -56,6 +57,8 @@ import {
   X,
   ShieldAlert,
   Trash2,
+  RotateCcw,
+  RotateCw,
 } from 'lucide-react';
 
 export interface CollaborativeEditorProps {
@@ -424,6 +427,41 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             return true;
           }
         }
+        // 3. Multi-line containment in Block View:
+        // Prevent multi-paragraph paste from shattering into multiple separate cards
+        if (viewMode === 'block' && text && text.includes('\n')) {
+          event.preventDefault();
+          const { state, dispatch } = view;
+          const { from, to } = state.selection;
+          const $from = state.doc.resolve(from);
+          const parentType = $from.parent.type.name;
+          if (parentType === 'paragraph' || parentType === 'heading') {
+            const tr = state.tr;
+            const lines = text.split('\n');
+            const nodes: any[] = [];
+            lines.forEach((line, idx) => {
+              if (idx > 0) {
+                const hardBreakNode = state.schema.nodes.hardBreak?.create();
+                if (hardBreakNode) {
+                  nodes.push(hardBreakNode);
+                } else {
+                  nodes.push(state.schema.text(' '));
+                }
+              }
+              if (line.length > 0) {
+                nodes.push(state.schema.text(line));
+              }
+            });
+            if (nodes.length > 0) {
+              tr.replaceWith(from, to, nodes);
+            } else {
+              tr.delete(from, to);
+            }
+            tr.setMeta('addToHistory', true);
+            dispatch(tr);
+            return true;
+          }
+        }
         return false;
       },
     },
@@ -720,7 +758,24 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         pos += size;
       }
 
-      editor.chain().deleteRange({ from: currentStart, to: currentEnd }).focus().run();
+      const state = editor.state;
+      const tr = state.tr;
+      tr.delete(currentStart, currentEnd);
+      tr.setMeta('addToHistory', true);
+
+      // Safe selection target:
+      // When deleting the last cell, place cursor at the end of the previous block cleanly
+      const targetPos = Math.max(0, Math.min(currentStart > 0 ? currentStart - 1 : 0, tr.doc.content.size));
+      if (tr.doc.content.size > 0) {
+        try {
+          const resolved = tr.doc.resolve(targetPos);
+          tr.setSelection(TextSelection.near(resolved, -1));
+        } catch {
+          tr.setSelection(TextSelection.atStart(tr.doc));
+        }
+      }
+      editor.view.dispatch(tr);
+      editor.view.focus();
       updateCurrentBlockInfo(editor);
       updateFloatingCellPos(editor);
     },
@@ -1065,6 +1120,24 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         <span className="text-border mx-0.5">|</span>
 
         {/* Text styling */}
+        {/* Undo & Redo History Triggers */}
+        <button
+          onClick={() => editor.chain().focus().undo().run()}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          title="Undo (Ctrl+Z)"
+        >
+          <RotateCcw size={13} />
+        </button>
+        <button
+          onClick={() => editor.chain().focus().redo().run()}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
+        >
+          <RotateCw size={13} />
+        </button>
+
+        <span className="text-border mx-0.5">|</span>
+
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
           className={`p-1.5 rounded-lg border transition-colors ${
@@ -1509,7 +1582,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                 <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
                   + Add Notebook Card (.ipynb)
                 </div>
-                <div className="flex flex-wrap items-center justify-center gap-1.5 p-1.5 rounded-xl bg-surface border border-border shadow-xs">
+                <div className="flex flex-wrap items-center justify-center gap-1.5 p-2 rounded-xl border border-dashed border-border/80 bg-canvas/40 shadow-2xs">
                   <button
                     type="button"
                     onClick={() => handleInsertCardBelow('paragraph')}

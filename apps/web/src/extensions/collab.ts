@@ -45,8 +45,12 @@ export const Collaboration = Extension.create<CollaborationOptions>({
       plugins.push(ySyncPlugin(fragment));
 
       // 2. Human UndoManager isolation (Feature 25)
+      // Allow deleteFilter to restore deleted blocks and cards on Ctrl+Z
       const undoManager =
-        this.options.undoManager ?? createHumanUndoManager(fragment);
+        this.options.undoManager ??
+        createHumanUndoManager(fragment, {
+          deleteFilter: () => true,
+        });
       plugins.push(createHumanUndoPlugin({ undoManager }));
     }
 

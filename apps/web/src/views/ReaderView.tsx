@@ -15,6 +15,7 @@ import {
   CheckCircle2,
   AlertCircle,
   FileText,
+  Layers,
   ListOrdered,
   ChevronRight,
 } from 'lucide-react';
@@ -77,6 +78,20 @@ export const ReaderView: React.FC = () => {
   const [isSepia, setIsSepia] = useState(false);
   const [showPreferences, setShowPreferences] = useState(false);
   const [showToc, setShowToc] = useState(false);
+
+  // Reader View Mode: 'flow' (continuous) vs 'block' (notebook cards)
+  const [readerViewMode, setReaderViewMode] = useState<'flow' | 'block'>(() => {
+    return (localStorage.getItem('glyphroom_reader_view_mode') as 'flow' | 'block') || 'block';
+  });
+
+  const handleToggleReaderViewMode = (mode: 'flow' | 'block') => {
+    setReaderViewMode(mode);
+    try {
+      localStorage.setItem('glyphroom_reader_view_mode', mode);
+    } catch {
+      // ignore
+    }
+  };
 
   // 1. Fetch Post Data
   useEffect(() => {
@@ -215,13 +230,25 @@ export const ReaderView: React.FC = () => {
 
     const flushList = (key: string) => {
       if (listItems.length > 0) {
-        elements.push(
-          <ul key={key} className="list-disc pl-6 space-y-1.5 my-3 text-text-secondary">
+        const listEl = (
+          <ul className="list-disc pl-6 space-y-1.5 text-text-secondary">
             {listItems.map((item, idx) => (
               <li key={idx} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
             ))}
           </ul>
         );
+        if (readerViewMode === 'block') {
+          elements.push(
+            <div key={key} className="rounded-xl border border-border bg-surface p-5 shadow-xs my-3">
+              <div className="text-[10px] font-mono text-text-muted uppercase tracking-wider mb-2 font-bold">
+                List Cell
+              </div>
+              {listEl}
+            </div>
+          );
+        } else {
+          elements.push(<div key={key} className="my-3">{listEl}</div>);
+        }
         listItems = [];
         inList = false;
       }
@@ -229,14 +256,23 @@ export const ReaderView: React.FC = () => {
 
     const flushCodeBlock = (key: string) => {
       if (codeBlockContent.length > 0) {
-        elements.push(
-          <pre
-            key={key}
-            className="p-4 rounded-xl bg-code-bg border border-border text-xs font-mono overflow-x-auto my-4 text-text-main shadow-inner"
-          >
+        const preEl = (
+          <pre className="p-3.5 rounded-lg bg-code-bg border border-border text-xs font-mono overflow-x-auto text-foreground">
             <code>{codeBlockContent.join('\n')}</code>
           </pre>
         );
+        if (readerViewMode === 'block') {
+          elements.push(
+            <div key={key} className="rounded-xl border border-border bg-surface p-4 shadow-xs my-3">
+              <div className="text-[10px] font-mono text-accent font-semibold uppercase tracking-wider mb-2">
+                Code Cell
+              </div>
+              {preEl}
+            </div>
+          );
+        } else {
+          elements.push(<div key={key} className="my-4">{preEl}</div>);
+        }
         codeBlockContent = [];
         inCodeBlock = false;
       }
@@ -299,11 +335,24 @@ export const ReaderView: React.FC = () => {
       // Headings
       if (line.startsWith('# ')) {
         const id = `heading-${headingCounter++}`;
-        elements.push(
-          <h1 key={id} id={id} className="text-2xl sm:text-3xl font-extrabold text-foreground pt-6 pb-2 scroll-mt-20">
-            {line.replace(/^#\s+/, '')}
-          </h1>
-        );
+        if (readerViewMode === 'block') {
+          elements.push(
+            <div key={id} id={id} className="pt-8 pb-2 scroll-mt-20">
+              <div className="inline-block px-2 py-0.5 mb-2 rounded bg-accent-bg text-accent text-[10px] font-extrabold uppercase tracking-wider">
+                Block Title
+              </div>
+              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground border-b-2 border-border pb-2">
+                {line.replace(/^#\s+/, '')}
+              </h1>
+            </div>
+          );
+        } else {
+          elements.push(
+            <h1 key={id} id={id} className="text-2xl sm:text-3xl font-extrabold text-foreground pt-6 pb-2 scroll-mt-20">
+              {line.replace(/^#\s+/, '')}
+            </h1>
+          );
+        }
         continue;
       }
       if (line.startsWith('## ')) {
@@ -330,14 +379,28 @@ export const ReaderView: React.FC = () => {
         continue;
       }
 
-      // Paragraph
-      elements.push(
-        <p
-          key={`p-${i}`}
-          className="text-text-main leading-relaxed"
-          dangerouslySetInnerHTML={{ __html: formatInline(line) }}
-        />
-      );
+      // Paragraph / Prose card
+      if (readerViewMode === 'block') {
+        elements.push(
+          <div key={`card-${i}`} className="rounded-xl border border-border bg-surface p-5 shadow-xs my-3">
+            <div className="text-[10px] font-mono text-text-muted uppercase tracking-wider mb-2 font-bold">
+              Text Cell
+            </div>
+            <p
+              className="text-foreground leading-relaxed"
+              dangerouslySetInnerHTML={{ __html: formatInline(line) }}
+            />
+          </div>
+        );
+      } else {
+        elements.push(
+          <p
+            key={`p-${i}`}
+            className="text-text-main leading-relaxed my-2"
+            dangerouslySetInnerHTML={{ __html: formatInline(line) }}
+          />
+        );
+      }
     }
 
     if (inList) flushList('list-end');
@@ -418,6 +481,34 @@ export const ReaderView: React.FC = () => {
               <SlidersHorizontal className="w-3.5 h-3.5" />
               <span>Comfort</span>
             </button>
+
+            {/* View Mode Switcher: Article Flow vs Notebook Blocks */}
+            <div className="flex items-center rounded-lg border border-border p-0.5 bg-surface mr-1">
+              <button
+                onClick={() => handleToggleReaderViewMode('flow')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  readerViewMode === 'flow'
+                    ? 'bg-elevated text-foreground shadow-xs'
+                    : 'text-text-muted hover:text-foreground'
+                }`}
+                title="Continuous Article Flow"
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>Flow</span>
+              </button>
+              <button
+                onClick={() => handleToggleReaderViewMode('block')}
+                className={`flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                  readerViewMode === 'block'
+                    ? 'bg-elevated text-accent shadow-xs'
+                    : 'text-text-muted hover:text-foreground'
+                }`}
+                title="Notebook Block Cards (.ipynb Mode)"
+              >
+                <Layers className="w-3.5 h-3.5" />
+                <span>Blocks</span>
+              </button>
+            </div>
 
             {/* Export Markdown Button */}
             <button
@@ -535,14 +626,18 @@ export const ReaderView: React.FC = () => {
 
         {/* Reader Paper Article Canvas */}
         <div
-          className={`rounded-2xl border p-8 sm:p-12 shadow-sm space-y-8 transition-colors ${
-            isSepia
-              ? 'bg-[#F7F0E0] border-[#E4D8BE] text-[#3B3228]'
-              : 'bg-surface border-border text-foreground'
+          className={`transition-colors ${
+            readerViewMode === 'block'
+              ? 'space-y-4'
+              : 'rounded-2xl border p-8 sm:p-12 shadow-sm space-y-8 ' + (isSepia ? 'bg-[#F7F0E0] border-[#E4D8BE] text-[#3B3228]' : 'bg-surface border-border text-foreground')
           } ${fontFamily === 'serif' ? 'font-serif' : 'font-sans'}`}
         >
           {/* Article Capsule Header */}
-          <div className="space-y-4 border-b border-border pb-8">
+          <div className={`space-y-4 ${
+            readerViewMode === 'block'
+              ? 'rounded-2xl border border-border bg-surface p-6 sm:p-8 shadow-xs mb-4'
+              : 'border-b border-border pb-8'
+          }`}>
             <div className="flex items-center gap-2 flex-wrap">
               {post.coeName && (
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-accent-bg text-accent-main border border-accent-main/20">
