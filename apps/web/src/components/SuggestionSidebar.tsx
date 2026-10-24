@@ -20,64 +20,25 @@ export const SuggestionSidebar: React.FC<SuggestionSidebarProps> = ({
   onSelect,
 }) => {
   return (
-    <div
-      style={{
-        width: '320px',
-        borderLeft: '1px solid #e2e8f0',
-        background: '#ffffff',
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}
-    >
-      <div
-        style={{
-          padding: '12px 16px',
-          borderBottom: '1px solid #e2e8f0',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 600 }}>
-          <Bot size={16} color="#8b5cf6" />
+    <div className="w-80 border-l border-border bg-surface flex flex-col h-full text-foreground">
+      <div className="p-3.5 border-b border-border flex justify-between items-center">
+        <div className="flex items-center gap-1.5 font-semibold text-xs">
+          <Bot size={15} className="text-agent" />
           <span>AI Suggestions ({suggestions.length})</span>
         </div>
 
         {suggestions.length > 0 && (
-          <div style={{ display: 'flex', gap: '4px' }}>
+          <div className="flex gap-1.5">
             <button
               onClick={onAcceptAll}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '2px',
-                padding: '2px 6px',
-                fontSize: '11px',
-                background: '#dcfce7',
-                color: '#15803d',
-                border: '1px solid #86efac',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold bg-status-success/15 text-status-success border border-status-success/30 rounded-lg transition-colors hover:bg-status-success/25"
               title="Accept All Suggestions"
             >
               <CheckCheck size={12} /> All
             </button>
             <button
               onClick={onRejectAll}
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: '2px',
-                padding: '2px 6px',
-                fontSize: '11px',
-                background: '#fee2e2',
-                color: '#b91c1c',
-                border: '1px solid #fca5a5',
-                borderRadius: '4px',
-                cursor: 'pointer',
-              }}
+              className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-semibold bg-status-danger/15 text-status-danger border border-status-danger/30 rounded-lg transition-colors hover:bg-status-danger/25"
               title="Reject All Suggestions"
             >
               <XCircle size={12} /> All
@@ -86,9 +47,9 @@ export const SuggestionSidebar: React.FC<SuggestionSidebarProps> = ({
         )}
       </div>
 
-      <div style={{ flex: 1, overflowY: 'auto', padding: '12px' }}>
+      <div className="flex-1 overflow-y-auto p-3 space-y-2">
         {suggestions.length === 0 ? (
-          <div style={{ color: '#94a3b8', textAlign: 'center', padding: '24px 8px', fontSize: '13px' }}>
+          <div className="text-text-muted text-center py-8 text-xs">
             No pending AI suggestions in this document.
           </div>
         ) : (
@@ -96,61 +57,40 @@ export const SuggestionSidebar: React.FC<SuggestionSidebarProps> = ({
             <div
               key={s.id}
               onClick={() => onSelect(s)}
-              style={{
-                padding: '10px',
-                marginBottom: '8px',
-                borderRadius: '6px',
-                border: `1px solid ${s.type === 'insert' ? '#86efac' : '#fca5a5'}`,
-                background: s.type === 'insert' ? '#f0fdf4' : '#fef2f2',
-                cursor: 'pointer',
-                fontSize: '12px',
-              }}
+              className={`p-3 rounded-xl border cursor-pointer transition-all ${
+                s.type === 'insert'
+                  ? 'border-[#86efac] dark:border-[#204a32] bg-[#DDF3E4]/70 dark:bg-[#173524]/60 hover:border-status-success'
+                  : 'border-[#fca5a5] dark:border-[#542727] bg-[#FBE3E0]/70 dark:bg-[#3B1D1D]/60 hover:border-status-danger'
+              }`}
             >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div className="flex justify-between items-center mb-1.5">
                 <span
-                  style={{
-                    fontWeight: 600,
-                    color: s.type === 'insert' ? '#16a34a' : '#dc2626',
-                    textTransform: 'uppercase',
-                    fontSize: '10px',
-                  }}
+                  className={`font-bold text-[10px] uppercase tracking-wider ${
+                    s.type === 'insert' ? 'text-[#14532D] dark:text-[#B7F0CB]' : 'text-[#7A1D14] dark:text-[#F9B8B2]'
+                  }`}
                 >
                   {s.type}
                 </span>
-                <span style={{ color: '#64748b', fontSize: '11px' }}>{s.agentId}</span>
+                <span className="text-text-secondary text-[11px] font-medium">{s.agentId}</span>
               </div>
 
               <div
-                style={{
-                  fontFamily: 'monospace',
-                  fontSize: '12px',
-                  color: '#1e293b',
-                  marginBottom: '8px',
-                  wordBreak: 'break-word',
-                  textDecoration: s.type === 'delete' ? 'line-through' : 'none',
-                }}
+                className={`font-mono text-xs mb-2.5 break-all ${
+                  s.type === 'insert'
+                    ? 'text-[#14532D] dark:text-[#B7F0CB] underline underline-offset-2'
+                    : 'text-[#7A1D14] dark:text-[#F9B8B2] line-through'
+                }`}
               >
                 "{s.text}"
               </div>
 
-              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '6px' }}>
+              <div className="flex justify-end gap-1.5">
                 <button
                   onClick={(e) => {
                     e.stopPropagation();
                     onAccept(s);
                   }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '2px',
-                    padding: '2px 8px',
-                    fontSize: '11px',
-                    background: '#16a34a',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-status-success hover:opacity-90 text-white rounded-lg transition-colors shadow-sm"
                 >
                   <Check size={11} /> Accept
                 </button>
@@ -159,18 +99,7 @@ export const SuggestionSidebar: React.FC<SuggestionSidebarProps> = ({
                     e.stopPropagation();
                     onReject(s);
                   }}
-                  style={{
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: '2px',
-                    padding: '2px 8px',
-                    fontSize: '11px',
-                    background: '#dc2626',
-                    color: '#ffffff',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: 'pointer',
-                  }}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 text-[11px] font-semibold bg-status-danger hover:opacity-90 text-white rounded-lg transition-colors shadow-sm"
                 >
                   <X size={11} /> Reject
                 </button>

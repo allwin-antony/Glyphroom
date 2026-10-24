@@ -30,7 +30,7 @@ export const AppLayout: React.FC = () => {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen overflow-hidden bg-slate-100 dark:bg-slate-950 text-slate-900 dark:text-slate-100 font-sans transition-colors">
+    <div className="flex h-screen w-screen overflow-hidden bg-canvas text-foreground font-sans transition-colors">
       {/* 1. Desktop & Mobile Sidebar */}
       <Sidebar
         isMobileOpen={isMobileSidebarOpen}
@@ -38,7 +38,7 @@ export const AppLayout: React.FC = () => {
       />
 
       {/* 2. Main Application Column */}
-      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-slate-50 dark:bg-slate-900 transition-colors">
+      <div className="flex flex-col flex-1 min-w-0 h-full overflow-hidden bg-canvas transition-colors">
         {/* Global Topbar */}
         <TopBar
           onOpenCommandSearch={handleOpenSearch}
@@ -46,7 +46,7 @@ export const AppLayout: React.FC = () => {
         />
 
         {/* Dynamic Route Content Area */}
-        <main className="flex-1 overflow-y-auto bg-slate-50/60 dark:bg-slate-950 relative focus:outline-none transition-colors">
+        <main className="flex-1 overflow-y-auto bg-canvas relative focus:outline-none transition-colors">
           <Outlet />
         </main>
       </div>

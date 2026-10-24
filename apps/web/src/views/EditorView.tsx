@@ -28,18 +28,18 @@ export const EditorView: React.FC = () => {
 
   const currentUser = {
     name: 'Lead Author',
-    color: '#0284c7',
+    color: '#0072B2', // Okabe-Ito Blue
     role: 'author',
   };
 
   return (
-    <div className="flex flex-col h-full bg-slate-950 text-slate-100">
+    <div className="flex flex-col h-full bg-canvas text-foreground">
       {/* Editor Sub-Header / Status Bar */}
-      <div className="h-12 bg-slate-900 border-b border-slate-800 flex items-center justify-between px-6">
+      <div className="h-12 bg-surface border-b border-border flex items-center justify-between px-6 shadow-sm">
         <div className="flex items-center gap-3">
           <button
             onClick={() => navigate('/my-work')}
-            className="p-1 rounded text-slate-400 hover:text-slate-200 hover:bg-slate-800"
+            className="p-1 rounded text-text-muted hover:text-foreground hover:bg-canvas transition-colors"
             aria-label="Back to My Work"
           >
             <ArrowLeft className="w-4 h-4" />
@@ -47,21 +47,21 @@ export const EditorView: React.FC = () => {
           <input
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            className="bg-transparent border-none text-sm font-semibold text-slate-100 focus:outline-none w-72 sm:w-96"
+            className="bg-transparent border-none text-sm font-semibold text-foreground focus:outline-none w-72 sm:w-96 placeholder:text-text-muted"
             placeholder="Untitled Post..."
           />
         </div>
 
         <div className="flex items-center gap-3">
           {/* Real-time Save Status Badge */}
-          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+          <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-status-success/15 text-status-success border border-status-success/30">
             <Radio className="w-2.5 h-2.5 animate-pulse" />
             <span>Saved ✓</span>
           </div>
 
           <button
             onClick={() => navigate('/reviews')}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs shadow-sm transition-all"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-semibold text-xs shadow-sm transition-all"
           >
             <FileCheck className="w-3.5 h-3.5" />
             <span>Submit for Review</span>

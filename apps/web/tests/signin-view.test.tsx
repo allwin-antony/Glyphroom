@@ -32,7 +32,7 @@ describe('SignInView Component', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Enterprise Blogger 2.0')).toBeDefined();
+    expect(screen.getByText('Glyphroom')).toBeDefined();
     expect(screen.getByText('Break-Glass Admin')).toBeDefined();
     expect(screen.getByPlaceholderText('name@company.com')).toBeDefined();
     expect(screen.getByPlaceholderText('••••••••••••')).toBeDefined();

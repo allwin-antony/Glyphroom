@@ -13,18 +13,20 @@ export const CatalogView: React.FC = () => {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">Knowledge Catalog</h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <h1 className="text-2xl font-bold text-foreground">Knowledge Catalog</h1>
+          <p className="text-xs text-text-secondary mt-1">
             Search, filter, and discover official enterprise engineering and architecture publications.
           </p>
         </div>
 
         {/* View Mode Toggle */}
-        <div className="flex items-center gap-1 p-1 rounded-lg bg-slate-900 border border-slate-800 self-start sm:self-auto">
+        <div className="flex items-center gap-1 p-1 rounded-lg bg-surface border border-border shadow-sm self-start sm:self-auto">
           <button
             onClick={() => setViewMode('grid')}
             className={`p-1.5 rounded-md text-xs font-medium transition-colors ${
-              viewMode === 'grid' ? 'bg-slate-800 text-sky-400' : 'text-slate-400 hover:text-slate-200'
+              viewMode === 'grid'
+                ? 'bg-accent-bg text-accent-main'
+                : 'text-text-muted hover:text-foreground'
             }`}
             aria-label="Grid view"
           >
@@ -33,7 +35,9 @@ export const CatalogView: React.FC = () => {
           <button
             onClick={() => setViewMode('list')}
             className={`p-1.5 rounded-md text-xs font-medium transition-colors ${
-              viewMode === 'list' ? 'bg-slate-800 text-sky-400' : 'text-slate-400 hover:text-slate-200'
+              viewMode === 'list'
+                ? 'bg-accent-bg text-accent-main'
+                : 'text-text-muted hover:text-foreground'
             }`}
             aria-label="List view"
           >
@@ -43,22 +47,22 @@ export const CatalogView: React.FC = () => {
       </div>
 
       {/* Filter Toolbar */}
-      <div className="flex flex-col sm:flex-row gap-3 p-4 rounded-xl bg-slate-900 border border-slate-800">
+      <div className="flex flex-col sm:flex-row gap-3 p-4 rounded-xl bg-surface border border-border shadow-sm">
         <div className="relative flex-1">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-text-muted absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search by title, excerpt, tag, or author..."
-            className="w-full pl-9 pr-4 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+            className="w-full pl-9 pr-4 py-2 rounded-lg bg-canvas border border-border-strong text-xs text-foreground placeholder:text-text-muted focus:outline-none focus:border-accent-main"
           />
         </div>
 
         <select
           value={selectedCoe}
           onChange={(e) => setSelectedCoe(e.target.value)}
-          className="px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300 focus:outline-none focus:border-sky-500"
+          className="px-3 py-2 rounded-lg bg-canvas border border-border-strong text-xs text-foreground focus:outline-none focus:border-accent-main"
         >
           <option value="all">All COEs / Categories</option>
           <option value="architecture">Architecture</option>
@@ -105,21 +109,21 @@ export const CatalogView: React.FC = () => {
           <div
             key={item.id}
             onClick={() => navigate(`/posts/${item.slug}`)}
-            className="p-5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer transition-all hover:bg-slate-900/80 group"
+            className="p-5 rounded-xl bg-surface border border-border hover:border-accent-main cursor-pointer transition-all hover:bg-elevated/40 shadow-sm group"
           >
             <div className="flex items-center justify-between text-xs mb-2">
-              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-accent-bg text-accent-main border border-accent-main/20">
                 {item.coe}
               </span>
-              <span className="text-slate-500">{item.readTime}</span>
+              <span className="text-text-muted">{item.readTime}</span>
             </div>
-            <h3 className="text-sm font-bold text-slate-100 group-hover:text-sky-300 transition-colors">
+            <h3 className="text-sm font-bold text-foreground group-hover:text-accent-main transition-colors">
               {item.title}
             </h3>
-            <p className="text-xs text-slate-400 mt-2 line-clamp-2 leading-relaxed">
+            <p className="text-xs text-text-secondary mt-2 line-clamp-2 leading-relaxed">
               {item.excerpt}
             </p>
-            <div className="mt-4 pt-3 border-t border-slate-800/80 flex items-center justify-between text-[11px] text-slate-500">
+            <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-[11px] text-text-muted">
               <span className="flex items-center gap-1.5">
                 <User className="w-3.5 h-3.5" />
                 {item.author}

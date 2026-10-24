@@ -224,24 +224,15 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   if (!editor) return null;
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+    <div className="flex flex-col h-full bg-canvas text-foreground">
       {/* Awareness bar showing connected users and AI agents */}
       <AwarenessBar provider={provider} />
 
       {/* Editor toolbar */}
-      <div
-        style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: '6px',
-          padding: '8px 16px',
-          background: '#f8fafc',
-          borderBottom: '1px solid #e2e8f0',
-        }}
-      >
+      <div className="flex items-center gap-1.5 px-4 py-2 bg-surface border-b border-border">
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
-          style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
           title="Bold"
         >
           <Bold size={14} />
@@ -249,7 +240,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
         <button
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
           title="Italic"
         >
           <Italic size={14} />
@@ -257,17 +248,17 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
         <button
           onClick={() => editor.chain().focus().toggleCode().run()}
-          style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
           title="Code"
         >
           <Code size={14} />
         </button>
 
-        <span style={{ color: '#cbd5e1' }}>|</span>
+        <span className="text-border mx-1">|</span>
 
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
           title="Heading 1"
         >
           <Heading1 size={14} />
@@ -275,7 +266,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
           title="Heading 2"
         >
           <Heading2 size={14} />
@@ -283,37 +274,24 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
         <button
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          style={{ padding: '4px 8px', borderRadius: '4px', border: '1px solid #cbd5e1', background: '#fff', cursor: 'pointer' }}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
           title="Bullet List"
         >
           <List size={14} />
         </button>
 
-        <span style={{ color: '#cbd5e1' }}>|</span>
+        <span className="text-border mx-1">|</span>
 
-        {/* Suggestion Mode Status Indicator */}
-        <div
-          style={{
-            marginLeft: 'auto',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            fontSize: '12px',
-            color: '#7c3aed',
-            background: '#f5f3ff',
-            padding: '4px 10px',
-            borderRadius: '16px',
-            border: '1px solid #ddd6fe',
-          }}
-        >
-          <Sparkles size={14} />
+        {/* Suggestion Mode Status Indicator - strictly violet for AI agents */}
+        <div className="ml-auto inline-flex items-center gap-1.5 text-xs text-agent bg-agent/10 border border-agent/25 px-2.5 py-1 rounded-full font-semibold">
+          <Sparkles size={13} />
           <span>Agent Suggestion Engine Active</span>
         </div>
       </div>
 
       {/* Floating Suggestion Action Menu */}
       {activeSuggestion && (
-        <div style={{ padding: '8px 16px', background: '#f1f5f9', borderBottom: '1px solid #e2e8f0' }}>
+        <div className="px-4 py-2 bg-elevated border-b border-border shadow-sm">
           <SuggestionActionMenu
             editor={editor}
             activeSuggestion={activeSuggestion}
@@ -323,10 +301,12 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         </div>
       )}
 
-      {/* Main workspace layout: Editor canvas + Suggestion sidebar */}
-      <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <div style={{ flex: 1, overflowY: 'auto', background: '#ffffff' }}>
-          <EditorContent editor={editor} />
+      {/* Main workspace layout: Editor canvas centered on paper surface + Suggestion sidebar */}
+      <div className="flex flex-1 overflow-hidden bg-canvas">
+        <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center">
+          <div className="w-full max-w-[740px] min-h-[700px] bg-surface border border-border rounded-2xl p-8 sm:p-12 shadow-sm text-foreground focus-within:border-accent-main/40 transition-colors">
+            <EditorContent editor={editor} />
+          </div>
         </div>
 
         <SuggestionSidebar

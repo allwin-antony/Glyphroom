@@ -17,28 +17,28 @@ export const HomeView: React.FC = () => {
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
       {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-sky-950/40 to-slate-900 border border-slate-800 p-8 shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-accent-bg via-surface to-accent-bg/40 border border-border p-8 shadow-sm">
         <div className="max-w-2xl">
-          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-sky-500/10 text-sky-400 border border-sky-500/20 mb-4">
+          <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-accent-bg text-accent-main border border-accent-main/20 mb-4">
             <Sparkles className="w-3.5 h-3.5" />
-            <span>Enterprise Knowledge Hub</span>
+            <span>Glyphroom Knowledge Hub</span>
           </div>
-          <h1 className="text-3xl font-extrabold tracking-tight text-slate-100 sm:text-4xl">
+          <h1 className="text-3xl font-extrabold tracking-tight text-foreground sm:text-4xl">
             Welcome back, {user?.fullName || 'Colleague'}
           </h1>
-          <p className="mt-2 text-sm text-slate-400 leading-relaxed">
+          <p className="mt-2 text-sm text-text-secondary leading-relaxed">
             Collaborate in real time with human peers and AI agents using Yjs CRDT suggestion mode.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <button
               onClick={() => navigate('/posts/new')}
-              className="px-4 py-2 rounded-lg bg-sky-600 hover:bg-sky-500 text-white font-medium text-xs shadow-md transition-all"
+              className="px-4 py-2 rounded-lg bg-primary hover:opacity-90 text-primary-foreground font-semibold text-xs shadow-sm transition-all"
             >
               Draft New Post
             </button>
             <button
               onClick={() => navigate('/catalog')}
-              className="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-medium text-xs border border-slate-700 transition-all"
+              className="px-4 py-2 rounded-lg bg-surface hover:bg-elevated text-foreground font-medium text-xs border border-border transition-all shadow-sm"
             >
               Explore Knowledge Catalog
             </button>
@@ -49,22 +49,22 @@ export const HomeView: React.FC = () => {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {[
-          { label: 'Published Knowledge', value: '42 Articles', icon: BookOpen, color: 'text-sky-400' },
-          { label: 'Pending Reviews', value: '3 In Review', icon: Clock, color: 'text-amber-400' },
-          { label: 'Active Suggestions', value: '14 Marks', icon: Sparkles, color: 'text-purple-400' },
-          { label: 'Audit Chain Status', value: '100% Verified', icon: CheckCircle2, color: 'text-emerald-400' },
+          { label: 'Published Knowledge', value: '42 Articles', icon: BookOpen, color: 'text-accent-main' },
+          { label: 'Pending Reviews', value: '3 In Review', icon: Clock, color: 'text-status-warning' },
+          { label: 'Active Suggestions', value: '14 Marks', icon: Sparkles, color: 'text-agent' },
+          { label: 'Audit Chain Status', value: '100% Verified', icon: CheckCircle2, color: 'text-status-success' },
         ].map((metric) => {
           const Icon = metric.icon;
           return (
             <div
               key={metric.label}
-              className="p-5 rounded-xl bg-slate-900 border border-slate-800 shadow-sm flex items-center justify-between"
+              className="p-5 rounded-xl bg-surface border border-border shadow-sm flex items-center justify-between"
             >
               <div>
-                <div className="text-xs text-slate-400 font-medium">{metric.label}</div>
-                <div className="text-xl font-bold text-slate-100 mt-1">{metric.value}</div>
+                <div className="text-xs text-text-muted font-medium">{metric.label}</div>
+                <div className="text-xl font-bold text-foreground mt-1">{metric.value}</div>
               </div>
-              <div className={`p-3 rounded-lg bg-slate-950 border border-slate-800 ${metric.color}`}>
+              <div className={`p-3 rounded-lg bg-canvas border border-border ${metric.color}`}>
                 <Icon className="w-5 h-5" />
               </div>
             </div>
@@ -77,13 +77,13 @@ export const HomeView: React.FC = () => {
         {/* Pinned Articles */}
         <div className="lg:col-span-2 space-y-4">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-              <TrendingUp className="w-4 h-4 text-sky-400" />
+            <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+              <TrendingUp className="w-4 h-4 text-accent-main" />
               <span>Pinned & Official Architecture Posts</span>
             </h2>
             <button
               onClick={() => navigate('/catalog')}
-              className="text-xs text-sky-400 hover:underline flex items-center gap-1"
+              className="text-xs text-accent-main hover:underline flex items-center gap-1 font-semibold"
             >
               <span>View all</span>
               <ArrowRight className="w-3 h-3" />
@@ -114,22 +114,22 @@ export const HomeView: React.FC = () => {
               <div
                 key={post.id}
                 onClick={() => navigate(`/posts/${post.slug}`)}
-                className="p-5 rounded-xl bg-slate-900 border border-slate-800 hover:border-slate-700 cursor-pointer transition-all hover:bg-slate-900/80 group"
+                className="p-5 rounded-xl bg-surface border border-border hover:border-accent-main cursor-pointer transition-all hover:bg-elevated/40 shadow-sm group"
               >
                 <div className="flex items-center gap-2 mb-2">
-                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-sky-500/10 text-sky-400 border border-sky-500/20">
+                  <span className="text-[10px] font-semibold px-2 py-0.5 rounded bg-accent-bg text-accent-main border border-accent-main/20">
                     {post.coe}
                   </span>
-                  <span className="text-xs text-slate-500">•</span>
-                  <span className="text-xs text-slate-400">{post.date}</span>
+                  <span className="text-xs text-text-muted">•</span>
+                  <span className="text-xs text-text-muted">{post.date}</span>
                 </div>
-                <h3 className="text-sm font-bold text-slate-100 group-hover:text-sky-300 transition-colors">
+                <h3 className="text-sm font-bold text-foreground group-hover:text-accent-main transition-colors">
                   {post.title}
                 </h3>
-                <p className="text-xs text-slate-400 mt-1 line-clamp-2">{post.excerpt}</p>
-                <div className="mt-3 flex items-center justify-between text-xs text-slate-500 pt-3 border-t border-slate-800/60">
+                <p className="text-xs text-text-secondary mt-1 line-clamp-2 leading-relaxed">{post.excerpt}</p>
+                <div className="mt-3 flex items-center justify-between text-xs text-text-muted pt-3 border-t border-border">
                   <span>By {post.author}</span>
-                  <span className="text-sky-400 font-medium flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
+                  <span className="text-accent-main font-semibold flex items-center gap-1 group-hover:translate-x-0.5 transition-transform">
                     Read article <ArrowRight className="w-3 h-3" />
                   </span>
                 </div>
@@ -140,34 +140,37 @@ export const HomeView: React.FC = () => {
 
         {/* Pending Actions Widget */}
         <div className="space-y-4">
-          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <Clock className="w-4 h-4 text-amber-400" />
+          <h2 className="text-base font-bold text-foreground flex items-center gap-2">
+            <Clock className="w-4 h-4 text-status-warning" />
             <span>Pending on You</span>
           </h2>
 
-          <div className="p-5 rounded-xl bg-slate-900 border border-slate-800 space-y-4">
-            <div className="p-3 rounded-lg bg-slate-950 border border-slate-800/80">
-              <div className="text-xs font-semibold text-slate-200">2 Suggestions Waiting</div>
-              <div className="text-[11px] text-slate-400 mt-0.5">
+          <div className="p-5 rounded-xl bg-surface border border-border shadow-sm space-y-4">
+            <div className="p-3.5 rounded-lg bg-canvas border border-border">
+              <div className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+                <Sparkles className="w-3.5 h-3.5 text-agent" />
+                <span>2 Suggestions Waiting</span>
+              </div>
+              <div className="text-[11px] text-text-secondary mt-1">
                 MCP Agent proposed additions to Section 3.2.
               </div>
               <button
                 onClick={() => navigate('/my-work')}
-                className="mt-2 text-[11px] text-sky-400 hover:underline font-medium"
+                className="mt-2 text-[11px] text-accent-main hover:underline font-semibold"
               >
                 Review Suggestions →
               </button>
             </div>
 
             {['moderator', 'admin'].includes(user?.role || '') && (
-              <div className="p-3 rounded-lg bg-slate-950 border border-slate-800/80">
-                <div className="text-xs font-semibold text-amber-300">1 Editorial Review Assigned</div>
-                <div className="text-[11px] text-slate-400 mt-0.5">
+              <div className="p-3.5 rounded-lg bg-canvas border border-border">
+                <div className="text-xs font-semibold text-status-warning">1 Editorial Review Assigned</div>
+                <div className="text-[11px] text-text-secondary mt-1">
                   "Production Docker Deployment Guide" submitted for publication.
                 </div>
                 <button
                   onClick={() => navigate('/reviews')}
-                  className="mt-2 text-[11px] text-amber-400 hover:underline font-medium"
+                  className="mt-2 text-[11px] text-status-warning hover:underline font-semibold"
                 >
                   Open Review Queue →
                 </button>

@@ -18,7 +18,7 @@ describe('AdminView Component & Cryptographic Hash Chain Verification', () => {
       render(<AdminView />);
 
       // Title & description
-      expect(screen.getByText('Enterprise Admin Console')).toBeDefined();
+      expect(screen.getByText('Glyphroom Admin Console')).toBeDefined();
       expect(
         screen.getByText(/Governance portal for user roles, Personal Access Tokens/i)
       ).toBeDefined();

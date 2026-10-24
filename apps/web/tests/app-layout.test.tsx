@@ -31,7 +31,7 @@ describe('AppLayout Shell & Navigation', () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByText('Enterprise Blogger')).toBeDefined();
+    expect(screen.getByText('Glyphroom')).toBeDefined();
     expect(screen.getByText('Home')).toBeDefined();
     expect(screen.getByText('Catalog')).toBeDefined();
     expect(screen.getByText('My Work')).toBeDefined();

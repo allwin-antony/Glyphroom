@@ -71,7 +71,7 @@ export const SignInView: React.FC = () => {
             <ShieldCheck className="w-8 h-8" />
           </div>
           <h1 className="text-2xl font-bold tracking-tight text-white sm:text-3xl">
-            Enterprise Blogger 2.0
+            Glyphroom
           </h1>
           <p className="mt-2 text-sm text-slate-400">
             Collaborative Enterprise Knowledge Platform
