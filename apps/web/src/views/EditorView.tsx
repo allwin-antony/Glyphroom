@@ -271,6 +271,7 @@ export const EditorView: React.FC = () => {
             onEditorReady={setEditor}
             hideSidebar={true}
             onDocChange={() => {}}
+            postId={id}
           />
         </main>
 

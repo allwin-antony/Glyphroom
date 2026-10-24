@@ -1,5 +1,6 @@
 import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import { createDatabaseClient, type Database } from './db/index.js';
 import { AuthService } from './services/auth.js';
 import { AuditService } from './services/audit.js';
@@ -13,6 +14,7 @@ import { reviewRoutes } from './routes/reviews.js';
 import { commentRoutes } from './routes/comments.js';
 import { patRoutes } from './routes/pats.js';
 import { auditRoutes } from './routes/audit.js';
+import { attachmentRoutes } from './routes/attachments.js';
 
 export interface ApiAppOptions {
   db?: Database;
@@ -46,6 +48,12 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   await app.register(cors, {
     origin: true,
     credentials: true,
+  });
+
+  await app.register(multipart, {
+    limits: {
+      fileSize: 25 * 1024 * 1024,
+    },
   });
 
   const authService = new AuthService(db, options.sessionSecret);
@@ -111,6 +119,20 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   await app.register(auditRoutes, {
     prefix: '/api/v1/audit',
     db,
+    auditService,
+  });
+
+  await app.register(attachmentRoutes, {
+    prefix: '/api/v1/posts',
+    db,
+    permissionService,
+    auditService,
+  });
+
+  await app.register(attachmentRoutes, {
+    prefix: '/api/v1',
+    db,
+    permissionService,
     auditService,
   });
 

@@ -40,6 +40,8 @@ coverage/
 .temp/
 .turbo/
 *.tmp
+uploads/
+**/uploads/
 
 # Operating System
 .DS_Store

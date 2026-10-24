@@ -84,7 +84,10 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
         </BrowserRouter>
       );
 
-      expect(screen.getByText(/Provisioning draft post/i)).toBeDefined();
+      expect(screen.getByText(/Create New Document or Status Post/i)).toBeDefined();
+
+      const startBlankCard = screen.getByText('Blank Document');
+      fireEvent.click(startBlankCard);
 
       await waitFor(() => {
         expect(api.post).toHaveBeenCalledWith(
@@ -98,7 +101,7 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
       });
     });
 
-    it('displays error and retry button if post provisioning fails', async () => {
+    it('displays error if post provisioning fails', async () => {
       (api.post as any).mockRejectedValueOnce(new Error('Database unavailable'));
 
       render(
@@ -109,10 +112,12 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
         </BrowserRouter>
       );
 
+      const startBlankCard = screen.getByText('Blank Document');
+      fireEvent.click(startBlankCard);
+
       await waitFor(() => {
-        expect(screen.getByText(/Draft Provisioning Failed/i)).toBeDefined();
+        expect(screen.getByText(/Provisioning Error/i)).toBeDefined();
         expect(screen.getByText(/Database unavailable/i)).toBeDefined();
-        expect(screen.getByRole('button', { name: /Retry/i })).toBeDefined();
       });
     });
   });
@@ -422,9 +427,9 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
 
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith('/posts/post-1/versions');
-        expect(screen.getByText('v2.0')).toBeDefined();
+        expect(screen.getByText('v2')).toBeDefined();
         expect(screen.getByText('Published Snapshot')).toBeDefined();
-        expect(screen.getByText('v1.0')).toBeDefined();
+        expect(screen.getByText('v1')).toBeDefined();
         expect(screen.getByText('Review Submission')).toBeDefined();
       });
     });

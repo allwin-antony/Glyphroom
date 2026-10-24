@@ -7,7 +7,8 @@ import {
   AlertCircle,
   ChevronDown,
   Save,
-  Check
+  Check,
+  UploadCloud
 } from 'lucide-react';
 import { Button } from '../ui/button.js';
 import { Badge } from '../ui/badge.js';
@@ -37,11 +38,13 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
   className,
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isRepublishOpen, setIsRepublishOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSavedFeedback, setDraftSavedFeedback] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [changeSummary, setChangeSummary] = useState('');
 
   const dropdownRef = useRef<HTMLDivElement>(null);
 
@@ -55,25 +58,6 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
-
-  // If already in review or published, display descriptive badge
-  if (status === 'in_review') {
-    return (
-      <Badge variant="in_review" className={cn("gap-1.5 py-1 px-3 text-xs font-semibold", className)}>
-        <Clock className="w-3.5 h-3.5" />
-        <span>In Review</span>
-      </Badge>
-    );
-  }
-
-  if (status === 'published') {
-    return (
-      <Badge variant="published" className={cn("gap-1.5 py-1 px-3 text-xs font-semibold", className)}>
-        <CheckCircle2 className="w-3.5 h-3.5" />
-        <span>Published</span>
-      </Badge>
-    );
-  }
 
   const handleConfirmSubmit = async () => {
     setIsSubmitting(true);
@@ -106,7 +90,6 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
     setIsDropdownOpen(false);
     setIsSavingDraft(true);
     try {
-      // Explicitly touch and save post as draft
       await api.patch(`/posts/${postId}`, { status: 'draft' });
       setDraftSavedFeedback(true);
       onStatusChange?.('draft');
@@ -117,6 +100,138 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
       setIsSavingDraft(false);
     }
   };
+
+  const handleRepublish = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!changeSummary.trim() || changeSummary.trim().length < 3) {
+      setErrorMessage('Please provide a meaningful change summary (minimum 3 characters).');
+      return;
+    }
+
+    setIsSubmitting(true);
+    setErrorMessage(null);
+
+    try {
+      await api.post(`/posts/${postId}/republish`, {
+        changeSummary: changeSummary.trim(),
+      });
+      setIsRepublishOpen(false);
+      setChangeSummary('');
+      setDraftSavedFeedback(true);
+      setTimeout(() => setDraftSavedFeedback(false), 3000);
+    } catch (err: any) {
+      setErrorMessage(err?.message || 'Failed to republish changes.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  // If already in review, display descriptive badge
+  if (status === 'in_review') {
+    return (
+      <Badge variant="in_review" className={cn("gap-1.5 py-1 px-3 text-xs font-semibold", className)}>
+        <Clock className="w-3.5 h-3.5" />
+        <span>In Review</span>
+      </Badge>
+    );
+  }
+
+  // If published: display Published badge PLUS Republish action
+  if (status === 'published') {
+    return (
+      <div className={cn("flex items-center gap-2", className)}>
+        <Badge variant="published" className="gap-1.5 py-1 px-3 text-xs font-semibold">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Published</span>
+        </Badge>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            setErrorMessage(null);
+            setIsRepublishOpen(true);
+          }}
+          className="gap-1.5 text-xs font-semibold border-accent text-accent hover:bg-accent hover:text-white transition-colors"
+        >
+          <UploadCloud className="w-3.5 h-3.5" />
+          <span>Republish Changes</span>
+        </Button>
+
+        {draftSavedFeedback && (
+          <span className="text-[11px] text-status-success font-semibold flex items-center gap-1 animate-in fade-in-50">
+            <Check className="w-3 h-3" />
+            <span>Republished ✓</span>
+          </span>
+        )}
+
+        {/* Republish Modal */}
+        <Dialog open={isRepublishOpen} onOpenChange={setIsRepublishOpen}>
+          <DialogContent className="sm:max-w-md">
+            <form onSubmit={handleRepublish}>
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <UploadCloud className="w-5 h-5 text-accent" />
+                  <span>Republish Post with Changes</span>
+                </DialogTitle>
+                <DialogDescription className="pt-2 text-xs text-text-secondary leading-relaxed">
+                  Readers currently view the previous published version. To deploy your working revisions, enter a brief change summary for the audit trail.
+                </DialogDescription>
+              </DialogHeader>
+
+              {errorMessage && (
+                <div className="my-3 p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
+                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
+
+              <div className="my-3 space-y-1.5">
+                <label className="text-xs font-semibold text-foreground">
+                  Change Summary / Changelog <span className="text-status-danger">*</span>
+                </label>
+                <textarea
+                  value={changeSummary}
+                  onChange={(e) => setChangeSummary(e.target.value)}
+                  placeholder="e.g. Updated architecture diagram and clarified Phase 2 requirements..."
+                  rows={3}
+                  required
+                  className="w-full text-xs px-3 py-2 rounded-lg bg-canvas border border-border text-foreground focus:outline-none focus:border-accent resize-none"
+                />
+              </div>
+
+              <DialogFooter className="gap-2 sm:gap-0 pt-2">
+                <DialogClose asChild>
+                  <Button variant="outline" size="sm" disabled={isSubmitting}>
+                    Cancel
+                  </Button>
+                </DialogClose>
+                <Button
+                  type="submit"
+                  variant="default"
+                  size="sm"
+                  disabled={isSubmitting || !changeSummary.trim()}
+                  className="gap-1.5 bg-accent text-white hover:opacity-95"
+                >
+                  {isSubmitting ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Deploying...</span>
+                    </>
+                  ) : (
+                    <>
+                      <UploadCloud className="w-3.5 h-3.5" />
+                      <span>Deploy Revisions</span>
+                    </>
+                  )}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+      </div>
+    );
+  }
 
   return (
     <div className={cn("relative inline-flex items-center", className)} ref={dropdownRef}>

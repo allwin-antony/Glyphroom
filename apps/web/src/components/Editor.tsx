@@ -1,23 +1,60 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
+import Image from '@tiptap/extension-image';
+import { Table } from '@tiptap/extension-table';
+import { TableRow } from '@tiptap/extension-table-row';
+import { TableHeader } from '@tiptap/extension-table-header';
+import { TableCell } from '@tiptap/extension-table-cell';
+import { TaskList } from '@tiptap/extension-task-list';
+import { TaskItem } from '@tiptap/extension-task-item';
+import { TextAlign } from '@tiptap/extension-text-align';
 import * as Y from 'yjs';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
 import { SuggestionInsert, SuggestionDelete } from '../extensions/suggestion.js';
 import { Alert } from '../extensions/alert.js';
+import { MathBlock } from '../extensions/math.js';
+import { MermaidBlock } from '../extensions/mermaid.js';
+import { ProjectStatusBlock } from '../extensions/status-block.js';
+import { FileAttachmentBlock } from '../extensions/attachment.js';
 import { Collaboration } from '../extensions/collab.js';
 import { AwarenessBar } from './AwarenessBar.js';
 import { SuggestionActionMenu, type ActiveSuggestionInfo } from './SuggestionActionMenu.js';
 import { SuggestionSidebar } from './SuggestionSidebar.js';
+import { SlashMenu } from './editor/SlashMenu.js';
+import { TemplatePickerDialog } from './editor/TemplatePickerDialog.js';
 import { acceptSuggestion, rejectSuggestion } from '@enterprise-blogger/shared';
+import { api } from '../lib/api.js';
 import {
   Bold,
   Italic,
   Code,
   Heading1,
   Heading2,
+  Heading3,
   List,
+  ListOrdered,
+  CheckSquare,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Table as TableIcon,
+  Flag,
+  GitGraph,
+  Sigma,
   AlertCircle,
+  Plus,
+  Rows,
+  Columns,
+  Paperclip,
+  Sparkles,
+  Layers,
+  FileText,
+  ChevronUp,
+  ChevronDown,
+  Loader2,
+  X,
+  ShieldAlert,
 } from 'lucide-react';
 
 export interface CollaborativeEditorProps {
@@ -31,6 +68,7 @@ export interface CollaborativeEditorProps {
   onDocChange?: (json: any) => void;
   onEditorReady?: (editor: any) => void;
   hideSidebar?: boolean;
+  postId?: string;
 }
 
 export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
@@ -40,11 +78,34 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   onDocChange,
   onEditorReady,
   hideSidebar = false,
+  postId,
 }) => {
   const fragment = ydoc.getXmlFragment('prosemirror');
 
+  // Suggestion tracking state
   const [activeSuggestion, setActiveSuggestion] = useState<ActiveSuggestionInfo | null>(null);
   const [allSuggestions, setAllSuggestions] = useState<ActiveSuggestionInfo[]>([]);
+
+  // Slash command menu state
+  const [isSlashMenuOpen, setIsSlashMenuOpen] = useState(false);
+  const [slashMenuPos, setSlashMenuPos] = useState({ top: 100, left: 100 });
+
+  // Template picker dialog state
+  const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
+
+  // View Mode: 'document' (flow) vs 'block' (discrete foldable cards)
+  const [viewMode, setViewMode] = useState<'document' | 'block'>('document');
+  const [reorderConflictMessage, setReorderConflictMessage] = useState<string | null>(null);
+  const [currentBlockInfo, setCurrentBlockInfo] = useState<{
+    index: number;
+    total: number;
+    type: string;
+  } | null>(null);
+
+  // File & Image attachment upload state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Detect if cursor is currently within a suggestion mark
   const detectActiveSuggestion = useCallback((ed: any) => {
@@ -87,6 +148,41 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     setActiveSuggestion(found);
   }, []);
 
+  // Update current active block info on selection
+  const updateCurrentBlockInfo = useCallback((ed: any) => {
+    if (!ed || !ed.state) return;
+    const { from } = ed.state.selection;
+    const $from = ed.state.doc.resolve(from);
+    const index = $from.index(0);
+    const total = ed.state.doc.childCount;
+    if (index >= 0 && index < total) {
+      const child = ed.state.doc.child(index);
+      let typeLabel = child.type.name;
+      if (typeLabel === 'heading') {
+        typeLabel = `H${child.attrs.level} Heading`;
+      } else if (typeLabel === 'projectStatusBlock') {
+        typeLabel = 'Status Pulse Block';
+      } else if (typeLabel === 'mermaidBlock') {
+        typeLabel = 'Mermaid Diagram';
+      } else if (typeLabel === 'mathBlock') {
+        typeLabel = 'KaTeX Math Formula';
+      } else if (typeLabel === 'fileAttachmentBlock') {
+        typeLabel = 'File Attachment';
+      } else if (typeLabel === 'table') {
+        typeLabel = 'Data Table Matrix';
+      } else if (typeLabel === 'taskList') {
+        typeLabel = 'Task Checklist';
+      } else if (typeLabel === 'codeBlock') {
+        typeLabel = 'Code Block';
+      } else if (typeLabel === 'paragraph') {
+        typeLabel = 'Prose Paragraph';
+      } else if (typeLabel === 'alert') {
+        typeLabel = 'Alert Callout';
+      }
+      setCurrentBlockInfo({ index: index + 1, total, type: typeLabel });
+    }
+  }, []);
+
   // Collect all suggestions across the entire document
   const scanSuggestions = useCallback((ed: any) => {
     if (!ed || !ed.state) return;
@@ -94,7 +190,6 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
     ed.state.doc.descendants((node: any, pos: number) => {
       if (!node.isText) return;
-
       const insertMark = node.marks.find((m: any) => m.type.name === 'suggestion_insert');
       const deleteMark = node.marks.find((m: any) => m.type.name === 'suggestion_delete');
 
@@ -128,12 +223,88 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     setAllSuggestions(list);
   }, []);
 
+  // Upload file or image attachment
+  const uploadAttachment = useCallback(
+    async (file: File) => {
+      if (!postId) {
+        setUploadError('Save draft first to upload attachments.');
+        return;
+      }
+      // 25 MB enterprise limit validation
+      if (file.size > 25 * 1024 * 1024) {
+        setUploadError('File exceeds 25 MB enterprise limit.');
+        return;
+      }
+
+      setIsUploading(true);
+      setUploadError(null);
+
+      try {
+        const formData = new FormData();
+        formData.append('file', file);
+
+        const res = await api.post<{
+          attachmentId: string;
+          fileName: string;
+          fileSize: number;
+          mimeType: string;
+          scanStatus: 'scanning' | 'clean' | 'blocked';
+          url: string;
+        }>(`/posts/${postId}/attachments`, formData);
+
+        if (editor && res) {
+          editor
+            .chain()
+            .focus()
+            .insertContent({
+              type: 'fileAttachmentBlock',
+              attrs: {
+                attachmentId: res.attachmentId,
+                fileName: res.fileName,
+                fileSize: res.fileSize,
+                mimeType: res.mimeType,
+                url: res.url,
+                scanStatus: res.scanStatus || 'clean',
+              },
+            })
+            .run();
+        }
+      } catch (err: any) {
+        setUploadError(err?.message || 'Failed to upload attachment.');
+      } finally {
+        setIsUploading(false);
+      }
+    },
+    [postId]
+  );
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
-        // CRITICAL: Disable ProseMirror default history/undo-redo plugin to allow Yjs UndoManager isolation!
+        // Disable ProseMirror default history/undo-redo plugin to allow Yjs UndoManager isolation
         undoRedo: false,
       }),
+      // Image extension strictly disallowing base64 payloads
+      Image.configure({
+        allowBase64: false,
+      }),
+      FileAttachmentBlock,
+      Table.configure({
+        resizable: true,
+      }),
+      TableRow,
+      TableHeader,
+      TableCell,
+      TaskList,
+      TaskItem.configure({
+        nested: true,
+      }),
+      TextAlign.configure({
+        types: ['heading', 'paragraph'],
+      }),
+      MathBlock,
+      MermaidBlock,
+      ProjectStatusBlock,
       SuggestionInsert,
       SuggestionDelete,
       Alert,
@@ -145,15 +316,61 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     ],
     editorProps: {
       attributes: {
-        class: 'enterprise-editor-content w-full focus:outline-none',
+        class: `enterprise-editor-content w-full focus:outline-none ${
+          viewMode === 'block' ? 'enterprise-block-mode' : ''
+        }`,
+      },
+      handleKeyDown: (view, event) => {
+        // Trigger slash menu when user presses '/' on an empty block
+        if (event.key === '/') {
+          const { $from } = view.state.selection;
+          const isAtBlockStart = $from.parentOffset === 0;
+          if (isAtBlockStart) {
+            const coords = view.coordsAtPos($from.pos);
+            setSlashMenuPos({ top: coords.bottom + 8, left: coords.left });
+            setIsSlashMenuOpen(true);
+          }
+        }
+        return false;
+      },
+      handleDrop: (view, event, slice, moved) => {
+        if (!moved && event.dataTransfer?.files?.length && postId) {
+          event.preventDefault();
+          const file = event.dataTransfer.files[0];
+          uploadAttachment(file);
+          return true;
+        }
+        return false;
+      },
+      handlePaste: (view, event) => {
+        // 1. Intercept file / image paste from clipboard
+        if (event.clipboardData?.files?.length && postId) {
+          event.preventDefault();
+          const file = event.clipboardData.files[0];
+          uploadAttachment(file);
+          return true;
+        }
+        // 2. Excel/CSV paste hygiene: prevent freezing by capping paste at 500 rows
+        const text = event.clipboardData?.getData('text/plain');
+        if (text && (text.includes('\t') || text.includes(','))) {
+          const lines = text.split('\n');
+          if (lines.length > 500) {
+            const capped = lines.slice(0, 500).join('\n');
+            view.dispatch(view.state.tr.insertText(capped));
+            return true;
+          }
+        }
+        return false;
       },
     },
     onUpdate: ({ editor }) => {
       onDocChange?.(editor.getJSON());
       scanSuggestions(editor);
+      updateCurrentBlockInfo(editor);
     },
     onSelectionUpdate: ({ editor }) => {
       detectActiveSuggestion(editor);
+      updateCurrentBlockInfo(editor);
     },
   });
 
@@ -161,8 +378,271 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     if (editor) {
       onEditorReady?.(editor);
       scanSuggestions(editor);
+      updateCurrentBlockInfo(editor);
     }
-  }, [editor, onEditorReady, scanSuggestions]);
+  }, [editor, onEditorReady, scanSuggestions, updateCurrentBlockInfo]);
+
+  // Open Slash Menu manually via toolbar button
+  const handleOpenSlashMenu = (e: React.MouseEvent) => {
+    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+    setSlashMenuPos({ top: rect.bottom + 8, left: rect.left });
+    setIsSlashMenuOpen(true);
+  };
+
+  // Safe Block Reordering with Collaborator Awareness Guard
+  const handleMoveBlock = (direction: 'up' | 'down') => {
+    if (!editor) return;
+    setReorderConflictMessage(null);
+    const { from } = editor.state.selection;
+    const $from = editor.state.doc.resolve(from);
+    const blockIndex = $from.index(0);
+    const totalChildren = editor.state.doc.childCount;
+
+    if (direction === 'up' && blockIndex === 0) return;
+    if (direction === 'down' && blockIndex >= totalChildren - 1) return;
+
+    const targetIndex = direction === 'up' ? blockIndex - 1 : blockIndex + 1;
+
+    // Calculate start & end bounds of current block and target block
+    let pos = 0;
+    let currentStart = 0;
+    let currentEnd = 0;
+    let targetStart = 0;
+    let targetEnd = 0;
+
+    for (let i = 0; i < totalChildren; i++) {
+      const size = editor.state.doc.child(i).nodeSize;
+      if (i === blockIndex) {
+        currentStart = pos;
+        currentEnd = pos + size;
+      }
+      if (i === targetIndex) {
+        targetStart = pos;
+        targetEnd = pos + size;
+      }
+      pos += size;
+    }
+
+    const minBound = Math.min(currentStart, targetStart);
+    const maxBound = Math.max(currentEnd, targetEnd);
+
+    // Collaborator Awareness Guard: check if any connected peer is actively inside the move range
+    if (provider?.awareness) {
+      const states = provider.awareness.getStates();
+      const myClientId = provider.awareness.clientID;
+      for (const [clientId, state] of states.entries()) {
+        if (clientId === myClientId) continue;
+        const peerUser = (state as any)?.user;
+        const peerCursor = (state as any)?.cursor || peerUser?.cursor;
+        if (peerCursor && typeof peerCursor.anchor === 'number') {
+          const anchor = peerCursor.anchor;
+          if (anchor >= minBound && anchor <= maxBound) {
+            setReorderConflictMessage(
+              `Cannot reorder: Collaborator "${peerUser?.name || 'Peer'}" is actively editing inside this section.`
+            );
+            setTimeout(() => setReorderConflictMessage(null), 4000);
+            return;
+          }
+        }
+      }
+    }
+
+    // Execute atomic ProseMirror transaction
+    const currentNode = editor.state.doc.child(blockIndex);
+    let tr = editor.state.tr;
+
+    if (direction === 'up') {
+      const prevNode = editor.state.doc.child(blockIndex - 1);
+      const prevSize = prevNode.nodeSize;
+      const prevStart = currentStart - prevSize;
+      tr = tr.delete(currentStart, currentEnd);
+      tr = tr.insert(prevStart, currentNode);
+      editor.view.dispatch(tr);
+      editor.commands.focus(prevStart + 1);
+    } else {
+      const nextNode = editor.state.doc.child(blockIndex + 1);
+      const nextSize = nextNode.nodeSize;
+      tr = tr.delete(currentStart, currentEnd);
+      tr = tr.insert(currentStart + nextSize, currentNode);
+      editor.view.dispatch(tr);
+      editor.commands.focus(currentStart + nextSize + 1);
+    }
+
+    updateCurrentBlockInfo(editor);
+  };
+
+  // Template Scaffolding Injection
+  const handleApplyTemplate = (templateId: string) => {
+    if (!editor) return;
+
+    if (templateId === 'weekly_status') {
+      editor
+        .chain()
+        .focus()
+        .insertContent([
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Weekly Project Status Pulse' }] },
+          { type: 'projectStatusBlock' },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Key Achievements & Deliverables' }] },
+          {
+            type: 'taskList',
+            content: [
+              {
+                type: 'taskItem',
+                attrs: { checked: true },
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Completed milestone core integration' }] }],
+              },
+              {
+                type: 'taskItem',
+                attrs: { checked: false },
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Verify staging cluster deployment' }] }],
+              },
+            ],
+          },
+        ])
+        .run();
+    } else if (templateId === 'architecture_rfc') {
+      editor
+        .chain()
+        .focus()
+        .insertContent([
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Architecture RFC & Decision Record' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Context & Problem Statement' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Describe the technical architecture context and problem drivers.' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Proposed Architecture Diagram' }] },
+          { type: 'mermaidBlock' },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Decision & Consequences' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'Record architectural trade-offs, security implications, and operational impact.' }] },
+        ])
+        .run();
+    } else if (templateId === 'incident_postmortem') {
+      editor
+        .chain()
+        .focus()
+        .insertContent([
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Incident Postmortem (SEV-1 Retrospective)' }] },
+          {
+            type: 'alert',
+            attrs: { type: 'warning' },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'SEV-1 Incident Summary: Outage detected, mitigated, and stabilized.' }] }],
+          },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Incident Timeline' }] },
+          {
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Timestamp (UTC)' }] }] },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Event Description' }] }] },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Responder' }] }] },
+                ],
+              },
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: '14:02 UTC' }] }] },
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Alert triggered for 5xx latency spike' }] }] },
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'SRE On-Call' }] }] },
+                ],
+              },
+            ],
+          },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Root Cause & 5 Whys' }] },
+          {
+            type: 'orderedList',
+            content: [
+              { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Why 1: Database connection pool exhausted.' }] }] },
+              { type: 'listItem', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Why 2: Query timeout was not configured on reporting jobs.' }] }] },
+            ],
+          },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Preventive Action Items' }] },
+          {
+            type: 'taskList',
+            content: [
+              {
+                type: 'taskItem',
+                attrs: { checked: false },
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Add strict connection limits and query timeouts' }] }],
+              },
+            ],
+          },
+        ])
+        .run();
+    } else if (templateId === 'runbook') {
+      editor
+        .chain()
+        .focus()
+        .insertContent([
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Operational Engineering Runbook' }] },
+          {
+            type: 'alert',
+            attrs: { type: 'note' },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Target SLA: 99.95% Availability. Escalation: SRE Team Primary.' }] }],
+          },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Prerequisites & Validation' }] },
+          {
+            type: 'taskList',
+            content: [
+              {
+                type: 'taskItem',
+                attrs: { checked: false },
+                content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Kubernetes cluster admin credentials verified' }] }],
+              },
+            ],
+          },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Execution Procedure' }] },
+          {
+            type: 'codeBlock',
+            content: [
+              {
+                type: 'text',
+                text: '# 1. Check pod status\nkubectl get pods -n production\n\n# 2. Trigger rollout restart\nkubectl rollout restart deployment/api-server -n production',
+              },
+            ],
+          },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Rollback Steps' }] },
+          {
+            type: 'codeBlock',
+            content: [{ type: 'text', text: 'kubectl rollout undo deployment/api-server -n production' }],
+          },
+        ])
+        .run();
+    } else if (templateId === 'test_plan') {
+      editor
+        .chain()
+        .focus()
+        .insertContent([
+          { type: 'heading', attrs: { level: 1 }, content: [{ type: 'text', text: 'Test Plan & Acceptance Matrix' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Scope & Target Environments' }] },
+          { type: 'paragraph', content: [{ type: 'text', text: 'QA staging cluster, integration database, simulated load.' }] },
+          { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Acceptance Test Matrix' }] },
+          {
+            type: 'table',
+            content: [
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Case ID' }] }] },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Scenario' }] }] },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Expected Outcome' }] }] },
+                  { type: 'tableHeader', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Status' }] }] },
+                ],
+              },
+              {
+                type: 'tableRow',
+                content: [
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'TC-01' }] }] },
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Collaborator paste file attachment' }] }] },
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'File uploaded and rendered cleanly' }] }] },
+                  { type: 'tableCell', content: [{ type: 'paragraph', content: [{ type: 'text', text: 'PASS' }] }] },
+                ],
+              },
+            ],
+          },
+        ])
+        .run();
+    }
+  };
 
   // Suggestion Acceptance Lifecycle using genuine @enterprise-blogger/shared lifecycle
   const handleAccept = (sug: ActiveSuggestionInfo) => {
@@ -217,12 +697,13 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   };
 
   const handleAcceptAll = () => {
+    if (!editor) return;
     ydoc.transact(() => {
       allSuggestions.forEach((sug) => {
         try {
           acceptSuggestion(ydoc, sug.id, user?.name || 'human', 'prosemirror');
         } catch {
-          handleAccept(sug);
+          // fallback
         }
       });
     }, { origin: 'human', userId: user?.name || 'human', action: 'acceptAll' });
@@ -231,12 +712,13 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   };
 
   const handleRejectAll = () => {
+    if (!editor) return;
     ydoc.transact(() => {
       allSuggestions.forEach((sug) => {
         try {
           rejectSuggestion(ydoc, sug.id, user?.name || 'human', 'prosemirror');
         } catch {
-          handleReject(sug);
+          // fallback
         }
       });
     }, { origin: 'human', userId: user?.name || 'human', action: 'rejectAll' });
@@ -252,69 +734,393 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
   if (!editor) return null;
 
+  const isTableActive = editor.isActive('table');
+
   return (
     <div className="flex flex-col h-full bg-canvas text-foreground">
       {/* Awareness bar showing connected users and AI agents */}
       <AwarenessBar provider={provider} />
 
-      {/* Editor toolbar */}
-      <div className="flex items-center gap-1.5 px-4 py-2 bg-surface border-b border-border">
+      {/* Hidden file input for attachment uploads */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) {
+            uploadAttachment(e.target.files[0]);
+            e.target.value = '';
+          }
+        }}
+      />
+
+      {/* Primary Editor Formatting Toolbar */}
+      <div className="flex flex-wrap items-center gap-1 px-3 py-1.5 bg-surface border-b border-border select-none">
+        {/* Slash Command / Block Insert trigger */}
+        <button
+          onClick={handleOpenSlashMenu}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-canvas text-text-secondary hover:text-foreground hover:bg-elevated transition-colors text-xs font-semibold mr-1 shadow-xs"
+          title="Insert Block (or type / on new line)"
+        >
+          <Plus size={13} className="text-accent" />
+          <span>Insert</span>
+        </button>
+
+        {/* Templates Picker Trigger */}
+        <button
+          onClick={() => setIsTemplatePickerOpen(true)}
+          className="flex items-center gap-1 px-2 py-1 rounded-lg border border-border bg-canvas text-accent hover:bg-elevated transition-colors text-xs font-semibold mr-1 shadow-xs"
+          title="Scaffold Enterprise Document Template"
+        >
+          <Sparkles size={13} />
+          <span>Templates</span>
+        </button>
+
+        <span className="text-border mx-0.5">|</span>
+
+        {/* View Mode Toggle: Document Flow vs Block View */}
+        <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas mr-1">
+          <button
+            onClick={() => setViewMode('document')}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
+              viewMode === 'document'
+                ? 'bg-elevated text-foreground shadow-xs'
+                : 'text-text-muted hover:text-foreground'
+            }`}
+            title="Document View (Continuous prose)"
+          >
+            <FileText size={11} />
+            <span>Doc</span>
+          </button>
+          <button
+            onClick={() => setViewMode('block')}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
+              viewMode === 'block'
+                ? 'bg-elevated text-accent shadow-xs'
+                : 'text-text-muted hover:text-foreground'
+            }`}
+            title="Block View (Discrete foldable section cards)"
+          >
+            <Layers size={11} />
+            <span>Blocks</span>
+          </button>
+        </div>
+
+        <span className="text-border mx-0.5">|</span>
+
+        {/* Text styling */}
         <button
           onClick={() => editor.chain().focus().toggleBold().run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
-          title="Bold"
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('bold')
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Bold (Ctrl+B)"
         >
-          <Bold size={14} />
+          <Bold size={13} />
         </button>
 
         <button
           onClick={() => editor.chain().focus().toggleItalic().run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
-          title="Italic"
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('italic')
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Italic (Ctrl+I)"
         >
-          <Italic size={14} />
+          <Italic size={13} />
         </button>
 
         <button
           onClick={() => editor.chain().focus().toggleCode().run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
-          title="Code"
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('code')
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Inline Code"
         >
-          <Code size={14} />
+          <Code size={13} />
         </button>
 
-        <span className="text-border mx-1">|</span>
+        <span className="text-border mx-0.5">|</span>
 
+        {/* Headings */}
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('heading', { level: 1 })
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
           title="Heading 1"
         >
-          <Heading1 size={14} />
+          <Heading1 size={13} />
         </button>
 
         <button
           onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('heading', { level: 2 })
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
           title="Heading 2"
         >
-          <Heading2 size={14} />
+          <Heading2 size={13} />
         </button>
 
         <button
+          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('heading', { level: 3 })
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Heading 3"
+        >
+          <Heading3 size={13} />
+        </button>
+
+        <span className="text-border mx-0.5">|</span>
+
+        {/* Text Alignment */}
+        <button
+          onClick={() => editor.chain().focus().setTextAlign('left').run()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive({ textAlign: 'left' })
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Align Left"
+        >
+          <AlignLeft size={13} />
+        </button>
+
+        <button
+          onClick={() => editor.chain().focus().setTextAlign('center').run()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive({ textAlign: 'center' })
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Align Center"
+        >
+          <AlignCenter size={13} />
+        </button>
+
+        <button
+          onClick={() => editor.chain().focus().setTextAlign('right').run()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive({ textAlign: 'right' })
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Align Right"
+        >
+          <AlignRight size={13} />
+        </button>
+
+        <span className="text-border mx-0.5">|</span>
+
+        {/* Lists & Checklists */}
+        <button
           onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('bulletList')
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
           title="Bullet List"
         >
-          <List size={14} />
+          <List size={13} />
+        </button>
+
+        <button
+          onClick={() => editor.chain().focus().toggleOrderedList().run()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('orderedList')
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Numbered List"
+        >
+          <ListOrdered size={13} />
+        </button>
+
+        <button
+          onClick={() => editor.chain().focus().toggleTaskList().run()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            editor.isActive('taskList')
+              ? 'bg-accent-bg text-accent border-accent/30'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title="Interactive Task Checklist"
+        >
+          <CheckSquare size={13} />
+        </button>
+
+        <span className="text-border mx-0.5">|</span>
+
+        {/* Tables & Structured Blocks */}
+        <button
+          onClick={() =>
+            isTableActive
+              ? editor.chain().focus().deleteTable().run()
+              : editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+          }
+          className={`p-1.5 rounded-lg border transition-colors ${
+            isTableActive
+              ? 'bg-accent-bg text-accent border-accent/30 font-semibold'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
+          title={isTableActive ? 'Delete Table' : 'Insert 3x3 Table'}
+        >
+          <TableIcon size={13} />
+        </button>
+
+        {isTableActive && (
+          <div className="flex items-center gap-0.5 bg-canvas px-1.5 py-0.5 rounded-lg border border-border">
+            <button
+              onClick={() => editor.chain().focus().addRowAfter().run()}
+              className="p-1 rounded text-text-secondary hover:text-foreground hover:bg-elevated text-[10px] flex items-center gap-0.5"
+              title="Add Row Below"
+            >
+              <Rows size={11} />
+              <span>+Row</span>
+            </button>
+            <button
+              onClick={() => editor.chain().focus().addColumnAfter().run()}
+              className="p-1 rounded text-text-secondary hover:text-foreground hover:bg-elevated text-[10px] flex items-center gap-0.5"
+              title="Add Column Right"
+            >
+              <Columns size={11} />
+              <span>+Col</span>
+            </button>
+            <button
+              onClick={() => editor.chain().focus().deleteRow().run()}
+              className="p-1 rounded text-status-danger hover:bg-status-danger/10 text-[10px]"
+              title="Delete Current Row"
+            >
+              -Row
+            </button>
+            <button
+              onClick={() => editor.chain().focus().deleteColumn().run()}
+              className="p-1 rounded text-status-danger hover:bg-status-danger/10 text-[10px]"
+              title="Delete Current Column"
+            >
+              -Col
+            </button>
+          </div>
+        )}
+
+        {/* Status Pulse */}
+        <button
+          onClick={() => editor.chain().focus().insertContent({ type: 'projectStatusBlock' }).run()}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          title="Insert Project Status & Health Pulse"
+        >
+          <Flag size={13} />
+        </button>
+
+        {/* Mermaid Diagram */}
+        <button
+          onClick={() => editor.chain().focus().insertContent({ type: 'mermaidBlock' }).run()}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          title="Insert Mermaid Architecture Diagram"
+        >
+          <GitGraph size={13} />
+        </button>
+
+        {/* KaTeX Math */}
+        <button
+          onClick={() => editor.chain().focus().insertContent({ type: 'mathBlock' }).run()}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          title="Insert KaTeX Math Formula"
+        >
+          <Sigma size={13} />
+        </button>
+
+        {/* File & Image Attachment */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={isUploading}
+          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors disabled:opacity-50"
+          title="Attach Image or File (Max 25MB)"
+        >
+          {isUploading ? <Loader2 size={13} className="animate-spin text-accent" /> : <Paperclip size={13} />}
         </button>
 
         {allSuggestions.length > 0 && (
           <div className="ml-auto inline-flex items-center gap-1.5 text-xs text-text-secondary bg-elevated border border-border px-2.5 py-0.5 rounded-full font-medium shadow-xs">
-            <span>{allSuggestions.length} {allSuggestions.length === 1 ? 'suggestion' : 'suggestions'} pending</span>
+            <span>
+              {allSuggestions.length} {allSuggestions.length === 1 ? 'suggestion' : 'suggestions'} pending
+            </span>
           </div>
         )}
       </div>
+
+      {/* Block View Active Control Bar (Visible when in Block View) */}
+      {viewMode === 'block' && currentBlockInfo && (
+        <div className="flex items-center justify-between px-4 py-1.5 bg-surface border-b border-border text-xs">
+          <div className="flex items-center gap-2">
+            <span className="font-semibold text-text-muted">
+              Block {currentBlockInfo.index} of {currentBlockInfo.total}:
+            </span>
+            <span className="px-2 py-0.5 rounded-md bg-canvas border border-border font-mono text-[11px] text-accent font-semibold">
+              {currentBlockInfo.type}
+            </span>
+          </div>
+
+          <div className="flex items-center gap-1">
+            <span className="text-[11px] text-text-muted mr-1">Reorder:</span>
+            <button
+              onClick={() => handleMoveBlock('up')}
+              disabled={currentBlockInfo.index <= 1}
+              className="p-1 rounded border border-border bg-canvas hover:bg-elevated text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              title="Move Block Up (▲)"
+            >
+              <ChevronUp size={13} />
+            </button>
+            <button
+              onClick={() => handleMoveBlock('down')}
+              disabled={currentBlockInfo.index >= currentBlockInfo.total}
+              className="p-1 rounded border border-border bg-canvas hover:bg-elevated text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+              title="Move Block Down (▼)"
+            >
+              <ChevronDown size={13} />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Reorder Collision Awareness Banner */}
+      {reorderConflictMessage && (
+        <div className="px-4 py-2 bg-status-danger/10 border-b border-status-danger/30 text-status-danger text-xs flex items-center justify-between animate-fadeIn">
+          <div className="flex items-center gap-2">
+            <ShieldAlert size={14} className="shrink-0" />
+            <span>{reorderConflictMessage}</span>
+          </div>
+          <button onClick={() => setReorderConflictMessage(null)} className="p-0.5 hover:opacity-70">
+            <X size={12} />
+          </button>
+        </div>
+      )}
+
+      {/* Upload Error Banner */}
+      {uploadError && (
+        <div className="px-4 py-2 bg-status-danger/10 border-b border-status-danger/30 text-status-danger text-xs flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <AlertCircle size={14} className="shrink-0" />
+            <span>{uploadError}</span>
+          </div>
+          <button onClick={() => setUploadError(null)} className="p-0.5 hover:opacity-70">
+            <X size={12} />
+          </button>
+        </div>
+      )}
 
       {/* Floating Suggestion Action Menu */}
       {activeSuggestion && (
@@ -328,10 +1134,31 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         </div>
       )}
 
+      {/* Floating Slash Command Menu */}
+      <SlashMenu
+        editor={editor}
+        isOpen={isSlashMenuOpen}
+        position={slashMenuPos}
+        onClose={() => setIsSlashMenuOpen(false)}
+        onUploadAttachment={() => fileInputRef.current?.click()}
+        onOpenTemplates={() => setIsTemplatePickerOpen(true)}
+      />
+
+      {/* Template Picker Dialog */}
+      <TemplatePickerDialog
+        isOpen={isTemplatePickerOpen}
+        onClose={() => setIsTemplatePickerOpen(false)}
+        onSelectTemplate={handleApplyTemplate}
+      />
+
       {/* Main workspace layout: Editor canvas centered on paper surface + Suggestion sidebar */}
       <div className="flex flex-1 overflow-hidden bg-canvas min-w-0">
         <div className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center min-w-0">
-          <div className="w-full max-w-[780px] min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40 transition-colors my-2">
+          <div
+            className={`w-full max-w-[780px] min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40 transition-colors my-2 ${
+              viewMode === 'block' ? 'bg-canvas border-dashed' : ''
+            }`}
+          >
             <EditorContent editor={editor} className="w-full max-w-full" />
           </div>
         </div>

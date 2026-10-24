@@ -17,6 +17,7 @@
     "@fastify/cookie": "11.0.2",
     "@fastify/cors": "10.0.2",
     "@fastify/csrf-protection": "7.0.2",
+    "@fastify/multipart": "9.0.3",
     "bcryptjs": "2.4.3",
     "dotenv": "16.4.7",
     "drizzle-orm": "0.38.4",

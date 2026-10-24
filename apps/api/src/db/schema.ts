@@ -290,3 +290,31 @@ export const postViewCounts = pgTable('post_view_counts', {
   totalViews: bigint('total_views', { mode: 'bigint' }).notNull().default(0n),
   lastViewedAt: timestamp('last_viewed_at', { withTimezone: true }),
 });
+
+// 13. Post Attachments Table (Strictly Out-of-Band from Document CRDT)
+export const postAttachments = pgTable(
+  'post_attachments',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    postId: uuid('post_id')
+      .references(() => posts.id, { onDelete: 'cascade' })
+      .notNull(),
+    fileName: varchar('file_name', { length: 255 }).notNull(),
+    fileSize: integer('file_size').notNull(),
+    mimeType: varchar('mime_type', { length: 100 }).notNull(),
+    sha256: varchar('sha256', { length: 64 }).notNull(),
+    storagePath: text('storage_path').notNull(),
+    scanStatus: varchar('scan_status', { length: 20 })
+      .notNull()
+      .default('clean')
+      .$type<'scanning' | 'clean' | 'blocked'>(),
+    uploadedBy: uuid('uploaded_by')
+      .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_post_attachments_post_id').on(table.postId),
+    index('idx_post_attachments_sha256').on(table.sha256),
+  ]
+);

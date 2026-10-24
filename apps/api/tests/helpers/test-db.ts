@@ -157,6 +157,19 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       total_views bigint NOT NULL DEFAULT 0,
       last_viewed_at timestamp
     );
+
+    CREATE TABLE post_attachments (
+      id text PRIMARY KEY DEFAULT gen_random_uuid(),
+      post_id text NOT NULL,
+      file_name text NOT NULL,
+      file_size integer NOT NULL,
+      mime_type text NOT NULL,
+      sha256 text NOT NULL,
+      storage_path text NOT NULL,
+      scan_status text NOT NULL DEFAULT 'clean',
+      uploaded_by text NOT NULL,
+      created_at timestamp NOT NULL DEFAULT NOW()
+    );
   `);
 
   const pg = pgMem.adapters.createPg();

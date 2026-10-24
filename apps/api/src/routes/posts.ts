@@ -15,6 +15,14 @@ const CreatePostSchema = z.object({
   slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/),
   excerpt: z.string().optional(),
   coeId: z.string().uuid().optional(),
+  templateId: z.enum([
+    'blank',
+    'weekly_status',
+    'architecture_rfc',
+    'incident_postmortem',
+    'runbook',
+    'test_plan',
+  ]).optional(),
 });
 
 const UpdatePostSchema = z.object({
@@ -239,6 +247,115 @@ export const postRoutes: FastifyPluginAsync<{
     return reply.send(markdown);
   });
 
+// Helper: Server-side pure Yjs template generator
+function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
+  const fragment = ydoc.getXmlFragment('prosemirror');
+
+  const createH = (level: number, text: string) => {
+    const h = new Y.XmlElement('heading');
+    h.setAttribute('level', level);
+    const pText = new Y.XmlText(text);
+    h.insert(0, [pText]);
+    return h;
+  };
+
+  const createP = (text: string) => {
+    const p = new Y.XmlElement('paragraph');
+    const pText = new Y.XmlText(text);
+    p.insert(0, [pText]);
+    return p;
+  };
+
+  if (templateId === 'weekly_status') {
+    fragment.insert(fragment.length, [createH(1, title || 'Weekly Project Status Pulse')]);
+
+    const statusBlock = new Y.XmlElement('projectStatusBlock');
+    statusBlock.setAttribute('ragStatus', 'green');
+    statusBlock.setAttribute('milestoneTitle', 'Sprint Milestone Deliverables');
+    statusBlock.setAttribute('completionPercent', 65);
+    statusBlock.setAttribute('targetDate', '2026-11-30');
+    statusBlock.setAttribute('blockers', 'None currently');
+    fragment.insert(fragment.length, [statusBlock]);
+
+    fragment.insert(fragment.length, [createH(2, 'Key Milestones Completed This Week')]);
+    fragment.insert(fragment.length, [createP('• Completed Sprint 1 database migration and table schemas')]);
+    fragment.insert(fragment.length, [createP('• Deployed staging API services with 99.9% uptime')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Deliverables for Next Sprint')]);
+    fragment.insert(fragment.length, [createP('• Runbook security verification and peer reviews')]);
+    fragment.insert(fragment.length, [createP('• Performance benchmarking under 500 concurrent connections')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Active Blockers & Dependencies')]);
+    const alert = new Y.XmlElement('alert');
+    alert.setAttribute('type', 'tip');
+    alert.insert(0, [createP('Dependency: SecOps review scheduled for Wednesday.')]);
+    fragment.insert(fragment.length, [alert]);
+  } else if (templateId === 'architecture_rfc') {
+    fragment.insert(fragment.length, [createH(1, title || 'Architecture RFC & System Design')]);
+
+    const alert = new Y.XmlElement('alert');
+    alert.setAttribute('type', 'note');
+    alert.insert(0, [createP('Status: Proposed | Authors: Engineering Architecture Group')]);
+    fragment.insert(fragment.length, [alert]);
+
+    fragment.insert(fragment.length, [createH(2, 'Context & Problem Statement')]);
+    fragment.insert(fragment.length, [createP('Describe the architectural background, business motivation, and technical constraints.')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Architecture Diagram')]);
+    const mermaid = new Y.XmlElement('mermaidBlock');
+    mermaid.setAttribute('code', 'graph TD\n  Client[Web Browser] -->|WebSocket| Gateway[Collab Gateway]\n  Gateway --> YjsEngine[Yjs CRDT Engine]\n  YjsEngine --> DB[(PostgreSQL)]');
+    fragment.insert(fragment.length, [mermaid]);
+
+    fragment.insert(fragment.length, [createH(2, 'Decision & Technical Rationale')]);
+    fragment.insert(fragment.length, [createP('Outline the chosen solution and explain why alternatives were rejected.')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Consequences & Trade-offs')]);
+    fragment.insert(fragment.length, [createP('Detail operational impact, security considerations, and latency characteristics.')]);
+  } else if (templateId === 'incident_postmortem') {
+    fragment.insert(fragment.length, [createH(1, title || 'Incident Retrospective (SEV-1)')]);
+
+    const alert = new Y.XmlElement('alert');
+    alert.setAttribute('type', 'caution');
+    alert.insert(0, [createP('Incident Date: 2026-10-24 | Duration: 23 mins | Severity: SEV-1')]);
+    fragment.insert(fragment.length, [alert]);
+
+    fragment.insert(fragment.length, [createH(2, 'Incident Summary & Customer Impact')]);
+    fragment.insert(fragment.length, [createP('Brief overview of the outage and percentage of requests affected.')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Root Cause Analysis (5 Whys)')]);
+    fragment.insert(fragment.length, [createP('1. Why did the service fail? Connection pool exhaustion under spike.')]);
+    fragment.insert(fragment.length, [createP('2. Why was the pool exhausted? Slow queries blocked background worker threads.')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Preventive Action Items')]);
+    fragment.insert(fragment.length, [createP('• Add query timeout threshold (3000ms)')]);
+    fragment.insert(fragment.length, [createP('• Scale connection pool limits dynamically')]);
+  } else if (templateId === 'runbook') {
+    fragment.insert(fragment.length, [createH(1, title || 'Operational Runbook')]);
+
+    const alert = new Y.XmlElement('alert');
+    alert.setAttribute('type', 'tip');
+    alert.insert(0, [createP('SLA: < 15 minutes | Service: Core API Production')]);
+    fragment.insert(fragment.length, [alert]);
+
+    fragment.insert(fragment.length, [createH(2, 'Preconditions & Access Requirements')]);
+    fragment.insert(fragment.length, [createP('Ensure you have production read-only or break-glass admin credentials.')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Verification & Health Checks')]);
+    fragment.insert(fragment.length, [createP('curl -f http://localhost:4001/health')]);
+
+    fragment.insert(fragment.length, [createH(2, 'Step-by-Step Recovery Procedure')]);
+    fragment.insert(fragment.length, [createP('1. Verify active worker pods.')]);
+    fragment.insert(fragment.length, [createP('2. Restart stale replica instances.')]);
+  } else if (templateId === 'test_plan') {
+    fragment.insert(fragment.length, [createH(1, title || 'Test Plan & Acceptance Matrix')]);
+    fragment.insert(fragment.length, [createH(2, 'Scope & Environment')]);
+    fragment.insert(fragment.length, [createP('Staging environment configuration and test coverage targets.')]);
+    fragment.insert(fragment.length, [createH(2, 'Acceptance Test Scenarios')]);
+    fragment.insert(fragment.length, [createP('• TC-01: Multi-user concurrent edit convergence')]);
+    fragment.insert(fragment.length, [createP('• TC-02: Attachment upload security and magic-byte validation')]);
+  }
+}
+
   // 3. Create Post (Requires Author, Moderator, or Admin)
   fastify.post('/', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
     const user = request.user!;
@@ -251,7 +368,7 @@ export const postRoutes: FastifyPluginAsync<{
       return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
     }
 
-    const { title, slug, excerpt, coeId } = parseResult.data;
+    const { title, slug, excerpt, coeId, templateId } = parseResult.data;
 
     // Check slug collision
     const [existing] = await db.select({ id: posts.id }).from(posts).where(eq(posts.slug, slug)).limit(1);
@@ -261,6 +378,9 @@ export const postRoutes: FastifyPluginAsync<{
 
     // Initialize canonical Yjs binary document state
     const ydoc = new Y.Doc();
+    if (templateId && templateId !== 'blank') {
+      populateYjsTemplate(ydoc, templateId, title);
+    }
     const yjsState = Buffer.from(Y.encodeStateAsUpdate(ydoc));
 
     const [newPost] = await db
@@ -493,5 +613,204 @@ export const postRoutes: FastifyPluginAsync<{
       .orderBy(desc(postVersions.versionNumber));
 
     return reply.send({ versions });
+  });
+
+  // 7.5 Get Single Version Details with snapshot
+  fastify.get('/:id/versions/:versionId', async (request, reply) => {
+    const { id, versionId } = request.params as { id: string; versionId: string };
+
+    const [version] = await db
+      .select({
+        id: postVersions.id,
+        postId: postVersions.postId,
+        versionNumber: postVersions.versionNumber,
+        triggerReason: postVersions.triggerReason,
+        markdownSnapshot: postVersions.markdownSnapshot,
+        createdAt: postVersions.createdAt,
+        createdBy: postVersions.createdBy,
+        authorName: users.fullName,
+      })
+      .from(postVersions)
+      .leftJoin(users, eq(postVersions.createdBy, users.id))
+      .where(and(eq(postVersions.id, versionId), eq(postVersions.postId, id)))
+      .limit(1);
+
+    if (!version) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Version not found' });
+    }
+
+    return reply.send({ version });
+  });
+
+  // 7.6 Live Restore Version (Creates safety checkpoint, restores Yjs state, records audit log)
+  fastify.post('/:id/versions/:versionId/restore', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
+    const { id, versionId } = request.params as { id: string; versionId: string };
+    const user = request.user!;
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const permission = await permissionService.resolvePostPermission(
+      { id: user.userId, role: user.role },
+      { postId: post.id, authorId: post.authorId, status: post.status }
+    );
+
+    if (!permissionService.canEdit(permission)) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Insufficient permission to restore version' });
+    }
+
+    const [targetVersion] = await db
+      .select()
+      .from(postVersions)
+      .where(and(eq(postVersions.id, versionId), eq(postVersions.postId, id)))
+      .limit(1);
+
+    if (!targetVersion) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Target version not found' });
+    }
+
+    // 1. Create a safety checkpoint version of the current state before rolling back
+    const [latestVersion] = await db
+      .select({ versionNumber: postVersions.versionNumber })
+      .from(postVersions)
+      .where(eq(postVersions.postId, id))
+      .orderBy(desc(postVersions.versionNumber))
+      .limit(1);
+
+    const safetyVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+    await db.insert(postVersions).values({
+      postId: id,
+      versionNumber: safetyVersionNumber,
+      triggerReason: 'hourly_checkpoint',
+      yjsStateSnapshot: post.yjsState,
+      markdownSnapshot: post.workingMarkdown || `# ${post.title}`,
+      createdBy: user.userId,
+    });
+
+    // 2. Restore historical state
+    await db
+      .update(posts)
+      .set({
+        yjsState: targetVersion.yjsStateSnapshot,
+        workingMarkdown: targetVersion.markdownSnapshot,
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, id));
+
+    await auditService.appendLog({
+      actorUserId: user.userId,
+      actorType: 'human',
+      action: 'post_version_restored',
+      entityType: 'post',
+      entityId: id,
+      metadata: {
+        restoredFromVersionId: targetVersion.id,
+        restoredVersionNumber: targetVersion.versionNumber,
+        safetyVersionNumber,
+      },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({
+      success: true,
+      restoredVersionNumber: targetVersion.versionNumber,
+      message: `Successfully restored version v${targetVersion.versionNumber}`,
+    });
+  });
+
+  // 7.7 Policy-Driven Republishing (with required change summary)
+  fastify.post('/:id/republish', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const permission = await permissionService.resolvePostPermission(
+      { id: user.userId, role: user.role },
+      { postId: post.id, authorId: post.authorId, status: post.status }
+    );
+
+    if (!permissionService.canEdit(permission)) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Insufficient permission to republish' });
+    }
+
+    const { changeSummary } = (request.body as any) || {};
+    if (!changeSummary || typeof changeSummary !== 'string' || changeSummary.trim().length < 3) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: 'A meaningful change summary (minimum 3 characters) is required when republishing',
+      });
+    }
+
+    // Derive markdown from flushed yjsState
+    let publishedMarkdown = post.workingMarkdown || '';
+    if (!publishedMarkdown) {
+      try {
+        const doc = new Y.Doc();
+        Y.applyUpdate(doc, new Uint8Array(post.yjsState));
+        const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
+        publishedMarkdown = exportDerivedMarkdown(pmJson as any);
+      } catch {
+        publishedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+      }
+    }
+
+    const [latestVersion] = await db
+      .select({ versionNumber: postVersions.versionNumber })
+      .from(postVersions)
+      .where(eq(postVersions.postId, id))
+      .orderBy(desc(postVersions.versionNumber))
+      .limit(1);
+
+    const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+
+    const [newVersion] = await db
+      .insert(postVersions)
+      .values({
+        postId: id,
+        versionNumber: nextVersionNumber,
+        triggerReason: 'publication',
+        yjsStateSnapshot: post.yjsState,
+        markdownSnapshot: publishedMarkdown,
+        createdBy: user.userId,
+      })
+      .returning();
+
+    const [republishedPost] = await db
+      .update(posts)
+      .set({
+        status: 'published',
+        publishedVersionId: newVersion.id,
+        publishedMarkdown,
+        publishedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, id))
+      .returning();
+
+    await auditService.appendLog({
+      actorUserId: user.userId,
+      actorType: 'human',
+      action: 'post_republished',
+      entityType: 'post',
+      entityId: id,
+      metadata: {
+        versionNumber: nextVersionNumber,
+        versionId: newVersion.id,
+        changeSummary: changeSummary.trim(),
+      },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({
+      post: republishedPost,
+      version: newVersion,
+      changeSummary: changeSummary.trim(),
+    });
   });
 };
