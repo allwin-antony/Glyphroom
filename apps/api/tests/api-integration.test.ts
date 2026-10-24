@@ -34,6 +34,18 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       .returning();
     adminUserId = admin.id;
 
+    const breakGlassHash = await bcrypt.hash('admin2026!', 10);
+    await db
+      .insert(users)
+      .values({
+        email: 'admin@enterprise-blogger.local',
+        fullName: 'Break-Glass System Administrator',
+        role: 'admin',
+        ssoProvider: 'local',
+        passwordHash: breakGlassHash,
+        isActive: true,
+      });
+
     const [reviewer] = await db
       .insert(users)
       .values({
@@ -317,5 +329,48 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     });
     expect(revokeRes.statusCode).toBe(200);
     expect(revokeRes.json().success).toBe(true);
+  });
+
+  it('authenticates break-glass admin (admin@enterprise-blogger.local) and returns csrfToken', async () => {
+    const res = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        email: 'admin@enterprise-blogger.local',
+        password: 'admin2026!',
+      },
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.user.email).toBe('admin@enterprise-blogger.local');
+    expect(body.user.role).toBe('admin');
+    expect(body.csrfToken).toBeDefined();
+    expect(typeof body.csrfToken).toBe('string');
+  });
+
+  it('verifies SHA-256 hash chain via /api/v1/audit/verify route alias', async () => {
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        email: 'admin@enterprise-blogger.local',
+        password: 'admin2026!',
+      },
+    });
+    const sessionCookie = loginRes.cookies.find((c: any) => c.name === 'blogger_session')?.value;
+
+    const verifyRes = await app.inject({
+      method: 'GET',
+      url: '/api/v1/audit/verify',
+      headers: {
+        cookie: `blogger_session=${sessionCookie}`,
+      },
+    });
+
+    expect(verifyRes.statusCode).toBe(200);
+    const verifyBody = verifyRes.json();
+    expect(verifyBody.valid).toBe(true);
+    expect(verifyBody.totalRows).toBeGreaterThanOrEqual(1);
   });
 });

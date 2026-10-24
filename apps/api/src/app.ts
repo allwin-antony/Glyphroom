@@ -108,6 +108,12 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     auditService,
   });
 
+  await app.register(auditRoutes, {
+    prefix: '/api/v1/audit',
+    db,
+    auditService,
+  });
+
   const close = async () => {
     await viewCounter.stop();
     await app.close();

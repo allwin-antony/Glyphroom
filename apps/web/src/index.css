@@ -1,0 +1,123 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Slate-based color tokens (light mode) */
+    --background: 210 40% 98%;           /* slate-50 (#f8fafc) */
+    --foreground: 222.2 47.4% 11.2%;      /* slate-900 (#0f172a) */
+
+    --card: 0 0% 100%;                   /* white */
+    --card-foreground: 222.2 47.4% 11.2%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 47.4% 11.2%;
+
+    --primary: 222.2 47.4% 11.2%;         /* slate-900 */
+    --primary-foreground: 210 40% 98%;    /* slate-50 */
+
+    --secondary: 210 40% 96.1%;          /* slate-100 */
+    --secondary-foreground: 222.2 47.4% 11.2%;
+
+    --muted: 210 40% 96.1%;              /* slate-100 */
+    --muted-foreground: 215.4 16.3% 46.9%; /* slate-500 */
+
+    --accent: 210 40% 96.1%;             /* slate-100 */
+    --accent-foreground: 222.2 47.4% 11.2%;
+
+    --destructive: 0 84.2% 60.2%;        /* rose-500 */
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 214.3 31.8% 91.4%;         /* slate-200 */
+    --input: 214.3 31.8% 91.4%;          /* slate-200 */
+    --ring: 222.2 47.4% 11.2%;           /* slate-900 */
+
+    --radius: 0.5rem;
+  }
+
+  .dark {
+    /* Slate-based color tokens (dark mode) */
+    --background: 222.2 84% 4.9%;        /* slate-950 (#020617) */
+    --foreground: 210 40% 98%;           /* slate-50 */
+
+    --card: 222.2 84% 4.9%;
+    --card-foreground: 210 40% 98%;
+
+    --popover: 222.2 84% 4.9%;
+    --popover-foreground: 210 40% 98%;
+
+    --primary: 210 40% 98%;              /* slate-50 */
+    --primary-foreground: 222.2 47.4% 11.2%;
+
+    --secondary: 217.2 32.6% 17.5%;      /* slate-800 */
+    --secondary-foreground: 210 40% 98%;
+
+    --muted: 217.2 32.6% 17.5%;          /* slate-800 */
+    --muted-foreground: 215 20.2% 65.1%; /* slate-400 */
+
+    --accent: 217.2 32.6% 17.5%;         /* slate-800 */
+    --accent-foreground: 210 40% 98%;
+
+    --destructive: 0 62.8% 30.6%;        /* rose-900 */
+    --destructive-foreground: 210 40% 98%;
+
+    --border: 217.2 32.6% 17.5%;         /* slate-800 */
+    --input: 217.2 32.6% 17.5%;          /* slate-800 */
+    --ring: 212.7 26.8% 83.9%;           /* slate-300 */
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1;
+  }
+}
+
+/* TipTap & ProseMirror Core Styles */
+.ProseMirror {
+  outline: none;
+  min-height: 400px;
+  font-size: 16px;
+  line-height: 1.6;
+}
+
+.ProseMirror p {
+  margin: 0.75em 0;
+}
+
+/* Suggestion Mark Highlights */
+.suggestion-insert {
+  background-color: rgba(34, 197, 94, 0.15);
+  color: #15803d;
+  border-bottom: 2px solid #22c55e;
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+
+.suggestion-delete {
+  background-color: rgba(239, 68, 68, 0.15);
+  color: #b91c1c;
+  text-decoration: line-through;
+  border-radius: 2px;
+  padding: 1px 2px;
+  opacity: 0.75;
+}
+
+/* Enterprise Callout Alert Nodes */
+.enterprise-alert {
+  border-left: 4px solid;
+  padding: 12px 16px;
+  margin: 16px 0;
+  border-radius: 0 4px 4px 0;
+  background: #f1f5f9;
+}
+
+.enterprise-alert-note { border-color: #3b82f6; background: #eff6ff; }
+.enterprise-alert-tip { border-color: #10b981; background: #ecfdf5; }
+.enterprise-alert-important { border-color: #8b5cf6; background: #f5f3ff; }
+.enterprise-alert-warning { border-color: #f59e0b; background: #fffbeb; }
+.enterprise-alert-caution { border-color: #ef4444; background: #fef2f2; }

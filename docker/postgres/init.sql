@@ -236,15 +236,35 @@ INSERT INTO _schema_migrations (version, name)
 VALUES ('001', 'initial_schema_and_extensions')
 ON CONFLICT (version) DO NOTHING;
 
-INSERT INTO users (id, email, full_name, role, is_active)
+-- Default System Admin (Preserved for turnkey deployment & integration suites)
+INSERT INTO users (id, email, full_name, password_hash, role, is_active)
 VALUES (
     '00000000-0000-0000-0000-000000000001',
     'admin@blogger.corp.internal',
     'System Administrator',
+    '$2b$10$PR02NRd01smAzSK7AM/01Ood3X2qMyyxHcja.l9FwDP.5.7SQh4/q',
     'admin',
     true
 )
-ON CONFLICT (email) DO NOTHING;
+ON CONFLICT (email) DO UPDATE
+SET password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    is_active = EXCLUDED.is_active;
+
+-- Break-Glass Local Admin (Mandated by ORIGINAL_REQUEST.md & E2E Acceptance Criteria)
+INSERT INTO users (id, email, full_name, password_hash, role, is_active)
+VALUES (
+    '00000000-0000-0000-0000-000000000002',
+    'admin@enterprise-blogger.local',
+    'Break-Glass System Administrator',
+    '$2b$10$PR02NRd01smAzSK7AM/01Ood3X2qMyyxHcja.l9FwDP.5.7SQh4/q',
+    'admin',
+    true
+)
+ON CONFLICT (email) DO UPDATE
+SET password_hash = EXCLUDED.password_hash,
+    role = EXCLUDED.role,
+    is_active = EXCLUDED.is_active;
 
 INSERT INTO audit_logs (id, actor_type, action, prev_hash, row_hash, metadata)
 VALUES (
