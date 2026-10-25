@@ -13,6 +13,7 @@ import {
   Calendar,
   Trash2,
   Loader2,
+  Users,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -30,7 +31,7 @@ export const MyWorkView: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
-  const [activeTab, setActiveTab] = useState<'drafts' | 'in_review' | 'published' | 'suggestions'>('drafts');
+  const [activeTab, setActiveTab] = useState<'drafts' | 'in_review' | 'published' | 'shared' | 'suggestions'>('drafts');
   const [posts, setPosts] = useState<CatalogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -73,12 +74,17 @@ export const MyWorkView: React.FC = () => {
   const drafts = myPosts.filter((p) => p.status === 'draft');
   const inReview = myPosts.filter((p) => p.status === 'in_review');
   const published = myPosts.filter((p) => p.status === 'published');
+  const sharedWithMe = posts.filter((p: any) => {
+    if (!user) return false;
+    return p.authorId !== user.userId && (p.isCollaborator || p.collaboratorPermission);
+  });
   const suggestions = myPosts.filter((p) => p.status === 'draft' || p.status === 'in_review');
 
   const currentTabPosts = {
     drafts,
     in_review: inReview,
     published,
+    shared: sharedWithMe,
     suggestions,
   }[activeTab];
 
@@ -152,6 +158,7 @@ export const MyWorkView: React.FC = () => {
           { id: 'drafts', label: `Drafts (${drafts.length})`, icon: FileText },
           { id: 'in_review', label: `In Review (${inReview.length})`, icon: Clock },
           { id: 'published', label: `Published (${published.length})`, icon: CheckCircle2 },
+          { id: 'shared', label: `Shared with Me (${sharedWithMe.length})`, icon: Users },
           { id: 'suggestions', label: `Suggestions Waiting (${suggestions.length})`, icon: Sparkles },
         ].map((tab) => {
           const Icon = tab.icon;
@@ -208,10 +215,20 @@ export const MyWorkView: React.FC = () => {
               {currentTabPosts.map((post) => (
                 <tr key={post.id} className="hover:bg-canvas/50 transition-colors">
                   <td className="px-5 py-4 font-medium text-foreground">
-                    <div className="font-semibold">{post.title}</div>
-                    {post.slug && (
-                      <div className="text-[10px] text-text-muted font-mono mt-0.5">/{post.slug}</div>
-                    )}
+                    <div className="flex items-center gap-2">
+                      <span className="font-semibold">{post.title}</span>
+                      {((post as any).isCollaborator || (post.authorId !== user?.userId)) && (
+                        <span className="px-1.5 py-0.2 rounded text-[9px] font-medium bg-accent-bg text-accent-main border border-accent-main/20">
+                          Collaborator
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 text-[10px] text-text-muted mt-0.5">
+                      {post.slug && <span className="font-mono">/{post.slug}</span>}
+                      {post.authorName && post.authorId !== user?.userId && (
+                        <span>• By {post.authorName}</span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-5 py-4">
                     {post.coeName ? (
@@ -268,14 +285,16 @@ export const MyWorkView: React.FC = () => {
                       </button>
                     )}
 
-                    <button
-                      onClick={() => setPostToDelete(post)}
-                      className="px-2.5 py-1 rounded bg-status-danger/10 text-status-danger border border-status-danger/25 hover:bg-status-danger/20 text-[11px] font-semibold transition-colors inline-flex items-center gap-1"
-                      title="Delete Post"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                      <span>Delete</span>
-                    </button>
+                    {(user?.role === 'admin' || post.authorId === user?.userId) && (
+                      <button
+                        onClick={() => setPostToDelete(post)}
+                        className="px-2.5 py-1 rounded bg-status-danger/10 text-status-danger border border-status-danger/25 hover:bg-status-danger/20 text-[11px] font-semibold transition-colors inline-flex items-center gap-1"
+                        title="Delete Post"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        <span>Delete</span>
+                      </button>
+                    )}
                   </td>
                 </tr>
               ))}

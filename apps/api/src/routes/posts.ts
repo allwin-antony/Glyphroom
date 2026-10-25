@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
 import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
 import type { Database } from '../db/index.js';
-import { posts, postViewCounts, postVersions, users, centersOfExcellence, postAttachments, spaces, spaceMembers } from '../db/schema.js';
+import { posts, postViewCounts, postVersions, users, centersOfExcellence, postAttachments, spaces, spaceMembers, postCollaborators } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 import type { BufferedViewCounter } from '../services/view-counter.js';
@@ -111,6 +111,17 @@ export const postRoutes: FastifyPluginAsync<{
         .filter((s) => s.role === 'maintainer' || s.role === 'owner')
         .map((s) => s.spaceId);
 
+      // Fetch direct post invitations (Page Guests / Collaborators)
+      const directCollabs = await db
+        .select({
+          postId: postCollaborators.postId,
+          permission: postCollaborators.permission,
+        })
+        .from(postCollaborators)
+        .where(eq(postCollaborators.userId, user.userId));
+
+      const collabMap = new Map(directCollabs.map((c) => [c.postId, c.permission]));
+
       const allRows = await db
         .select(baseSelection)
         .from(posts)
@@ -121,21 +132,29 @@ export const postRoutes: FastifyPluginAsync<{
 
       // Filter rows based on access rules:
       // 1. Author's own posts
-      // 2. Promoted and published (Company Library)
-      // 3. User is member of post's space:
+      // 2. Direct page guest / collaborator invitation
+      // 3. Promoted and published (Company Library)
+      // 4. User is member of post's space:
       //    - If post is 'space' visibility -> can see
       //    - If post is 'invited_only' -> only maintainers/owners of that space can see without guest invite
-      // 4. Standalone published posts without a space
-      queryResult = allRows.filter((p) => {
-        if (p.authorId === user.userId) return true;
-        if (p.isPromoted && p.status === 'published') return true;
-        if (!p.spaceId && p.status === 'published') return true;
-        if (p.spaceId && joinedSpaceIds.includes(p.spaceId)) {
-          if (p.visibility === 'space') return true;
-          if (maintainerSpaceIds.includes(p.spaceId)) return true;
-        }
-        return false;
-      });
+      // 5. Standalone published posts without a space
+      queryResult = allRows
+        .filter((p) => {
+          if (p.authorId === user.userId) return true;
+          if (collabMap.has(p.id)) return true;
+          if (p.isPromoted && p.status === 'published') return true;
+          if (!p.spaceId && p.status === 'published') return true;
+          if (p.spaceId && joinedSpaceIds.includes(p.spaceId)) {
+            if (p.visibility === 'space') return true;
+            if (maintainerSpaceIds.includes(p.spaceId)) return true;
+          }
+          return false;
+        })
+        .map((p) => ({
+          ...p,
+          isCollaborator: collabMap.has(p.id),
+          collaboratorPermission: collabMap.get(p.id) || null,
+        }));
     }
 
     // Apply search filter if query string provided
