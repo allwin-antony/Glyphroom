@@ -20,10 +20,30 @@ export const SettingsView: React.FC = () => {
   // PAT management state
   const [tokens, setTokens] = useState<PatItem[]>([]);
   const [tokenName, setTokenName] = useState('');
+  const [selectedScopes, setSelectedScopes] = useState<string[]>([
+    'posts:read',
+    'posts:write',
+    'spaces:read',
+    'spaces:write',
+  ]);
+  const [expiresInDays, setExpiresInDays] = useState<number>(90);
   const [isCreatingToken, setIsCreatingToken] = useState(false);
   const [generatedSecret, setGeneratedSecret] = useState<string | null>(null);
   const [hasCopiedSecret, setHasCopiedSecret] = useState(false);
   const [patError, setPatError] = useState<string | null>(null);
+
+  const AVAILABLE_SCOPES = [
+    { id: 'posts:read', label: 'Read Posts & Documents', desc: 'Allows AI or scripts to read documents & view catalogs.' },
+    { id: 'posts:write', label: 'Edit & Create Posts', desc: 'Allows drafting, editing, and appending section cards.' },
+    { id: 'spaces:read', label: 'Read Spaces & Directories', desc: 'Allows browsing team spaces and member rosters.' },
+    { id: 'spaces:write', label: 'Manage Spaces', desc: 'Allows creating team spaces and requesting permissions.' },
+  ];
+
+  const handleToggleScope = (scopeId: string) => {
+    setSelectedScopes((prev) =>
+      prev.includes(scopeId) ? prev.filter((s) => s !== scopeId) : [...prev, scopeId]
+    );
+  };
 
   const fetchTokens = async () => {
     try {
@@ -42,7 +62,7 @@ export const SettingsView: React.FC = () => {
 
   const handleCreatePat = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!tokenName.trim() || isCreatingToken) return;
+    if (!tokenName.trim() || isCreatingToken || selectedScopes.length === 0) return;
 
     setIsCreatingToken(true);
     setPatError(null);
@@ -50,8 +70,8 @@ export const SettingsView: React.FC = () => {
     try {
       const res = await api.post<{ token: PatItem; secret: string }>('/pats', {
         name: tokenName.trim(),
-        scopes: ['posts:read', 'posts:write', 'spaces:read', 'spaces:write'],
-        expiresInDays: 90,
+        scopes: selectedScopes,
+        expiresInDays: expiresInDays,
       });
       setTokenName('');
       setGeneratedSecret(res.secret);
@@ -202,26 +222,77 @@ export const SettingsView: React.FC = () => {
         )}
 
         {/* Generate PAT form */}
-        <form onSubmit={handleCreatePat} className="flex gap-2">
-          <input
-            type="text"
-            value={tokenName}
-            onChange={(e) => setTokenName(e.target.value)}
-            placeholder="Token name (e.g., Claude Desktop MCP)"
-            className="flex-1 p-2 rounded-lg bg-canvas border border-border text-foreground text-xs"
-          />
-          <button
-            type="submit"
-            disabled={isCreatingToken || !tokenName.trim()}
-            className="px-4 py-2 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5 shadow-xs"
-          >
-            {isCreatingToken ? (
-              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-            ) : (
-              <Plus className="w-3.5 h-3.5" />
-            )}
-            <span>Generate Token</span>
-          </button>
+        <form onSubmit={handleCreatePat} className="space-y-3 p-4 rounded-xl bg-canvas border border-border">
+          <div className="font-semibold text-xs text-foreground">Create New Access Token</div>
+          
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={tokenName}
+              onChange={(e) => setTokenName(e.target.value)}
+              placeholder="Token description (e.g. Antigravity MCP Assistant)"
+              className="flex-1 p-2 rounded-lg bg-surface border border-border text-foreground text-xs"
+            />
+            <select
+              value={expiresInDays}
+              onChange={(e) => setExpiresInDays(Number(e.target.value))}
+              className="p-2 rounded-lg bg-surface border border-border text-foreground text-xs"
+            >
+              <option value={30}>Expires in 30 days</option>
+              <option value={90}>Expires in 90 days</option>
+              <option value={180}>Expires in 180 days</option>
+              <option value={365}>Expires in 1 year</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block text-[11px] font-semibold text-text-muted mb-1.5 uppercase tracking-wider">
+              Token Permissions (Scopes)
+            </label>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {AVAILABLE_SCOPES.map((sc) => {
+                const isSelected = selectedScopes.includes(sc.id);
+                return (
+                  <button
+                    key={sc.id}
+                    type="button"
+                    onClick={() => handleToggleScope(sc.id)}
+                    className={`p-2.5 rounded-lg border text-left transition-colors flex items-start gap-2.5 ${
+                      isSelected
+                        ? 'bg-accent/10 border-accent/40 text-foreground'
+                        : 'bg-surface border-border text-text-muted hover:border-border-strong'
+                    }`}
+                  >
+                    <input
+                      type="checkbox"
+                      checked={isSelected}
+                      readOnly
+                      className="mt-0.5 accent-accent pointer-events-none"
+                    />
+                    <div>
+                      <div className="text-xs font-semibold">{sc.label}</div>
+                      <div className="text-[10px] text-text-secondary">{sc.desc}</div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-1">
+            <button
+              type="submit"
+              disabled={isCreatingToken || !tokenName.trim() || selectedScopes.length === 0}
+              className="px-4 py-2 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-50 inline-flex items-center gap-1.5 shadow-xs hover:opacity-90 transition-opacity"
+            >
+              {isCreatingToken ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Plus className="w-3.5 h-3.5" />
+              )}
+              <span>Generate Token</span>
+            </button>
+          </div>
         </form>
 
         {/* Active tokens list */}
