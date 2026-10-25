@@ -41,7 +41,7 @@ export function loadConfig(): McpServerConfig {
   const gatewaySecret =
     process.env.GATEWAY_SECRET ||
     process.env.COLLAB_GATEWAY_SECRET ||
-    'blogger_gateway_secret_key_32bytes';
+    'REPLACE_WITH_STRONG_GATEWAY_SECRET';
 
   return {
     port: parseInt(process.env.PORT || process.env.MCP_PORT || '5000', 10),

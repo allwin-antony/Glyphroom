@@ -48,9 +48,13 @@ export async function executeAgentEdit(
     tokenId: agentMeta.tokenId,
   };
 
+  const documentName = request.documentId.startsWith('post-')
+    ? request.documentId
+    : `post-${request.documentId}`;
+
   let conn;
   try {
-    conn = await server.hocuspocus.openDirectConnection(request.documentId, context);
+    conn = await server.hocuspocus.openDirectConnection(documentName, context);
   } catch (err: any) {
     const msg = err?.message || '';
     if (msg.includes('Forbidden')) {
@@ -78,7 +82,9 @@ export async function executeAgentEdit(
     await conn.transact((doc) => {
       switch (request.operation) {
         case 'append_section': {
-          const result = appendSection(doc, request.heading, request.content, agentMeta);
+          const result = appendSection(doc, request.heading, request.content, agentMeta, {
+            fragmentName: 'prosemirror',
+          });
           changesSummary = result.changesSummary;
           suggestionIds = result.suggestionIds;
           break;
@@ -90,7 +96,8 @@ export async function executeAgentEdit(
             request.targetHeading,
             request.heading,
             request.content,
-            agentMeta
+            agentMeta,
+            { fragmentName: 'prosemirror' }
           );
           if (!result.success) {
             throw new GatewayError(
@@ -109,7 +116,8 @@ export async function executeAgentEdit(
             doc,
             request.targetHeading,
             request.content,
-            agentMeta
+            agentMeta,
+            { fragmentName: 'prosemirror' }
           );
           if (!result.success) {
             throw new GatewayError(

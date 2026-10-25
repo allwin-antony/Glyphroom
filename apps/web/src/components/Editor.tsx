@@ -84,7 +84,11 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   hideSidebar = false,
   postId,
 }) => {
-  const fragment = ydoc.getXmlFragment('prosemirror');
+  // Support both canonical 'prosemirror' and existing agent 'default' fragments
+  const fragment =
+    ydoc.share.has('default') && (!ydoc.share.has('prosemirror') || ydoc.getXmlFragment('prosemirror').length === 0)
+      ? ydoc.getXmlFragment('default')
+      : ydoc.getXmlFragment('prosemirror');
 
   // Suggestion tracking state
   const [activeSuggestion, setActiveSuggestion] = useState<ActiveSuggestionInfo | null>(null);

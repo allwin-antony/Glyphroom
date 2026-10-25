@@ -15,12 +15,21 @@ export class ApiClient {
     this.defaultToken = options.defaultToken;
   }
 
+  private buildHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Accept': 'application/json',
+      ...customHeaders,
+    };
+    if (this.defaultToken) {
+      headers['Authorization'] = `Bearer ${this.defaultToken}`;
+    }
+    return headers;
+  }
+
   async searchPosts(params: { query: string; limit?: number; offset?: number }): Promise<any> {
     const res = await fetch(`${this.baseUrl}/api/v1/posts`, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers: this.buildHeaders(),
     });
     if (!res.ok) {
       throw new Error(`Failed to search posts: ${res.statusText}`);
@@ -48,9 +57,7 @@ export class ApiClient {
   async getPost(postId: string): Promise<any> {
     const res = await fetch(`${this.baseUrl}/api/v1/posts/${postId}`, {
       method: 'GET',
-      headers: {
-        'Accept': 'application/json',
-      },
+      headers: this.buildHeaders(),
     });
     if (!res.ok) {
       throw new Error(`Post not found or access denied: ${res.statusText}`);
@@ -75,9 +82,9 @@ export class ApiClient {
   async createPost(params: { title: string; slug: string; excerpt?: string }): Promise<any> {
     const res = await fetch(`${this.baseUrl}/api/v1/posts`, {
       method: 'POST',
-      headers: {
+      headers: this.buildHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify({
         title: params.title,
         slug: params.slug,
@@ -85,7 +92,8 @@ export class ApiClient {
       }),
     });
     if (!res.ok) {
-      throw new Error(`Failed to create post: ${res.statusText}`);
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`Failed to create post (${res.status} ${res.statusText}): ${errBody}`);
     }
     return res.json();
   }
@@ -93,16 +101,17 @@ export class ApiClient {
   async addComment(postId: string, params: { content: string; parentId?: string }): Promise<any> {
     const res = await fetch(`${this.baseUrl}/api/v1/posts/${postId}/comments`, {
       method: 'POST',
-      headers: {
+      headers: this.buildHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
       body: JSON.stringify({
         content: params.content,
         parentId: params.parentId,
       }),
     });
     if (!res.ok) {
-      throw new Error(`Failed to add comment: ${res.statusText}`);
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`Failed to add comment (${res.status} ${res.statusText}): ${errBody}`);
     }
     return res.json();
   }
@@ -110,12 +119,13 @@ export class ApiClient {
   async publishPost(postId: string): Promise<any> {
     const res = await fetch(`${this.baseUrl}/api/v1/posts/${postId}/publish`, {
       method: 'POST',
-      headers: {
+      headers: this.buildHeaders({
         'Content-Type': 'application/json',
-      },
+      }),
     });
     if (!res.ok) {
-      throw new Error(`Failed to publish post: ${res.statusText}`);
+      const errBody = await res.text().catch(() => '');
+      throw new Error(`Failed to publish post (${res.status} ${res.statusText}): ${errBody}`);
     }
     return res.json();
   }

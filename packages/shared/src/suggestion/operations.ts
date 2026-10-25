@@ -25,13 +25,14 @@ export function getDocumentFragment(doc: Y.Doc, fieldName?: string): Y.XmlFragme
   if (fieldName) {
     return doc.getXmlFragment(fieldName);
   }
-  if (doc.share.has('default')) {
-    return doc.getXmlFragment('default');
-  }
+  // The Web Editor (Tiptap / ProseMirror) binds to 'prosemirror'
   if (doc.share.has('prosemirror')) {
     return doc.getXmlFragment('prosemirror');
   }
-  return doc.getXmlFragment('default');
+  if (doc.share.has('default')) {
+    return doc.getXmlFragment('default');
+  }
+  return doc.getXmlFragment('prosemirror');
 }
 
 /**

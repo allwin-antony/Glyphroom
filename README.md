@@ -176,6 +176,47 @@ pnpm test:collab  # Hocuspocus CRDT sync and document lifecycle tests
 
 ---
 
+## Model Context Protocol (MCP) Integration
+
+Glyphroom includes a first-class **Model Context Protocol (MCP)** server (`apps/mcp-server`) that enables AI assistants (Antigravity IDE, Claude Desktop, Cursor) to safely read documents, participate in review cycles, and collaboratively edit live Yjs documents with suggestion tracking.
+
+### 1. Client Configuration (`mcp_config.json`)
+
+To connect your external assistant or IDE to Glyphroom, add the following entry to your MCP configuration:
+
+```json
+"glyphroom": {
+  "command": "node",
+  "args": [
+    "C:/Users/santo/Documents/antigravity/Enterprise_Blogger/apps/mcp-server/dist/index.js",
+    "--stdio"
+  ],
+  "env": {
+    "GLYPHROOM_API_URL": "http://127.0.0.1:4001/api/v1",
+    "GLYPHROOM_PAT": "<YOUR_PERSONAL_ACCESS_TOKEN>",
+    "COLLAB_GATEWAY_URL": "http://127.0.0.1:4000/internal/agent-gateway/edit",
+    "GATEWAY_SECRET": "REPLACE_WITH_STRONG_GATEWAY_SECRET"
+  }
+}
+```
+
+> **Note**: Generate your `GLYPHROOM_PAT` from the Web UI at **http://localhost:3000/settings**.
+
+### 2. Available MCP Tools
+
+| Tool | Capability | Description |
+| :--- | :--- | :--- |
+| `search_posts` | Discovery | Searches published and draft posts matching query keywords. Untrusted content is wrapped in prompt-injection boundary guards. |
+| `get_post` | Content Retrieval | Fetches post metadata, structural outline/headings, and derived working markdown. |
+| `create_post` | REST Drafting | Creates a new post in the system attributed to the authenticated PAT owner. |
+| `add_comment` | Peer Review | Anchors feedback notes or review comments to document sections. |
+| `append_section` | Collaborative Yjs Edit | Appends a new section or content block to the document working copy via the single-write authority Collab Gateway. |
+| `insert_after_section` | Collaborative Yjs Edit | Inserts headings and content immediately following a specified target heading. |
+| `suggest_edit_section` | Collaborative Yjs Edit | Generates granular suggestion marks (`suggestion_insert` and `suggestion_delete`) without overwriting human text. |
+| `publish_post` | Governance | Triggers the publication pipeline. Strictly gated by PAT scope (`posts:publish`). |
+
+---
+
 ## Architectural Decisions & Constraints
 
 - **Yjs as Source of Truth**: Document content is stored as Yjs binary updates in `posts.yjs_state`. Derived Markdown (`published_markdown`, `working_markdown`) is generated on document save to support full-text search indexing (`tsvector`) without decoding binary CRDTs during search queries.

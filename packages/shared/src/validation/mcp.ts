@@ -92,11 +92,18 @@ export type McpGetPostOutput = z.infer<typeof McpGetPostOutputSchema>;
 // 3. create_post
 // ==========================================
 export const McpCreatePostInputSchema = z.object({
-  title: z.string().min(1, 'Title is required').max(500, 'Title too long'),
-  content: z.string().min(1, 'Initial content is required'),
-  tags: z.array(TagSchema).max(20, 'Cannot exceed 20 tags').optional(),
-  coeId: SafeIdentifierSchema.optional(),
-  excerpt: z.string().max(2000, 'Excerpt cannot exceed 2000 characters').optional(),
+  title: z.string().min(1, 'Title is required').max(500, 'Title too long').describe('Title of the document (e.g. "Platform Architecture RFC")'),
+  content: z.string().min(1, 'Initial content is required').describe(
+    'Initial document content in Markdown. Supports Glyphroom rich blocks:\n' +
+    '- Alerts: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`\n' +
+    '- Mermaid Diagrams: ```mermaid\\ngraph TD\\n...```\n' +
+    '- KaTeX Math Formulas: `$$ formula $$`\n' +
+    '- Status Pulse Cards: `<!-- status-block ragStatus="green" milestoneTitle="Title" completionPercent="75" targetDate="2026-12-01" blockers="None" -->`\n' +
+    '- Checklists & Tables: `- [x] Done` and Markdown tables'
+  ),
+  tags: z.array(TagSchema).max(20, 'Cannot exceed 20 tags').optional().describe('Keywords or tags for catalog discovery'),
+  coeId: SafeIdentifierSchema.optional().describe('Center of Excellence category ID'),
+  excerpt: z.string().max(2000, 'Excerpt cannot exceed 2000 characters').optional().describe('Short 1-2 sentence summary for catalog cards'),
 });
 export type McpCreatePostInput = z.infer<typeof McpCreatePostInputSchema>;
 
@@ -114,9 +121,16 @@ export type McpCreatePostOutput = z.infer<typeof McpCreatePostOutputSchema>;
 // 4. append_section
 // ==========================================
 export const McpAppendSectionInputSchema = z.object({
-  postId: PostIdSchema,
-  heading: z.string().max(500, 'Heading cannot exceed 500 characters').optional(),
-  content: z.string().min(1, 'content is required'),
+  postId: PostIdSchema.describe('UUID or slug of the target document'),
+  heading: z.string().max(500, 'Heading cannot exceed 500 characters').optional().describe('Section heading title (e.g. "Security & Compliance Considerations")'),
+  content: z.string().min(1, 'content is required').describe(
+    'Markdown content for the section. Supports full Glyphroom rich blocks:\n' +
+    '- Alerts: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`\n' +
+    '- Mermaid Diagrams: ```mermaid\\ngraph TD\\n...```\n' +
+    '- KaTeX Math Formulas: `$$ formula $$`\n' +
+    '- Status Pulse Cards: `<!-- status-block ragStatus="green" milestoneTitle="Title" completionPercent="75" targetDate="2026-12-01" blockers="None" -->`\n' +
+    '- Checklists & Tables: `- [x] Done` and Markdown tables'
+  ),
 });
 export type McpAppendSectionInput = z.infer<typeof McpAppendSectionInputSchema>;
 
@@ -133,10 +147,12 @@ export type McpAppendSectionOutput = z.infer<typeof McpAppendSectionOutputSchema
 // 5. insert_after_section
 // ==========================================
 export const McpInsertAfterSectionInputSchema = z.object({
-  postId: PostIdSchema,
-  targetHeading: z.string().min(1, 'targetHeading is required').max(500),
-  heading: z.string().max(500, 'Heading cannot exceed 500 characters').optional(),
-  content: z.string().min(1, 'content is required'),
+  postId: PostIdSchema.describe('UUID or slug of the target document'),
+  targetHeading: z.string().min(1, 'targetHeading is required').max(500).describe('Exact or normalized heading of the existing section after which to insert'),
+  heading: z.string().max(500, 'Heading cannot exceed 500 characters').optional().describe('New section heading to insert'),
+  content: z.string().min(1, 'content is required').describe(
+    'Markdown content for the inserted section. Supports Glyphroom rich blocks (Alerts, Mermaid, Math, Status Cards, Tables).'
+  ),
 });
 export type McpInsertAfterSectionInput = z.infer<typeof McpInsertAfterSectionInputSchema>;
 
@@ -153,10 +169,12 @@ export type McpInsertAfterSectionOutput = z.infer<typeof McpInsertAfterSectionOu
 // 6. suggest_edit_section
 // ==========================================
 export const McpSuggestEditSectionInputSchema = z.object({
-  postId: PostIdSchema,
-  targetHeading: z.string().min(1, 'targetHeading is required').max(500),
-  newContent: z.string().min(1, 'newContent is required'),
-  instruction: z.string().max(2000, 'Instruction cannot exceed 2000 characters').optional(),
+  postId: PostIdSchema.describe('UUID or slug of the target document'),
+  targetHeading: z.string().min(1, 'targetHeading is required').max(500).describe('Heading of the section you want to propose edits for'),
+  newContent: z.string().min(1, 'newContent is required').describe(
+    'Proposed revised Markdown content for the section. The system calculates a diff and attaches suggestion marks without overwriting existing human text.'
+  ),
+  instruction: z.string().max(2000, 'Instruction cannot exceed 2000 characters').optional().describe('Reason or explanation for the editorial suggestion (e.g. "Clarify Redis cluster failover")'),
 });
 export type McpSuggestEditSectionInput = z.infer<typeof McpSuggestEditSectionInputSchema>;
 
