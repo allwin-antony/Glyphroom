@@ -1,8 +1,34 @@
 {
-  "name": "enterprise-blogger",
+  "name": "glyphroom",
   "version": "0.1.0",
   "private": true,
-  "description": "Enterprise Blogger 2.0 — Phase 0 Spike: CRDT Convergence, Hocuspocus Agent Gateway & Suggestion Mode",
+  "description": "Glyphroom — Self-hosted collaborative enterprise knowledge & documentation platform featuring real-time CRDT convergence, Yjs suggestion mode, and AI agent co-editing.",
+  "author": "Allwin <santonyallwin@gmail.com>",
+  "license": "Apache-2.0",
+  "homepage": "https://github.com/allwin-antony/Glyphroom#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/allwin-antony/Glyphroom.git"
+  },
+  "bugs": {
+    "url": "https://github.com/allwin-antony/Glyphroom/issues"
+  },
+  "keywords": [
+    "glyphroom",
+    "crdt",
+    "yjs",
+    "prosemirror",
+    "tiptap",
+    "hocuspocus",
+    "mcp",
+    "model-context-protocol",
+    "real-time",
+    "collaboration",
+    "enterprise-wiki",
+    "knowledge-base",
+    "fastify",
+    "react"
+  ],
   "packageManager": "pnpm@12.15.0",
   "type": "module",
   "scripts": {

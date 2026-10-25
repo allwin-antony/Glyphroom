@@ -1,112 +1,113 @@
 # Glyphroom
 
-> **Self-hosted collaborative enterprise knowledge, technical documentation & status updates platform with real-time CRDT co-editing, team Spaces, and Model Context Protocol (MCP) AI co-authorship.**
+Self-hosted technical documentation and engineering status updates with live Yjs co-editing, team-scoped Spaces, and Model Context Protocol (MCP) AI co-authoring.
 
-[![Tests](https://img.shields.io/badge/tests-171%20passing-brightgreen.svg)]()
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.x-blue.svg)]()
-[![CRDT](https://img.shields.io/badge/CRDT-Yjs%20%2B%20Hocuspocus-blueviolet.svg)]()
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](./LICENSE)
+Licensed under [Apache 2.0](./LICENSE).
 
 ---
 
-## 1. What is Glyphroom?
+## Why this exists
 
-**Glyphroom** is an open-source, self-hosted platform where engineering and product teams write, review, and organize project documentation and weekly status updates together.
+Most internal knowledge tools fail engineering teams in one of two ways:
 
-It pairs **real-time conflict-free co-editing (Yjs CRDTs)** with an enterprise **Spaces and Access Model**, ensuring that internal team drafts stay strictly private within a project space until explicitly promoted to the company-wide knowledge library.
+1. **One shared wiki where everyone sees everything**: Teams avoid writing raw technical details, incident post-mortems, or in-flight design proposals because early drafts are visible company-wide.
+2. **Siloed tools per team**: Knowledge ends up scattered across personal notes, Google Docs, Slack threads, and private repos. Nobody can find canonical architectural decisions or test plans.
+
+Glyphroom uses a strict **Spaces & Promotion** model:
 
 ```
-Company
-  ├── Space: Payments Revamp       (Team members only)
-  │    ├── Page: Project Architecture
-  │    ├── Page: Weekly Status
-  │    └── Page: Settlement Test Plan
-  ├── Space: Platform Security     (Separate team, isolated)
-  │    └── Page: Zero-Trust Threat Model
-  └── Company Library              (Official, visible to all employees)
-       └── Promoted pages from any space
+Company Network
+  ├── Space: Payments Revamp           [Team members only]
+  │    ├── Page: Gateway Architecture   (Working draft -> Published in Space)
+  │    ├── Page: Weekly Status          (Published in Space)
+  │    └── Page: Settlement Runbook     (Promoted to Company Library)
+  │
+  ├── Space: Platform Security         [Separate team, isolated]
+  │    └── Page: Threat Model           (Invited-only: maintainers + security leads)
+  │
+  └── Company Library                  [Visible to all employees]
+       └── Pages promoted from any Space by that space's maintainer
 ```
 
 ---
 
-## 2. Core Pillars
+## Core Concepts
 
-### 🔒 Spaces & Access Model
-- **Spaces**: One space per team or initiative (like a project in GitLab). Space members can read, review, or write based on their role.
-- **5 Deliberately Simple Roles**:
-  - `Viewer`: Read pages in the space.
-  - `Reviewer`: Read, comment, and suggest changes.
-  - `Author`: Create and edit draft pages.
-  - `Maintainer`: Manage pages, invite/remove members, and promote pages to the company library.
-  - `Owner`: Maintainer permissions plus delete, archive, or transfer the space.
-- **Page Guest Access**: Invite a colleague to a single page (View, Comment, or Edit) without exposing the rest of the space.
-- **Invited Only Pages**: Lock sensitive documents (e.g. security vulnerabilities) to maintainers and explicitly named guests.
+### 1. Spaces & Roles
+Work lives inside a **Space** (owned by a team or initiative). A Space contains pages and members.
 
-### 🚀 Three-Stage Content Promotion & Separation of Duties
-Content progresses through three distinct stages:
-1. **Working Draft** *(Team Only)*: Live collaborative drafting on Yjs CRDTs.
-2. **Published to Space** *(Team Only)*: Approved version visible to all members of the space.
-3. **Promoted to Company** *(All Employees)*: Verified official document visible in the global catalog and company search.
+| Role | Permissions |
+| :--- | :--- |
+| **Viewer** | Read pages in the Space. |
+| **Reviewer** | Read, comment, and submit reviews on pages in the Space. |
+| **Author** | Create, edit, and maintain draft pages in the Space. |
+| **Maintainer** | Edit all pages, invite/remove members, and **promote pages to Company Library**. |
+| **Owner** | Maintainer rights plus space archive, rename, or deletion. |
 
-> **Separation of Duty**: Authors cannot promote their own pages to the company library; promotion requires review and action by a Space Maintainer or System Admin. After promotion, teams can continue editing drafts privately—the company sees the promoted snapshot until republishing.
+### 2. Separation of Duties (Promotion Pipeline)
+Content moves through three explicit stages:
+1. **Working Draft**: Real-time collaborative drafting between team members.
+2. **Published in Space**: Stable version accessible to everyone inside the Space.
+3. **Promoted to Company**: Maintainer explicitly shares the document with the entire company. It appears in the global catalog and company search.
 
-### ⚡ Live Collaborative Editing (Yjs CRDT)
-- **Zero Base64 in Yjs**: Canonical CRDT binary states stored directly in PostgreSQL `bytea` columns.
-- **Real-Time WebSocket Sync**: Powered by Hocuspocus with sub-20ms broadcast latency.
-- **Presence & Awareness**: Real-time multi-cursor tracking, collaborator name tags, and activity status.
-- **Dual View Modes**:
-  - **Document View**: Distraction-free, fluid reading and long-form prose.
-  - **Block View**: Interactive section cards with quick cell additions, reordering (Move Up / Down), code cells, tables, and Mermaid architecture diagrams.
+> **Rule**: An `Author` cannot self-promote their team space page to the company library. Promotion requires action from a `Maintainer` or system `Admin`. Once promoted, teams can continue editing their working draft privately without exposing work-in-progress edits to the rest of the company until republishing.
 
-### 🤖 Model Context Protocol (MCP) AI Co-Editing
-- Seamless integration with AI agents via Model Context Protocol (MCP).
-- **Suggestion Mode**: AI edits are introduced as non-destructive suggestions (`suggestion_insert`, `suggestion_delete`) requiring human review and approval.
-- **Personal Access Tokens (PATs)**: Individual users can issue hashed, scoped PATs (`read:posts`, `write:posts`, `suggest:posts`) to connect their local MCP servers or CLI agents safely.
+### 3. Page Guests & Invited-Only Documents
+- **Page Guest**: A person can be invited to a single page (View, Comment, or Edit) without gaining visibility into the rest of the Space.
+- **Invited-Only Page**: Sensitive documents (e.g. unpatched vulnerability reports or confidential post-mortems) can be flagged `invited_only`, restricting access exclusively to Space Maintainers and explicitly invited individuals.
 
-### 🛡️ Enterprise Security & Governance
-- **Break-Glass Local Auth & Corporate SSO**: Out-of-the-box local credentials with bcrypt and turnkey SSO integration.
-- **Turnkey Auto-Migrations**: The API server inspects and upgrades schema tables (`ensureDatabaseSchema`) automatically upon startup—no manual migration scripts required on updates.
-- **Tamper-Evident SHA-256 Audit Trail**: Every invite, promotion, role adjustment, and PAT generation is permanently recorded in a cryptographically verifiable audit chain.
+### 4. Real-time Co-editing (CRDTs)
+- **Zero Base64 in Yjs**: Canonical CRDT binary states are stored as raw binary in PostgreSQL `bytea` columns (`posts.yjs_state`), not JSON or base64 strings.
+- **Hocuspocus WebSocket Engine**: Node-based WebSocket server (`apps/collab`) coordinates document awareness, cursor positions, and state vectors with sub-20ms broadcast latency.
+- **Dual Presentation**:
+  - **Document View**: Continuous reading and editing canvas.
+  - **Block View**: Card-oriented notebook cells with reordering, code execution blocks, and Mermaid diagrams.
+
+### 5. Model Context Protocol (MCP) AI Co-authoring
+- Glyphroom exposes tools via MCP for local and autonomous AI agents.
+- **Suggestion Mode**: AI edits cannot silently overwrite human text. Edits are recorded as non-destructive suggestions (`suggestion_insert` and `suggestion_delete` marks) that human authors accept or reject.
+- **Personal Access Tokens (PATs)**: Scoped API tokens (`read:posts`, `write:posts`, `suggest:posts`) allow users to run local coding assistants against Glyphroom documents without sharing session cookies.
 
 ---
 
-## 3. Architecture & Monorepo Topology
+## Repository Structure
 
 ```
-glyphroom/
+.
 ├── apps/
-│   ├── web/               # React 18, Vite, Tailwind CSS, TipTap/ProseMirror UI
-│   ├── api/               # Fastify, Drizzle ORM, PostgreSQL REST API, RBAC, Auto-Migrations
-│   └── collab/            # Hocuspocus WebSocket CRDT server, PostgreSQL binary persistence
+│   ├── web/               # React 18, Vite, TipTap/ProseMirror, Tailwind CSS
+│   ├── api/               # Fastify, Drizzle ORM, PostgreSQL REST API, RBAC
+│   └── collab/            # Hocuspocus CRDT WebSocket server with Postgres adapter
 ├── packages/
-│   ├── shared/            # Shared types, CRDT validation, Markdown converters
-│   └── mcp-server/        # Model Context Protocol server for AI agent integrations
+│   ├── shared/            # Common TypeScript types, CRDT diffing, markdown export
+│   └── mcp-server/        # Model Context Protocol server for AI assistant integration
 └── docker/
-    └── postgres/          # PostgreSQL database container with init.sql
+    └── postgres/          # PostgreSQL 15 schema initialization
 ```
 
 ---
 
-## 4. Quickstart Guide
+## Getting Started
 
 ### Prerequisites
-- **Node.js**: `v20.x` or higher
-- **pnpm**: `v9.x` or `v10.x` (`corepack enable pnpm`)
-- **PostgreSQL**: `v15` or higher (or Docker)
+- Node.js 20+
+- pnpm 9+ (`corepack enable pnpm`)
+- PostgreSQL 15+ (local or via Docker)
 
-### 1. Clone & Install Dependencies
+### 1. Install dependencies
 ```bash
 git clone https://github.com/allwin-antony/Glyphroom.git
 cd Glyphroom
 pnpm install
 ```
 
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env` in the root and in `apps/api` and `apps/collab`:
+### 2. Configure environment
+Copy `.env.example` to `.env`:
 ```bash
 cp .env.example .env
 ```
-Default connection string:
+
+Ensure `DATABASE_URL` points to your PostgreSQL instance:
 ```env
 DATABASE_URL=postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/enterprise_blogger
 PORT=4001
@@ -114,83 +115,85 @@ COLLAB_PORT=4000
 WEB_PORT=3000
 ```
 
-### 3. Start Database (Docker)
+### 3. Start database (Docker)
 ```bash
 docker compose -f docker-compose.prod.yml up -d postgres
 ```
 
-### 4. Seed Test Accounts & Spaces
+The database initializes automatically. The API server runs schema verification (`ensureDatabaseSchema`) on startup.
+
+### 4. Seed demo users and spaces
 ```bash
 pnpm --filter @enterprise-blogger/api tsx src/scripts/seed-test-users.ts
 ```
 
-### 5. Start Development Servers
+### 5. Start dev services
 ```bash
-# Starts Web (3000), API (4001), and Collab (4000)
+# Terminal 1: REST API (Port 4001)
 pnpm --filter @enterprise-blogger/api run dev
+
+# Terminal 2: Collaborative CRDT Server (Port 4000)
 pnpm --filter @enterprise-blogger/collab run dev
+
+# Terminal 3: Web UI (Port 3000)
 pnpm --filter @enterprise-blogger/web run dev
 ```
 
-Navigate to `http://localhost:3000` in your browser.
+Open `http://localhost:3000` in your browser.
 
 ---
 
-## 5. Seeded Test Accounts
+## Seeded Test Accounts
 
-The database includes pre-configured testing accounts with 1-click login buttons on the sign-in page:
+All seeded accounts use password: `admin2026!`
 
-> **Universal Test Password**: `admin2026!`
+The sign-in screen at `http://localhost:3000/signin` includes one-click buttons to autofill any of these test profiles:
 
-| Account | Email | System Role | Space Memberships | Capabilities |
-| :--- | :--- | :--- | :--- | :--- |
-| **Maya (Admin)** | `admin@enterprise-blogger.local` | System Admin | Global Access | Full system control, audit logs, spaces approval |
-| **Arjun** | `arjun.maintainer@enterprise.internal` | Member | *Payments Revamp* (Owner) | Manage space members, promote team pages |
-| **Priya** | `priya.sharma@enterprise.internal` | Member | *Payments Revamp* (Author) | Author drafts, cannot self-promote team pages |
-| **Rahul** | `rahul.viewer@enterprise.internal` | Member | *Payments Revamp* (Viewer) | Read-only access to space pages |
-| **Marcus** | `marcus.chen@enterprise.internal` | Moderator | *Platform Security* (Maintainer) | Review queue moderation, manage space |
-| **Elena** | `elena.rostova@enterprise.internal` | Member | Standalone Author | Write independent pages, request spaces |
+| Name | Email | System Role | Space Role |
+| :--- | :--- | :--- | :--- |
+| **Maya (Admin)** | `admin@enterprise-blogger.local` | System Admin | System-wide admin access |
+| **Arjun** | `arjun.maintainer@enterprise.internal` | Member | Owner / Maintainer of *Payments Revamp* |
+| **Priya** | `priya.sharma@enterprise.internal` | Member | Author in *Payments Revamp* |
+| **Rahul** | `rahul.viewer@enterprise.internal` | Member | Viewer in *Payments Revamp* |
+| **Marcus** | `marcus.chen@enterprise.internal` | Moderator | Maintainer in *Platform Security* |
+| **Elena** | `elena.rostova@enterprise.internal` | Member | Staff SRE (independent standalone drafts) |
 
 ---
 
-## 6. Testing
+## Testing
 
-Glyphroom has comprehensive test suites covering CRDT convergence, RBAC security, API integration, and user interface workflows:
+Glyphroom maintains automated test coverage across RBAC security, REST endpoints, UI interactions, and collaborative synchronization:
 
 ```bash
-# Run all workspace test suites
+# Run all test suites
 pnpm test:all
 
-# Or test individual services
-pnpm test:web     # 111 tests passing
-pnpm test:api     # 60 tests passing
-pnpm test:collab  # Hocuspocus convergence tests
+# Individual packages
+pnpm test:web     # 111 tests passing (Vitest + React Testing Library)
+pnpm test:api     # 60 tests passing (Fastify integration + RBAC + Audit chain)
+pnpm test:collab  # Hocuspocus CRDT sync and document lifecycle tests
 ```
 
 ---
 
-## 7. Open Source Licensing
+## Architectural Decisions & Constraints
 
-Glyphroom is open-source software licensed under the **[MIT License](./LICENSE)**.
-
-### Licensing Comparison & Options for Enterprise Deployments
-
-| License | Best For | Commercial SaaS Protection | Enterprise Adoption Friction | Patent Grant |
-| :--- | :--- | :---: | :---: | :---: |
-| **MIT** *(Current)* | Maximum community adoption, developer freedom | None | Lowest (Instant IT Approval) | Implicit |
-| **Apache 2.0** | Enterprise governance, trademark & patent defense | None | Low (Standard Corporate Pick) | **Explicit** |
-| **AGPLv3** | Preventing cloud hyperscalers from offering closed SaaS | **Strong** (Network copyleft) | Medium (Some enterprise legal blocks) | Explicit |
-| **BSL 1.1** *(Source Available)* | Building a commercial venture while keeping self-hosting free | **Full** (Restricts commercial SaaS) | Medium (Not strictly OSI-open) | Custom |
-
-For corporate self-hosting and internal deployment, **MIT** and **Apache 2.0** provide the highest developer velocity and zero legal friction. If the goal is to build a commercial hosted cloud while keeping the on-premise version open, dual-licensing or **BSL 1.1 / AGPLv3** can be applied.
+- **Yjs as Source of Truth**: Document content is stored as Yjs binary updates in `posts.yjs_state`. Derived Markdown (`published_markdown`, `working_markdown`) is generated on document save to support full-text search indexing (`tsvector`) without decoding binary CRDTs during search queries.
+- **View Counter Decoupling**: View counts are tracked in an in-memory ring buffer (`BufferedViewCounter`) and periodically flushed to PostgreSQL in batches to prevent write-lock contention on popular posts.
+- **Audit Logging**: Sensitive governance events (space member additions, promotions to company library, role updates, PAT creations) write to an immutable audit table with SHA-256 integrity hashes.
+- **Air-gap Capability**: Glyphroom relies solely on Node.js and PostgreSQL. It has zero mandatory SaaS dependencies, external font calls, or third-party tracking scripts.
 
 ---
 
-## 8. Contributing
+## License
 
-Contributions, issues, and feature requests are welcome!
-Feel free to check [issues page](https://github.com/allwin-antony/Glyphroom/issues).
+Licensed under the [Apache License, Version 2.0](./LICENSE).
+You may obtain a copy of the License at:
 
----
+    http://www.apache.org/licenses/LICENSE-2.0
 
-© 2026 Allwin. Built with passion for open enterprise engineering.
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
