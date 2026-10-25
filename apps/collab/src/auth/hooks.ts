@@ -10,6 +10,7 @@ export interface UserContext {
 export interface CollabAuthOptions {
   allowedOrigins?: string[];
   mockUsers?: Record<string, UserContext>;
+  adapter?: any;
 }
 
 export function createAuthHooks(options: CollabAuthOptions = {}) {
@@ -70,17 +71,43 @@ export function createAuthHooks(options: CollabAuthOptions = {}) {
       }
 
       // 4. Enforce read-only access for readers and reviewers
+      let isReadOnly = false;
       if (user.role !== 'reader' && user.permissions.includes('edit')) {
-        data.connectionConfig.readOnly = false;
+        isReadOnly = false;
       } else if (
         user.role === 'reader' ||
         user.permissions.includes('view') ||
         user.permissions.includes('review')
       ) {
-        data.connectionConfig.readOnly = true;
-      } else {
-        data.connectionConfig.readOnly = false;
+        isReadOnly = true;
       }
+
+      // Check if user has explicit collaborator permission on this document
+      if (isReadOnly && options.adapter?.getPool && data.documentName) {
+        try {
+          const docId = data.documentName.startsWith('post-')
+            ? data.documentName.slice(5)
+            : data.documentName;
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(docId);
+          const userIdFromToken = token.startsWith('token-') ? token.split('-').slice(2).join('-') : null;
+
+          if (isUuid && userIdFromToken) {
+            const pool = options.adapter.getPool();
+            const res = await pool.query(
+              `SELECT permission FROM post_collaborators WHERE post_id = $1::uuid AND user_id = $2::uuid LIMIT 1`,
+              [docId, userIdFromToken]
+            );
+            if (res.rows.length > 0 && res.rows[0].permission === 'edit') {
+              isReadOnly = false;
+              user.permissions = ['edit'];
+            }
+          }
+        } catch {
+          // Keep default isReadOnly on error
+        }
+      }
+
+      data.connectionConfig.readOnly = isReadOnly;
 
       // 5. Populate connection context
       if (!data.context) {

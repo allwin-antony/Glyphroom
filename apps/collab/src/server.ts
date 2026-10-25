@@ -127,7 +127,10 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
   }
 
   // 3. Configure Authentication and Authorization Hooks
-  const authHooks = createAuthHooks(options.authOptions);
+  const authHooks = createAuthHooks({
+    ...options.authOptions,
+    adapter,
+  });
 
   const serverConfig: Partial<ServerConfiguration> = {
     port: options.port ?? 4000,
