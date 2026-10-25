@@ -16,6 +16,7 @@ import {
   Loader2,
   AlertCircle,
   CheckCircle2,
+  Mail,
 } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -64,6 +65,9 @@ export const SpaceView: React.FC = () => {
 
   // Add member modal
   const [isAddMemberOpen, setIsAddMemberOpen] = useState(false);
+  const [inviteMode, setInviteMode] = useState<'directory' | 'manual'>('directory');
+  const [manualEmail, setManualEmail] = useState('');
+  const [isLoadingDirectory, setIsLoadingDirectory] = useState(false);
   const [allUsers, setAllUsers] = useState<Array<{ id: string; email: string; fullName: string }>>([]);
   const [selectedUserId, setSelectedUserId] = useState('');
   const [selectedRole, setSelectedRole] = useState<'viewer' | 'reviewer' | 'author' | 'maintainer'>('author');
@@ -103,27 +107,66 @@ export const SpaceView: React.FC = () => {
   const handleOpenAddMember = async () => {
     setIsAddMemberOpen(true);
     setMemberActionError(null);
+    setIsLoadingDirectory(true);
     try {
-      const res = await api.get<{ users: any[] }>('/collaborators/users');
-      setAllUsers(res.users || []);
-      if (res.users && res.users.length > 0) {
-        setSelectedUserId(res.users[0].id);
+      let usersList: any[] = [];
+      try {
+        const res = await api.get<{ users: any[] }>('/spaces/directory/users');
+        usersList = res.users || [];
+      } catch {
+        try {
+          const res = await api.get<{ users: any[] }>('/collaborators/users');
+          usersList = res.users || [];
+        } catch {
+          const res = await api.get<{ users: any[] }>('/posts/collaborators/users');
+          usersList = res.users || [];
+        }
       }
-    } catch (err) {
+      setAllUsers(usersList);
+      
+      const memberIds = new Set(members.map((m) => m.userId));
+      const available = usersList.filter((u) => !memberIds.has(u.id));
+      if (available.length > 0) {
+        setSelectedUserId(available[0].id);
+      } else {
+        setSelectedUserId('');
+      }
+    } catch (err: any) {
       console.error('Failed to load user directory:', err);
+      setMemberActionError('Could not load corporate user directory.');
+    } finally {
+      setIsLoadingDirectory(false);
     }
   };
 
   const handleAddMemberSubmit = async () => {
-    if (!selectedUserId || !space) return;
+    if (!space) return;
     setIsAddingMember(true);
     setMemberActionError(null);
     try {
-      await api.post(`/spaces/${space.id}/members`, {
-        userId: selectedUserId,
-        role: selectedRole,
-      });
+      if (inviteMode === 'directory') {
+        if (!selectedUserId) {
+          setMemberActionError('Please select a user from the directory or switch to invite by email.');
+          setIsAddingMember(false);
+          return;
+        }
+        await api.post(`/spaces/${space.id}/members`, {
+          userId: selectedUserId,
+          role: selectedRole,
+        });
+      } else {
+        if (!manualEmail.trim()) {
+          setMemberActionError('Please enter a valid corporate email address.');
+          setIsAddingMember(false);
+          return;
+        }
+        await api.post(`/spaces/${space.id}/members`, {
+          email: manualEmail.trim(),
+          role: selectedRole,
+        });
+      }
       setIsAddMemberOpen(false);
+      setManualEmail('');
       fetchSpaceDetails();
     } catch (err: any) {
       setMemberActionError(err.message || 'Failed to add member.');
@@ -412,21 +455,83 @@ export const SpaceView: React.FC = () => {
             </div>
           )}
 
+          {/* Toggle between directory dropdown & email input */}
+          <div className="flex border-b border-border mt-1 mb-2 text-xs">
+            <button
+              type="button"
+              onClick={() => { setInviteMode('directory'); setMemberActionError(null); }}
+              className={`pb-2 px-3 font-semibold transition-colors flex items-center gap-1.5 border-b-2 ${
+                inviteMode === 'directory'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-text-muted hover:text-foreground'
+              }`}
+            >
+              <Users className="w-3.5 h-3.5" />
+              <span>Select from Directory</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => { setInviteMode('manual'); setMemberActionError(null); }}
+              className={`pb-2 px-3 font-semibold transition-colors flex items-center gap-1.5 border-b-2 ${
+                inviteMode === 'manual'
+                  ? 'border-accent text-accent'
+                  : 'border-transparent text-text-muted hover:text-foreground'
+              }`}
+            >
+              <Mail className="w-3.5 h-3.5" />
+              <span>Invite by Email</span>
+            </button>
+          </div>
+
           <div className="space-y-4 py-2 text-xs">
-            <div>
-              <label className="block font-semibold mb-1">User from Directory</label>
-              <select
-                value={selectedUserId}
-                onChange={(e) => setSelectedUserId(e.target.value)}
-                className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground"
-              >
-                {allUsers.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.fullName} ({u.email})
-                  </option>
-                ))}
-              </select>
-            </div>
+            {inviteMode === 'directory' ? (
+              <div>
+                <label className="block font-semibold mb-1">User from Directory</label>
+                {isLoadingDirectory ? (
+                  <div className="py-3 px-3 bg-canvas border border-border rounded-lg text-text-muted flex items-center gap-2">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-accent" />
+                    <span>Loading corporate directory...</span>
+                  </div>
+                ) : (
+                  (() => {
+                    const memberUserIds = new Set(members.map((m) => m.userId));
+                    const availableDirectoryUsers = allUsers.filter((u) => !memberUserIds.has(u.id));
+                    return availableDirectoryUsers.length > 0 ? (
+                      <select
+                        value={selectedUserId}
+                        onChange={(e) => setSelectedUserId(e.target.value)}
+                        className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground focus:outline-none focus:ring-1 focus:ring-accent"
+                      >
+                        {availableDirectoryUsers.map((u) => (
+                          <option key={u.id} value={u.id}>
+                            {u.fullName} ({u.email})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <div className="p-3 bg-canvas border border-border rounded-lg text-text-muted leading-relaxed">
+                        {allUsers.length > 0 ? (
+                          <span>All directory users are already members of this Space. You can use <strong>Invite by Email</strong> to invite another user.</span>
+                        ) : (
+                          <span>No directory users found. You can use <strong>Invite by Email</strong> to invite directly.</span>
+                        )}
+                      </div>
+                    );
+                  })()
+                )}
+              </div>
+            ) : (
+              <div>
+                <label className="block font-semibold mb-1">Corporate Email Address</label>
+                <input
+                  type="email"
+                  placeholder="name@company.com"
+                  value={manualEmail}
+                  onChange={(e) => setManualEmail(e.target.value)}
+                  className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+              </div>
+            )}
 
             <div>
               <label className="block font-semibold mb-1">Space Role</label>

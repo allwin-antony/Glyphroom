@@ -44,6 +44,21 @@ export const spaceRoutes: FastifyPluginAsync<{
 }> = async (fastify, options) => {
   const { db, permissionService, auditService } = options;
 
+  // 0. Space Directory Users (active users that can be invited to a space)
+  fastify.get('/directory/users', { preHandler: (fastify as any).requireAuth }, async (_request, reply) => {
+    const activeUsers = await db
+      .select({
+        id: users.id,
+        email: users.email,
+        fullName: users.fullName,
+        role: users.role,
+      })
+      .from(users)
+      .where(eq(users.isActive, true));
+
+    return reply.send({ users: activeUsers });
+  });
+
   // 1. List Spaces (Returns user's joined spaces + all active open spaces)
   fastify.get('/', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
     const user = request.user!;

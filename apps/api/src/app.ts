@@ -94,6 +94,13 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     auditService,
   });
 
+  await app.register(collaboratorRoutes, {
+    prefix: '/api/v1',
+    db,
+    permissionService,
+    auditService,
+  });
+
   await app.register(reviewRoutes, {
     prefix: '/api/v1/posts',
     db,
