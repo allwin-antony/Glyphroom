@@ -1,7 +1,7 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import crypto from 'node:crypto';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, isNull } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
 import { personalAccessTokens } from '../db/schema.js';
 import type { AuditService } from '../services/audit.js';
@@ -18,7 +18,7 @@ export const patRoutes: FastifyPluginAsync<{
 }> = async (fastify, options) => {
   const { db, auditService } = options;
 
-  // 1. List PATs for current user
+  // 1. List PATs for current user (active only)
   fastify.get('/', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
     const user = request.user!;
 
@@ -33,7 +33,12 @@ export const patRoutes: FastifyPluginAsync<{
         createdAt: personalAccessTokens.createdAt,
       })
       .from(personalAccessTokens)
-      .where(eq(personalAccessTokens.userId, user.userId));
+      .where(
+        and(
+          eq(personalAccessTokens.userId, user.userId),
+          isNull(personalAccessTokens.revokedAt)
+        )
+      );
 
     return reply.send({ tokens });
   });

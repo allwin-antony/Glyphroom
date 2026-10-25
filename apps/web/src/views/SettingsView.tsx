@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext.js';
 import { useTheme } from '../context/ThemeContext.js';
-import { Sun, Moon, Laptop, Key, Plus, Trash2, Copy, Check, ShieldAlert, Loader2 } from 'lucide-react';
+import { Sun, Moon, Laptop, Key, Plus, Trash2, Copy, Check, ShieldAlert, Loader2, Clock } from 'lucide-react';
 import { api } from '../lib/api.js';
 
 export interface PatItem {
@@ -83,12 +83,37 @@ export const SettingsView: React.FC = () => {
     }
   };
 
-  const handleRevokePat = async (id: string) => {
+  const formatLastUsed = (dateStr?: string | null) => {
+    if (!dateStr) return 'Never';
+    const date = new Date(dateStr);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    let relative = '';
+    if (diffMins < 1) relative = 'Just now';
+    else if (diffMins < 60) relative = `${diffMins}m ago`;
+    else if (diffHours < 24) relative = `${diffHours}h ago`;
+    else if (diffDays < 7) relative = `${diffDays}d ago`;
+    else relative = date.toLocaleDateString();
+
+    return `${relative} (${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})`;
+  };
+
+  const handleRevokePat = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to revoke and delete token "${name}"? External tools and scripts using this token will immediately lose access.`)) {
+      return;
+    }
+    // Optimistically update list immediately
+    setTokens((prev) => prev.filter((tok) => tok.id !== id));
     try {
       await api.delete(`/pats/${id}`);
-      fetchTokens();
+      await fetchTokens();
     } catch (err: any) {
       alert(err.message || 'Failed to revoke token.');
+      fetchTokens();
     }
   };
 
@@ -296,29 +321,86 @@ export const SettingsView: React.FC = () => {
         </form>
 
         {/* Active tokens list */}
-        <div className="space-y-2 pt-2">
+        <div className="space-y-3 pt-2">
+          <div className="text-xs font-semibold text-foreground flex items-center justify-between">
+            <span>Active Tokens ({tokens.length})</span>
+          </div>
+
           {tokens.length === 0 ? (
-            <p className="text-xs text-text-muted italic">No active personal access tokens.</p>
+            <p className="text-xs text-text-muted italic p-3 rounded-lg bg-canvas border border-border">
+              No active personal access tokens found.
+            </p>
           ) : (
             tokens.map((tok) => (
               <div
                 key={tok.id}
-                className="p-3 rounded-lg bg-canvas border border-border flex items-center justify-between text-xs"
+                className="p-4 rounded-xl bg-canvas border border-border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
               >
-                <div className="space-y-0.5">
-                  <div className="font-semibold text-foreground">{tok.name}</div>
-                  <div className="text-[11px] text-text-muted">
-                    Created {new Date(tok.createdAt).toLocaleDateString()}
-                    {tok.lastUsedAt && ` • Last used ${new Date(tok.lastUsedAt).toLocaleDateString()}`}
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <span className="font-bold text-foreground text-sm">{tok.name}</span>
+                    {tok.lastUsedAt ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-success/15 text-status-success border border-status-success/30">
+                        <span className="w-1.5 h-1.5 rounded-full bg-status-success animate-pulse" />
+                        Active
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium bg-text-muted/10 text-text-muted border border-border">
+                        Never used
+                      </span>
+                    )}
+                  </div>
+
+                  {tok.scopes && tok.scopes.length > 0 && (
+                    <div className="flex flex-wrap gap-1">
+                      {tok.scopes.map((scope) => (
+                        <span
+                          key={scope}
+                          className="px-2 py-0.5 rounded bg-accent/10 border border-accent/20 text-accent font-mono text-[10px]"
+                        >
+                          {scope}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary">
+                    <div className="flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-text-muted" />
+                      <span>
+                        <strong className="text-foreground font-medium">Last used:</strong>{' '}
+                        {tok.lastUsedAt ? (
+                          <span className="text-foreground">{formatLastUsed(tok.lastUsedAt)}</span>
+                        ) : (
+                          <span className="text-text-muted italic">Never</span>
+                        )}
+                      </span>
+                    </div>
+
+                    <div>
+                      <strong className="text-foreground font-medium">Created:</strong>{' '}
+                      {new Date(tok.createdAt).toLocaleDateString()}
+                    </div>
+
+                    {tok.expiresAt && (
+                      <div>
+                        <strong className="text-foreground font-medium">Expires:</strong>{' '}
+                        {new Date(tok.expiresAt).toLocaleDateString()}
+                      </div>
+                    )}
                   </div>
                 </div>
-                <button
-                  onClick={() => handleRevokePat(tok.id)}
-                  className="p-1.5 rounded-md text-text-muted hover:text-status-danger hover:bg-status-danger/10 transition-colors"
-                  title="Revoke Token"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+
+                <div className="flex items-center justify-end sm:self-center">
+                  <button
+                    onClick={() => handleRevokePat(tok.id, tok.name)}
+                    className="px-3 py-1.5 rounded-lg border border-border text-text-muted hover:text-status-danger hover:border-status-danger/40 hover:bg-status-danger/10 transition-colors inline-flex items-center gap-1.5 text-xs font-medium"
+                    title="Revoke & Delete Token"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete</span>
+                  </button>
+                </div>
               </div>
             ))
           )}
