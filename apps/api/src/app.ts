@@ -2,6 +2,7 @@ import Fastify, { FastifyInstance } from 'fastify';
 import cors from '@fastify/cors';
 import multipart from '@fastify/multipart';
 import { createDatabaseClient, type Database } from './db/index.js';
+import { ensureDatabaseSchema } from './db/auto-migrate.js';
 import { AuthService } from './services/auth.js';
 import { AuditService } from './services/audit.js';
 import { PermissionService } from './services/permissions.js';
@@ -40,6 +41,8 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     const client = createDatabaseClient({ connectionString: options.connectionString });
     db = client.db;
     closeDb = client.close;
+    // Auto-run schema migration check on startup
+    await ensureDatabaseSchema(db);
   }
 
   const app = Fastify({

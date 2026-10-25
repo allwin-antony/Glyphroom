@@ -50,6 +50,50 @@ CREATE TABLE IF NOT EXISTS centers_of_excellence (
 );
 
 -- ===========================================================================
+-- 4.5 Spaces & Access Model (Team Workspaces & Isolation)
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS spaces (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    slug VARCHAR(255) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    description TEXT,
+    is_archived BOOLEAN NOT NULL DEFAULT false,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_spaces_slug ON spaces(slug);
+
+CREATE TABLE IF NOT EXISTS space_members (
+    space_id UUID NOT NULL REFERENCES spaces(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    role VARCHAR(20) NOT NULL CHECK (role IN ('viewer', 'reviewer', 'author', 'maintainer', 'owner')),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (space_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_space_members_user ON space_members(user_id);
+
+CREATE TABLE IF NOT EXISTS space_requests (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    requested_by UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name VARCHAR(255) NOT NULL,
+    slug VARCHAR(255) NOT NULL,
+    reason TEXT,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'approved', 'rejected')),
+    reviewed_by UUID REFERENCES users(id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_space_requests_status ON space_requests(status);
+
+-- Seed default "General Engineering" Space
+INSERT INTO spaces (id, slug, name, description)
+VALUES ('00000000-0000-0000-0000-000000000101', 'general-engineering', 'General Engineering', 'Default shared engineering workspace for core project documentation.')
+ON CONFLICT (slug) DO NOTHING;
+
+-- ===========================================================================
 -- 5. Posts (Yjs CRDT Canonical Working State & Derived Projections)
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS posts (
@@ -59,6 +103,11 @@ CREATE TABLE IF NOT EXISTS posts (
     excerpt TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'in_review', 'approved', 'published', 'archived')),
     author_id UUID REFERENCES users(id) ON DELETE RESTRICT,
+    space_id UUID REFERENCES spaces(id) ON DELETE SET NULL,
+    visibility VARCHAR(20) NOT NULL DEFAULT 'space' CHECK (visibility IN ('space', 'invited_only')),
+    is_promoted BOOLEAN NOT NULL DEFAULT false,
+    promoted_at TIMESTAMPTZ,
+    promoted_by UUID REFERENCES users(id),
     coe_id UUID REFERENCES centers_of_excellence(id),
     yjs_state BYTEA NOT NULL,
     working_markdown TEXT,
