@@ -1580,7 +1580,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             {viewMode === 'block' && (
               <div className="mt-8 pt-4 border-t border-border flex flex-col items-center gap-2 select-none">
                 <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
-                  + Add Notebook Card (.ipynb)
+                  + Add Section Card
                 </div>
                 <div className="flex flex-wrap items-center justify-center gap-1.5 p-2 rounded-xl border border-dashed border-border/80 bg-canvas/40 shadow-2xs">
                   <button

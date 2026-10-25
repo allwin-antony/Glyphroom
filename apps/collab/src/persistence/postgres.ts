@@ -32,7 +32,10 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
       this.ownsPool = false;
     } else {
       this.pool = new pg.Pool({
-        connectionString: options.connectionString || process.env.DATABASE_URL,
+        connectionString:
+          options.connectionString ||
+          process.env.DATABASE_URL ||
+          'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/enterprise_blogger',
         max: 20,
         idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 5000,

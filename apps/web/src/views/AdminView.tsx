@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Users, Key, Shield, CheckCircle2, AlertCircle, Loader2, Layers, Plus, Check, X } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { Users, Key, Shield, CheckCircle2, AlertCircle, Loader2, Layers, Plus, Check, X, ArrowRight } from 'lucide-react';
 import { api } from '../lib/api.js';
 
 export const AdminView: React.FC = () => {
@@ -236,10 +237,20 @@ export const AdminView: React.FC = () => {
             <h2 className="text-sm font-bold text-foreground">Active Enterprise Spaces ({spaces.length})</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
               {spaces.map((sp) => (
-                <div key={sp.id} className="p-3.5 rounded-lg bg-canvas border border-border space-y-1.5">
-                  <div className="flex items-center gap-2">
-                    <Layers className="w-4 h-4 text-accent" />
-                    <span className="font-bold text-xs text-foreground truncate">{sp.name}</span>
+                <Link
+                  key={sp.id}
+                  to={`/spaces/${sp.slug}`}
+                  className="p-3.5 rounded-lg bg-canvas border border-border hover:border-accent hover:shadow-xs transition-all space-y-1.5 block group cursor-pointer"
+                  title={`Open ${sp.name} Space`}
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Layers className="w-4 h-4 text-accent shrink-0" />
+                      <span className="font-bold text-xs text-foreground group-hover:text-accent transition-colors truncate">
+                        {sp.name}
+                      </span>
+                    </div>
+                    <ArrowRight className="w-3.5 h-3.5 text-text-muted group-hover:text-accent group-hover:translate-x-0.5 transition-all shrink-0" />
                   </div>
                   <p className="text-[11px] text-text-secondary line-clamp-2">
                     {sp.description || 'Dedicated workspace'}
@@ -247,7 +258,7 @@ export const AdminView: React.FC = () => {
                   <div className="font-mono text-[10px] text-text-muted">
                     /spaces/{sp.slug}
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
           </div>

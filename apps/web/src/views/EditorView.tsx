@@ -57,6 +57,24 @@ export const EditorView: React.FC = () => {
           setPostMetadata(res.post);
           setTitle(res.post.title || 'Untitled Post');
           setPostStatus(res.post.status || 'draft');
+
+          if (res.post.yjsState) {
+            try {
+              let binary: Uint8Array | null = null;
+              if (res.post.yjsState.data && Array.isArray(res.post.yjsState.data)) {
+                binary = new Uint8Array(res.post.yjsState.data);
+              } else if (typeof res.post.yjsState === 'string') {
+                binary = new Uint8Array(res.post.yjsState.match(/.{1,2}/g)?.map((b: string) => parseInt(b, 16)) || []);
+              } else if (res.post.yjsState instanceof Uint8Array) {
+                binary = res.post.yjsState;
+              }
+              if (binary && binary.length > 0 && ydoc.share.size === 0) {
+                Y.applyUpdate(ydoc, binary);
+              }
+            } catch (yErr) {
+              console.warn('Failed to hydrate initial Yjs document state:', yErr);
+            }
+          }
         }
       } catch (err: any) {
         if (isMounted) {

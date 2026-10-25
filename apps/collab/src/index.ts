@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { createCollabServer } from './server.js';
 import { PostgresPersistenceAdapter } from './persistence/postgres.js';
 import { InMemoryPersistenceAdapter } from './persistence/in-memory.js';
@@ -14,12 +15,14 @@ export const COLLAB_APP_NAME = 'enterprise-blogger-collab';
  */
 async function main() {
   const port = parseInt(process.env.PORT || '4000', 10);
-  const persistenceType =
-    process.env.PERSISTENCE_ADAPTER || (process.env.DATABASE_URL ? 'postgres' : 'in-memory');
+  const dbUrl =
+    process.env.DATABASE_URL ||
+    'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/enterprise_blogger';
+  const persistenceType = process.env.PERSISTENCE_ADAPTER || (dbUrl ? 'postgres' : 'in-memory');
 
   const adapter =
     persistenceType === 'postgres'
-      ? new PostgresPersistenceAdapter()
+      ? new PostgresPersistenceAdapter({ connectionString: dbUrl })
       : new InMemoryPersistenceAdapter();
 
   const instance = await createCollabServer({
