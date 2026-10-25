@@ -291,8 +291,11 @@ export const Sidebar: React.FC<SidebarProps> = ({
                         <span className="truncate">{sp.name}</span>
                       </div>
                       {sp.userRole && (
-                        <span className="text-[9px] uppercase px-1 py-0.2 rounded bg-surface border border-border text-text-muted">
-                          {sp.userRole[0]}
+                        <span
+                          className="text-[9px] capitalize px-1.5 py-0.5 rounded bg-surface border border-border text-text-muted font-medium"
+                          title={`Your Space Role: ${sp.userRole}`}
+                        >
+                          {sp.userRole}
                         </span>
                       )}
                     </NavLink>
