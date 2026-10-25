@@ -71,6 +71,68 @@ export const centersOfExcellence = pgTable('centers_of_excellence', {
   description: text('description'),
 });
 
+// 2.5 Spaces Table
+export const spaces = pgTable(
+  'spaces',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    slug: varchar('slug', { length: 255 }).unique().notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    description: text('description'),
+    isArchived: boolean('is_archived').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_spaces_slug').on(table.slug),
+  ]
+);
+
+// 2.6 Space Members Table
+export const spaceMembers = pgTable(
+  'space_members',
+  {
+    spaceId: uuid('space_id')
+      .references(() => spaces.id, { onDelete: 'cascade' })
+      .notNull(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    role: varchar('role', { length: 20 })
+      .notNull()
+      .$type<'viewer' | 'reviewer' | 'author' | 'maintainer' | 'owner'>(),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.spaceId, table.userId] }),
+    index('idx_space_members_user').on(table.userId),
+  ]
+);
+
+// 2.7 Space Requests Table (Users can request a new space for Admins to approve)
+export const spaceRequests = pgTable(
+  'space_requests',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    requestedBy: uuid('requested_by')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    name: varchar('name', { length: 255 }).notNull(),
+    slug: varchar('slug', { length: 255 }).notNull(),
+    reason: text('reason'),
+    status: varchar('status', { length: 20 })
+      .notNull()
+      .default('pending')
+      .$type<'pending' | 'approved' | 'rejected'>(),
+    reviewedBy: uuid('reviewed_by').references(() => users.id),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_space_requests_status').on(table.status),
+  ]
+);
+
 // 3. Posts Table
 export const posts = pgTable(
   'posts',
@@ -86,6 +148,14 @@ export const posts = pgTable(
     authorId: uuid('author_id')
       .references(() => users.id, { onDelete: 'restrict' })
       .notNull(),
+    spaceId: uuid('space_id').references(() => spaces.id, { onDelete: 'set null' }),
+    visibility: varchar('visibility', { length: 20 })
+      .notNull()
+      .default('space')
+      .$type<'space' | 'invited_only'>(),
+    isPromoted: boolean('is_promoted').notNull().default(false),
+    promotedAt: timestamp('promoted_at', { withTimezone: true }),
+    promotedBy: uuid('promoted_by').references(() => users.id),
     coeId: uuid('coe_id').references(() => centersOfExcellence.id),
     yjsState: customBytea('yjs_state').notNull(),
     workingMarkdown: text('working_markdown'),
@@ -101,6 +171,8 @@ export const posts = pgTable(
     index('idx_posts_slug').on(table.slug),
     index('idx_posts_author').on(table.authorId),
     index('idx_posts_status').on(table.status),
+    index('idx_posts_space_id').on(table.spaceId),
+    index('idx_posts_promoted').on(table.isPromoted),
   ]
 );
 

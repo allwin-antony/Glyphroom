@@ -13,6 +13,7 @@ import { EditorView } from './views/EditorView.js';
 import { ReaderView } from './views/ReaderView.js';
 import { ReviewQueueView } from './views/ReviewQueueView.js';
 import { AdminView } from './views/AdminView.js';
+import { SpaceView } from './views/SpaceView.js';
 import { SettingsView } from './views/SettingsView.js';
 import { NotFoundView } from './views/NotFoundView.js';
 
@@ -68,6 +69,10 @@ export const router = createBrowserRouter([
             <AdminView />
           </ProtectedRoute>
         ),
+      },
+      {
+        path: 'spaces/:idOrSlug',
+        element: <SpaceView />,
       },
       {
         path: 'settings',

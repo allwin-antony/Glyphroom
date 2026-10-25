@@ -15,7 +15,10 @@ import {
   HelpCircle, 
   ShieldCheck, 
   Edit3, 
-  Eye 
+  Eye,
+  Globe,
+  Layers,
+  Lock,
 } from 'lucide-react';
 import { api, ApiError } from '../../../lib/api.js';
 import {
@@ -35,6 +38,9 @@ export interface PostSettingsTabProps {
     slug: string;
     excerpt?: string | null;
     coeId?: string | null;
+    spaceId?: string | null;
+    visibility?: 'space' | 'invited_only';
+    isPromoted?: boolean;
     status: string;
   };
   onMetadataUpdate?: (metadata: any) => void;
@@ -58,6 +64,12 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
   const [slug, setSlug] = useState(postMetadata?.slug || '');
   const [excerpt, setExcerpt] = useState(postMetadata?.excerpt || '');
   const [coeId, setCoeId] = useState(postMetadata?.coeId || '');
+  const [spaceId, setSpaceId] = useState(postMetadata?.spaceId || '');
+  const [visibility, setVisibility] = useState<'space' | 'invited_only'>(postMetadata?.visibility || 'space');
+  const [isPromoted, setIsPromoted] = useState(postMetadata?.isPromoted || false);
+  const [spacesOptions, setSpacesOptions] = useState<Array<{ id: string; name: string }>>([]);
+  const [promotionLoading, setPromotionLoading] = useState(false);
+  const [promotionError, setPromotionError] = useState<string | null>(null);
   const [tags, setTags] = useState<string[]>(['engineering', 'collaborative']);
   const [tagInput, setTagInput] = useState('');
 
@@ -96,9 +108,9 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // 1. Fetch COEs on mount
+  // 1. Fetch COEs and Spaces on mount
   useEffect(() => {
-    async function fetchCoes() {
+    async function fetchCoesAndSpaces() {
       try {
         const res = await api.get<{ coes: Array<{ id: string; name: string; code: string }> }>('/posts/coe');
         if (res?.coes && res.coes.length > 0) {
@@ -110,8 +122,15 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
       } catch (err) {
         console.warn('Failed to load COEs:', err);
       }
+
+      try {
+        const spacesRes = await api.get<{ spaces: Array<{ id: string; name: string }> }>('/spaces');
+        setSpacesOptions(spacesRes?.spaces || []);
+      } catch (err) {
+        console.warn('Failed to load spaces:', err);
+      }
     }
-    fetchCoes();
+    fetchCoesAndSpaces();
   }, []);
 
   // 2. Fetch Collaborators & Available Users
@@ -147,6 +166,9 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
       setSlug(postMetadata.slug || '');
       setExcerpt(postMetadata.excerpt || '');
       setCoeId(postMetadata.coeId || '');
+      setSpaceId(postMetadata.spaceId || '');
+      setVisibility(postMetadata.visibility || 'space');
+      setIsPromoted(Boolean(postMetadata.isPromoted));
     }
   }, [postMetadata]);
 
@@ -182,7 +204,37 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
     title !== (postMetadata?.title || '') ||
     slug !== (postMetadata?.slug || '') ||
     excerpt !== (postMetadata?.excerpt || '') ||
-    coeId !== (postMetadata?.coeId || '');
+    coeId !== (postMetadata?.coeId || '') ||
+    spaceId !== (postMetadata?.spaceId || '') ||
+    visibility !== (postMetadata?.visibility || 'space');
+
+  const handlePromoteToCompany = async () => {
+    setPromotionLoading(true);
+    setPromotionError(null);
+    try {
+      await api.post(`/posts/${postId}/promote`);
+      setIsPromoted(true);
+      onMetadataUpdate?.({ ...postMetadata, isPromoted: true });
+    } catch (err: any) {
+      setPromotionError(err.message || 'Failed to promote post to Company Library.');
+    } finally {
+      setPromotionLoading(false);
+    }
+  };
+
+  const handleDemoteFromCompany = async () => {
+    setPromotionLoading(true);
+    setPromotionError(null);
+    try {
+      await api.post(`/posts/${postId}/demote`);
+      setIsPromoted(false);
+      onMetadataUpdate?.({ ...postMetadata, isPromoted: false });
+    } catch (err: any) {
+      setPromotionError(err.message || 'Failed to withdraw post.');
+    } finally {
+      setPromotionLoading(false);
+    }
+  };
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -204,6 +256,8 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
         slug: slug.trim(),
         excerpt: excerpt.trim() || undefined,
         coeId: coeId || null,
+        spaceId: spaceId || null,
+        visibility,
       };
 
       const res = await api.patch<{ post: any }>(`/posts/${postId}`, payload);
@@ -373,6 +427,46 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
             </select>
           </div>
 
+          {/* Team Space Association */}
+          <div className="space-y-1.5">
+            <div className="flex items-center gap-1">
+              <label className="font-semibold text-foreground">Team Space</label>
+              <div 
+                className="text-text-muted cursor-help"
+                title="Spaces partition documents to team members with dedicated roles (Viewer, Reviewer, Author, Maintainer, Owner)."
+              >
+                <Layers className="w-3 h-3" />
+              </div>
+            </div>
+            <select
+              value={spaceId}
+              onChange={(e) => setSpaceId(e.target.value)}
+              className="w-full px-2.5 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs cursor-pointer"
+            >
+              <option value="">None (Independent / Personal Document)</option>
+              {spacesOptions.map((sp) => (
+                <option key={sp.id} value={sp.id}>
+                  {sp.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Page Visibility Setting */}
+          {spaceId && (
+            <div className="space-y-1.5">
+              <label className="font-semibold text-foreground">Page Visibility inside Space</label>
+              <select
+                value={visibility}
+                onChange={(e) => setVisibility(e.target.value as any)}
+                className="w-full px-2.5 py-1.5 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs cursor-pointer"
+              >
+                <option value="space">Space — Visible to all space members per their role</option>
+                <option value="invited_only">Invited Only — Restricted to Maintainers & Page Guests</option>
+              </select>
+            </div>
+          )}
+
           {/* Tags Chips */}
           <div className="space-y-1.5">
             <label className="font-semibold text-foreground">Tags</label>
@@ -433,6 +527,60 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
             </button>
           </div>
         </form>
+
+        {/* ======================================================== */}
+        {/* Company Library Promotion Governance Section */}
+        {/* ======================================================== */}
+        <div className="border-t border-border pt-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Globe className="w-4 h-4 text-emerald-500" />
+              <h4 className="font-semibold text-xs text-foreground">Company Library Promotion</h4>
+            </div>
+            {isPromoted ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 border border-emerald-500/20">
+                Promoted
+              </span>
+            ) : (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-surface border border-border text-text-muted">
+                Team Only
+              </span>
+            )}
+          </div>
+
+          <p className="text-[11px] text-text-secondary leading-relaxed">
+            {spaceId
+              ? 'Promoting publishes this document to the company-wide Company Library and search. Authors cannot self-promote team space pages; a Space Maintainer or Owner must promote.'
+              : 'Independent personal documents can be directly promoted to the company library once vetted.'}
+          </p>
+
+          {promotionError && (
+            <div className="p-2.5 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+              <span>{promotionError}</span>
+            </div>
+          )}
+
+          {isPromoted ? (
+            <button
+              type="button"
+              onClick={handleDemoteFromCompany}
+              disabled={promotionLoading}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg border border-border bg-canvas hover:bg-elevated text-text-secondary hover:text-foreground text-xs font-semibold disabled:opacity-50"
+            >
+              {promotionLoading ? 'Updating...' : 'Withdraw to Team Space'}
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handlePromoteToCompany}
+              disabled={promotionLoading}
+              className="w-full flex items-center justify-center gap-2 px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold disabled:opacity-50 shadow-xs"
+            >
+              {promotionLoading ? 'Promoting...' : 'Promote to Company Library'}
+            </button>
+          )}
+        </div>
 
         {/* ======================================================== */}
         {/* Collaborators & Co-Authors Section */}

@@ -42,6 +42,36 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       description text
     );
 
+    CREATE TABLE spaces (
+      id text PRIMARY KEY DEFAULT gen_random_uuid(),
+      slug text UNIQUE NOT NULL,
+      name text NOT NULL,
+      description text,
+      is_archived boolean NOT NULL DEFAULT false,
+      created_at timestamp NOT NULL DEFAULT NOW(),
+      updated_at timestamp NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE space_members (
+      space_id text NOT NULL,
+      user_id text NOT NULL,
+      role text NOT NULL,
+      created_at timestamp NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (space_id, user_id)
+    );
+
+    CREATE TABLE space_requests (
+      id text PRIMARY KEY DEFAULT gen_random_uuid(),
+      requested_by text NOT NULL,
+      name text NOT NULL,
+      slug text NOT NULL,
+      reason text,
+      status text NOT NULL DEFAULT 'pending',
+      reviewed_by text,
+      created_at timestamp NOT NULL DEFAULT NOW(),
+      updated_at timestamp NOT NULL DEFAULT NOW()
+    );
+
     CREATE TABLE posts (
       id text PRIMARY KEY DEFAULT gen_random_uuid(),
       slug text UNIQUE NOT NULL,
@@ -49,6 +79,11 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       excerpt text,
       status text NOT NULL DEFAULT 'draft',
       author_id text NOT NULL,
+      space_id text,
+      visibility text NOT NULL DEFAULT 'space',
+      is_promoted boolean NOT NULL DEFAULT false,
+      promoted_at timestamp,
+      promoted_by text,
       coe_id text,
       yjs_state bytea NOT NULL,
       working_markdown text,

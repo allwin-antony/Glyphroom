@@ -15,6 +15,7 @@ import { commentRoutes } from './routes/comments.js';
 import { patRoutes } from './routes/pats.js';
 import { auditRoutes } from './routes/audit.js';
 import { attachmentRoutes } from './routes/attachments.js';
+import { spaceRoutes } from './routes/spaces.js';
 
 export interface ApiAppOptions {
   db?: Database;
@@ -62,7 +63,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   const viewCounter = new BufferedViewCounter(db);
   viewCounter.start();
 
-  await app.register(authPlugin, { authService });
+  await app.register(authPlugin, { authService, db });
 
   // Health check endpoint
   app.get('/health', async () => ({ status: 'ok', service: 'enterprise-blogger-api' }));
@@ -131,6 +132,13 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
 
   await app.register(attachmentRoutes, {
     prefix: '/api/v1',
+    db,
+    permissionService,
+    auditService,
+  });
+
+  await app.register(spaceRoutes, {
+    prefix: '/api/v1/spaces',
     db,
     permissionService,
     auditService,

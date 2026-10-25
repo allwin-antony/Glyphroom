@@ -6,7 +6,7 @@ import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
 import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
 import type { Database } from '../db/index.js';
-import { posts, postViewCounts, postVersions, users, centersOfExcellence, postAttachments } from '../db/schema.js';
+import { posts, postViewCounts, postVersions, users, centersOfExcellence, postAttachments, spaces, spaceMembers } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 import type { BufferedViewCounter } from '../services/view-counter.js';
@@ -16,6 +16,8 @@ const CreatePostSchema = z.object({
   slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/),
   excerpt: z.string().optional(),
   coeId: z.string().uuid().optional(),
+  spaceId: z.string().uuid().optional(),
+  visibility: z.enum(['space', 'invited_only']).optional(),
   templateId: z.enum([
     'blank',
     'weekly_status',
@@ -31,6 +33,8 @@ const UpdatePostSchema = z.object({
   slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/).optional(),
   excerpt: z.string().optional(),
   coeId: z.string().uuid().nullable().optional(),
+  spaceId: z.string().uuid().nullable().optional(),
+  visibility: z.enum(['space', 'invited_only']).optional(),
 });
 
 export const postRoutes: FastifyPluginAsync<{
@@ -57,6 +61,11 @@ export const postRoutes: FastifyPluginAsync<{
       authorEmail: users.email,
       coeId: posts.coeId,
       coeName: centersOfExcellence.name,
+      spaceId: posts.spaceId,
+      spaceName: spaces.name,
+      visibility: posts.visibility,
+      isPromoted: posts.isPromoted,
+      promotedAt: posts.promotedAt,
       publishedMarkdown: posts.publishedMarkdown,
       workingMarkdown: posts.workingMarkdown,
       publishedAt: posts.publishedAt,
@@ -67,36 +76,66 @@ export const postRoutes: FastifyPluginAsync<{
     let queryResult;
 
     if (!user || user.role === 'reader') {
-      // Readers and public see ONLY published posts
+      // Readers and public see ONLY published posts that are either promoted to company library OR legacy standalone
       queryResult = await db
         .select(baseSelection)
         .from(posts)
         .leftJoin(users, eq(posts.authorId, users.id))
         .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
-        .where(eq(posts.status, 'published'))
-        .orderBy(desc(posts.publishedAt), desc(posts.createdAt));
-    } else if (user.role === 'admin' || user.role === 'moderator') {
-      // Admin/Moderators see all posts
-      queryResult = await db
-        .select(baseSelection)
-        .from(posts)
-        .leftJoin(users, eq(posts.authorId, users.id))
-        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
-        .orderBy(desc(posts.createdAt));
-    } else {
-      // Authors see published posts + their own drafts
-      queryResult = await db
-        .select(baseSelection)
-        .from(posts)
-        .leftJoin(users, eq(posts.authorId, users.id))
-        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
+        .leftJoin(spaces, eq(posts.spaceId, spaces.id))
         .where(
-          or(
+          and(
             eq(posts.status, 'published'),
-            eq(posts.authorId, user.userId)
+            or(eq(posts.isPromoted, true), eq(posts.spaceId, null as any))
           )
         )
+        .orderBy(desc(posts.publishedAt), desc(posts.createdAt));
+    } else if (user.role === 'admin') {
+      // Global Admins see all posts across all spaces
+      queryResult = await db
+        .select(baseSelection)
+        .from(posts)
+        .leftJoin(users, eq(posts.authorId, users.id))
+        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
+        .leftJoin(spaces, eq(posts.spaceId, spaces.id))
         .orderBy(desc(posts.createdAt));
+    } else {
+      // Fetch spaces user is a member of
+      const userSpaces = await db
+        .select({ spaceId: spaceMembers.spaceId, role: spaceMembers.role })
+        .from(spaceMembers)
+        .where(eq(spaceMembers.userId, user.userId));
+
+      const joinedSpaceIds = userSpaces.map((s) => s.spaceId);
+      const maintainerSpaceIds = userSpaces
+        .filter((s) => s.role === 'maintainer' || s.role === 'owner')
+        .map((s) => s.spaceId);
+
+      const allRows = await db
+        .select(baseSelection)
+        .from(posts)
+        .leftJoin(users, eq(posts.authorId, users.id))
+        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
+        .leftJoin(spaces, eq(posts.spaceId, spaces.id))
+        .orderBy(desc(posts.createdAt));
+
+      // Filter rows based on access rules:
+      // 1. Author's own posts
+      // 2. Promoted and published (Company Library)
+      // 3. User is member of post's space:
+      //    - If post is 'space' visibility -> can see
+      //    - If post is 'invited_only' -> only maintainers/owners of that space can see without guest invite
+      // 4. Standalone published posts without a space
+      queryResult = allRows.filter((p) => {
+        if (p.authorId === user.userId) return true;
+        if (p.isPromoted && p.status === 'published') return true;
+        if (!p.spaceId && p.status === 'published') return true;
+        if (p.spaceId && joinedSpaceIds.includes(p.spaceId)) {
+          if (p.visibility === 'space') return true;
+          if (maintainerSpaceIds.includes(p.spaceId)) return true;
+        }
+        return false;
+      });
     }
 
     // Apply search filter if query string provided
@@ -148,6 +187,11 @@ export const postRoutes: FastifyPluginAsync<{
         authorEmail: users.email,
         coeId: posts.coeId,
         coeName: centersOfExcellence.name,
+        spaceId: posts.spaceId,
+        visibility: posts.visibility,
+        isPromoted: posts.isPromoted,
+        promotedAt: posts.promotedAt,
+        promotedBy: posts.promotedBy,
         yjsState: posts.yjsState,
         publishedMarkdown: posts.publishedMarkdown,
         workingMarkdown: posts.workingMarkdown,
@@ -168,9 +212,16 @@ export const postRoutes: FastifyPluginAsync<{
     const permission = request.user
       ? await permissionService.resolvePostPermission(
           { id: request.user.userId, role: request.user.role },
-          { postId: post.id, authorId: post.authorId, status: post.status }
+          {
+            postId: post.id,
+            authorId: post.authorId,
+            status: post.status,
+            spaceId: post.spaceId,
+            visibility: post.visibility,
+            isPromoted: post.isPromoted,
+          }
         )
-      : post.status === 'published'
+      : (post.status === 'published' && (post.isPromoted || !post.spaceId))
       ? 'view'
       : 'none';
 
@@ -221,9 +272,16 @@ export const postRoutes: FastifyPluginAsync<{
     const permission = request.user
       ? await permissionService.resolvePostPermission(
           { id: request.user.userId, role: request.user.role },
-          { postId: post.id, authorId: post.authorId, status: post.status }
+          {
+            postId: post.id,
+            authorId: post.authorId,
+            status: post.status,
+            spaceId: post.spaceId,
+            visibility: post.visibility,
+            isPromoted: post.isPromoted,
+          }
         )
-      : post.status === 'published'
+      : (post.status === 'published' && (post.isPromoted || !post.spaceId))
       ? 'view'
       : 'none';
 
@@ -369,7 +427,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
     }
 
-    const { title, slug, excerpt, coeId, templateId } = parseResult.data;
+    const { title, slug, excerpt, coeId, spaceId, visibility, templateId } = parseResult.data;
 
     // Check slug collision
     const [existing] = await db.select({ id: posts.id }).from(posts).where(eq(posts.slug, slug)).limit(1);
@@ -391,6 +449,8 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
         slug,
         excerpt,
         coeId,
+        spaceId: spaceId || null,
+        visibility: visibility || 'space',
         authorId: user.userId,
         status: 'draft',
         yjsState,
@@ -640,6 +700,114 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     });
 
     return reply.send({ post: publishedPost, version });
+  });
+
+  // 6.5 Promote Page to Company Library
+  fastify.post('/:id/promote', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const canPromote = await permissionService.canPromoteToCompany(
+      { id: user.userId, role: user.role },
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
+    );
+
+    if (!canPromote) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: post.spaceId
+          ? 'Authors cannot self-promote team space pages to the Company Library. A Space Maintainer or Owner must promote this page.'
+          : 'You do not have permission to promote this document to the Company Library.',
+      });
+    }
+
+    const [promotedPost] = await db
+      .update(posts)
+      .set({
+        isPromoted: true,
+        promotedAt: new Date(),
+        promotedBy: user.userId,
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, id))
+      .returning();
+
+    await auditService.appendLog({
+      actorUserId: user.userId,
+      actorType: 'human',
+      action: 'post_promoted_to_company',
+      entityType: 'post',
+      entityId: id,
+      metadata: { title: post.title, spaceId: post.spaceId },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ message: 'Page promoted to Company Library', post: promotedPost });
+  });
+
+  // 6.6 Demote / Withdraw Page from Company Library
+  fastify.post('/:id/demote', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const canDemote = await permissionService.canPromoteToCompany(
+      { id: user.userId, role: user.role },
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
+    );
+
+    if (!canDemote) {
+      return reply.status(403).send({
+        error: 'Forbidden',
+        message: 'Only Space Maintainers, Owners, or Global Admins can withdraw pages from the Company Library.',
+      });
+    }
+
+    const [demotedPost] = await db
+      .update(posts)
+      .set({
+        isPromoted: false,
+        promotedAt: null,
+        promotedBy: null,
+        updatedAt: new Date(),
+      })
+      .where(eq(posts.id, id))
+      .returning();
+
+    await auditService.appendLog({
+      actorUserId: user.userId,
+      actorType: 'human',
+      action: 'post_demoted_from_company',
+      entityType: 'post',
+      entityId: id,
+      metadata: { title: post.title, spaceId: post.spaceId },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ message: 'Page withdrawn to team space', post: demotedPost });
   });
 
   // 7. Get Post Versions (Milestone M2 Feature 19)

@@ -1,7 +1,8 @@
-import React from 'react';
-import { NavLink } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { ThemeToggle } from '../ui/ThemeToggle.js';
+import { api } from '../../lib/api.js';
 import {
   Sparkles,
   Home,
@@ -14,7 +15,17 @@ import {
   X,
   PanelLeftClose,
   PanelLeftOpen,
+  Layers,
+  Plus,
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../ui/dialog.js';
 
 export interface SidebarProps {
   isMobileOpen: boolean;
@@ -38,6 +49,55 @@ export const Sidebar: React.FC<SidebarProps> = ({
   onToggleCollapse,
 }) => {
   const { user } = useAuth();
+  const navigate = useNavigate();
+
+  const [spacesList, setSpacesList] = useState<Array<{ id: string; slug: string; name: string; userRole?: string }>>([]);
+  const [isRequestSpaceOpen, setIsRequestSpaceOpen] = useState(false);
+  const [requestName, setRequestName] = useState('');
+  const [requestSlug, setRequestSlug] = useState('');
+  const [requestReason, setRequestReason] = useState('');
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
+  const [requestStatus, setRequestStatus] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (user) {
+      api.get<{ spaces: any[] }>('/spaces')
+        .then((res) => {
+          setSpacesList(res.spaces || []);
+        })
+        .catch(() => {});
+    }
+  }, [user]);
+
+  const handleNameChange = (val: string) => {
+    setRequestName(val);
+    setRequestSlug(val.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+  };
+
+  const handleSubmitSpaceRequest = async () => {
+    if (!requestName.trim() || !requestSlug.trim()) return;
+    setIsSubmittingRequest(true);
+    setRequestStatus(null);
+    try {
+      await api.post('/spaces/requests', {
+        name: requestName.trim(),
+        slug: requestSlug.trim(),
+        reason: requestReason.trim(),
+      });
+      setRequestStatus('Space request submitted to Administrators for approval!');
+      setTimeout(() => {
+        setIsRequestSpaceOpen(false);
+        setRequestName('');
+        setRequestSlug('');
+        setRequestReason('');
+        setRequestStatus(null);
+      }, 1500);
+    } catch (err: any) {
+      setRequestStatus(err.message || 'Failed to submit space request.');
+    } finally {
+      setIsSubmittingRequest(false);
+    }
+  };
 
   const navItems: NavItem[] = [
     { name: 'Home', to: '/', icon: Home },
@@ -193,6 +253,54 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </NavLink>
             );
           })}
+
+          {/* Team Spaces Section */}
+          {!isCollapsed && (
+            <div className="pt-4 pb-1">
+              <div className="px-3 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-text-muted">
+                <span>Team Spaces</span>
+                <button
+                  onClick={() => setIsRequestSpaceOpen(true)}
+                  className="p-0.5 rounded hover:bg-canvas hover:text-accent transition-colors"
+                  title="Request New Space"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                </button>
+              </div>
+              <div className="mt-1 space-y-0.5">
+                {spacesList.length === 0 ? (
+                  <div className="px-3 py-1.5 text-[11px] text-text-muted italic">
+                    No active spaces
+                  </div>
+                ) : (
+                  spacesList.slice(0, 8).map((sp) => (
+                    <NavLink
+                      key={sp.id}
+                      to={`/spaces/${sp.slug}`}
+                      onClick={onMobileClose}
+                      className={({ isActive }) =>
+                        `flex items-center justify-between px-3 py-1.5 rounded-lg text-xs transition-colors ${
+                          isActive
+                            ? 'bg-accent-bg text-accent font-semibold'
+                            : 'text-text-secondary hover:text-foreground hover:bg-canvas'
+                        }`
+                      }
+                    >
+                      <div className="flex items-center gap-2.5 truncate">
+                        <Layers className="w-3.5 h-3.5 text-text-muted shrink-0" />
+                        <span className="truncate">{sp.name}</span>
+                      </div>
+                      {sp.userRole && (
+                        <span className="text-[9px] uppercase px-1 py-0.2 rounded bg-surface border border-border text-text-muted">
+                          {sp.userRole[0]}
+                        </span>
+                      )}
+                    </NavLink>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
         </nav>
 
         {/* Footer Session / Theme Toggle */}
@@ -232,6 +340,75 @@ export const Sidebar: React.FC<SidebarProps> = ({
           )}
         </div>
       </aside>
+
+      {/* User Space Request Dialog */}
+      <Dialog open={isRequestSpaceOpen} onOpenChange={setIsRequestSpaceOpen}>
+        <DialogContent className="sm:max-w-md bg-surface text-foreground border border-border">
+          <DialogHeader>
+            <DialogTitle>Request a New Team Space</DialogTitle>
+            <DialogDescription className="text-text-secondary text-xs">
+              Submit a proposal for a dedicated workspace. Platform Administrators will review and provision the space.
+            </DialogDescription>
+          </DialogHeader>
+
+          {requestStatus && (
+            <div className="p-3 rounded-lg bg-accent-bg border border-accent/20 text-accent text-xs">
+              {requestStatus}
+            </div>
+          )}
+
+          <div className="space-y-3 py-2 text-xs">
+            <div>
+              <label className="block font-semibold mb-1">Space Name</label>
+              <input
+                type="text"
+                value={requestName}
+                onChange={(e) => handleNameChange(e.target.value)}
+                placeholder="e.g. Payments Revamp"
+                className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold mb-1">URL Identifier (Slug)</label>
+              <input
+                type="text"
+                value={requestSlug}
+                onChange={(e) => setRequestSlug(e.target.value)}
+                placeholder="e.g. payments-revamp"
+                className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground font-mono text-[11px]"
+              />
+            </div>
+
+            <div>
+              <label className="block font-semibold mb-1">Reason & Purpose</label>
+              <textarea
+                value={requestReason}
+                onChange={(e) => setRequestReason(e.target.value)}
+                rows={3}
+                placeholder="Describe which team or initiative will use this space..."
+                className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground resize-none"
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <button
+              onClick={() => setIsRequestSpaceOpen(false)}
+              className="px-3 py-1.5 rounded-lg border border-border text-xs"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSubmitSpaceRequest}
+              disabled={isSubmittingRequest || !requestName.trim()}
+              className="px-4 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-50"
+            >
+              {isSubmittingRequest ? 'Submitting...' : 'Submit Request'}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 };
