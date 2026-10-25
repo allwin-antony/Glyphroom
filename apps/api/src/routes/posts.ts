@@ -75,8 +75,8 @@ export const postRoutes: FastifyPluginAsync<{
 
     let queryResult;
 
-    if (!user || user.role === 'reader') {
-      // Readers and public see ONLY published posts that are either promoted to company library OR legacy standalone
+    if (!user) {
+      // Unauthenticated public requests see ONLY published posts in company library or standalone
       queryResult = await db
         .select(baseSelection)
         .from(posts)
