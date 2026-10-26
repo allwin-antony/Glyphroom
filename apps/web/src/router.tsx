@@ -15,6 +15,7 @@ import { ReviewQueueView } from './views/ReviewQueueView.js';
 import { AdminView } from './views/AdminView.js';
 import { SpaceView } from './views/SpaceView.js';
 import { SettingsView } from './views/SettingsView.js';
+import { BookmarksView } from './views/BookmarksView.js';
 import { NotFoundView } from './views/NotFoundView.js';
 
 export const router = createBrowserRouter([
@@ -41,6 +42,10 @@ export const router = createBrowserRouter([
       {
         path: 'my-work',
         element: <MyWorkView />,
+      },
+      {
+        path: 'bookmarks',
+        element: <BookmarksView />,
       },
       {
         path: 'posts/new',

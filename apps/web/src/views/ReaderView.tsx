@@ -18,6 +18,7 @@ import {
   Layers,
   ListOrdered,
   ChevronRight,
+  Bookmark,
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -56,6 +57,11 @@ interface TocItem {
   level: number;
 }
 
+interface BookmarkItem {
+  postId: string;
+  note?: string | null;
+}
+
 export const ReaderView: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -65,6 +71,8 @@ export const ReaderView: React.FC = () => {
   const [userPermission, setUserPermission] = useState<string>('view');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isBookmarked, setIsBookmarked] = useState(false);
+  const [isBookmarking, setIsBookmarking] = useState(false);
 
   // Comments state
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -99,6 +107,7 @@ export const ReaderView: React.FC = () => {
     let isCurrent = true;
     setIsLoading(true);
     setError(null);
+    setIsBookmarked(false);
 
     api
       .get<{ post: PostDetails; userPermission: string }>(`/posts/${slug}`)
@@ -106,6 +115,12 @@ export const ReaderView: React.FC = () => {
         if (!isCurrent) return;
         setPost(res.post);
         setUserPermission(res.userPermission);
+
+        api.get<{ bookmarks: BookmarkItem[] }>('/bookmarks')
+          .then((bookmarkRes) => {
+            if (isCurrent) setIsBookmarked(bookmarkRes.bookmarks.some((item) => item.postId === res.post.id));
+          })
+          .catch(() => {});
 
         // Fetch comments for post
         return api
@@ -135,6 +150,24 @@ export const ReaderView: React.FC = () => {
       isCurrent = false;
     };
   }, [slug]);
+
+  const handleToggleBookmark = async () => {
+    if (!post || isBookmarking) return;
+    setIsBookmarking(true);
+    try {
+      if (isBookmarked) {
+        await api.delete(`/bookmarks/${post.id}`);
+        setIsBookmarked(false);
+      } else {
+        await api.post('/bookmarks', { postId: post.id });
+        setIsBookmarked(true);
+      }
+    } catch (err) {
+      console.error('Failed to update bookmark:', err);
+    } finally {
+      setIsBookmarking(false);
+    }
+  };
 
   const rawMarkdown = useMemo(() => {
     if (!post) return '';
@@ -467,6 +500,22 @@ export const ReaderView: React.FC = () => {
                 <span>Outline ({tocItems.length})</span>
               </button>
             )}
+
+            {/* Save for later */}
+            <button
+              onClick={handleToggleBookmark}
+              disabled={isBookmarking}
+              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border text-xs font-medium transition-colors shadow-sm ${
+                isBookmarked
+                  ? 'bg-accent-bg text-accent-main border-accent-main/30'
+                  : 'bg-surface border-border text-text-secondary hover:text-foreground'
+              }`}
+              title={isBookmarked ? 'Remove bookmark' : 'Save this article'}
+              aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark article'}
+            >
+              <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
+              <span>{isBookmarked ? 'Saved' : 'Save'}</span>
+            </button>
 
             {/* Reader Preferences Toggle */}
             <button

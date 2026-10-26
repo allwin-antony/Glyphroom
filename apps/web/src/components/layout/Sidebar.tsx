@@ -17,6 +17,7 @@ import {
   PanelLeftOpen,
   Layers,
   Plus,
+  Bookmark,
 } from 'lucide-react';
 import {
   Dialog,
@@ -103,6 +104,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
     { name: 'Home', to: '/', icon: Home },
     { name: 'Catalog', to: '/catalog', icon: BookOpen },
     { name: 'My Work', to: '/my-work', icon: FolderGit2 },
+    { name: 'Saved Reading', to: '/bookmarks', icon: Bookmark },
     {
       name: 'Reviews',
       to: '/reviews',
