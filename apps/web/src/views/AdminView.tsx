@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Key, Shield, CheckCircle2, AlertCircle, Loader2, Layers, Plus, Check, X, ArrowRight } from 'lucide-react';
+import { Users, Key, Shield, CheckCircle2, AlertCircle, Loader2, Layers, Plus, Check, X, ArrowRight, RefreshCw } from 'lucide-react';
 import { api } from '../lib/api.js';
 
 export const AdminView: React.FC = () => {
@@ -17,6 +17,20 @@ export const AdminView: React.FC = () => {
   const [newSpaceDesc, setNewSpaceDesc] = useState('');
   const [isCreatingSpace, setIsCreatingSpace] = useState(false);
   const [spaceError, setSpaceError] = useState<string | null>(null);
+
+  type AdminUser = { id: string; email: string; fullName: string; role: string; isActive: boolean; ssoProvider?: string | null; createdAt?: string };
+  type AdminPat = { id: string; name: string; scopes: string[]; lastUsedAt?: string | null; expiresAt?: string | null; revokedAt?: string | null; createdAt?: string; userEmail: string; userFullName: string; userIsActive: boolean };
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
+  const [adminPats, setAdminPats] = useState<AdminPat[]>([]);
+  const [userSearch, setUserSearch] = useState('');
+  const [userRole, setUserRole] = useState('all');
+  const [userStatus, setUserStatus] = useState('all');
+  const [patSearch, setPatSearch] = useState('');
+  const [patStatus, setPatStatus] = useState('all');
+  const [adminLoading, setAdminLoading] = useState(false);
+  const [adminError, setAdminError] = useState<string | null>(null);
+  const [adminAction, setAdminAction] = useState<string | null>(null);
+  const [confirmingAction, setConfirmingAction] = useState<string | null>(null);
 
   const fetchAdminData = async () => {
     try {
@@ -35,6 +49,97 @@ export const AdminView: React.FC = () => {
       fetchAdminData();
     }
   }, [activeTab]);
+
+  const fetchUsers = async () => {
+    setAdminLoading(true);
+    setAdminError(null);
+    try {
+      const params = new URLSearchParams({ status: userStatus });
+      if (userSearch.trim()) params.set('q', userSearch.trim());
+      if (userRole !== 'all') params.set('role', userRole);
+      const result = await api.get<{ users: AdminUser[] }>(`/admin/users?${params.toString()}`);
+      setAdminUsers(result.users || []);
+    } catch (err: any) {
+      setAdminError(err?.message || 'Failed to load users.');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  const fetchPats = async () => {
+    setAdminLoading(true);
+    setAdminError(null);
+    try {
+      const params = new URLSearchParams({ status: patStatus });
+      if (patSearch.trim()) params.set('q', patSearch.trim());
+      const result = await api.get<{ tokens: AdminPat[] }>(`/admin/pats?${params.toString()}`);
+      setAdminPats(result.tokens || []);
+    } catch (err: any) {
+      setAdminError(err?.message || 'Failed to load PAT inventory.');
+    } finally {
+      setAdminLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab === 'users') fetchUsers();
+    if (activeTab === 'pats') fetchPats();
+  }, [activeTab]);
+
+  const updateUserRole = async (user: AdminUser, role: string) => {
+    if (role === user.role) return;
+    if (confirmingAction !== `role-${user.id}-${role}`) {
+      setConfirmingAction(`role-${user.id}-${role}`);
+      return;
+    }
+    setAdminAction(`role-${user.id}`);
+    setConfirmingAction(null);
+    try {
+      await api.patch(`/admin/users/${user.id}/role`, { role });
+      await fetchUsers();
+    } catch (err: any) {
+      setAdminError(err?.message || 'Failed to update user role.');
+    } finally {
+      setAdminAction(null);
+    }
+  };
+
+  const updateUserStatus = async (user: AdminUser) => {
+    const nextStatus = !user.isActive;
+    if (confirmingAction !== `status-${user.id}`) {
+      setConfirmingAction(`status-${user.id}`);
+      return;
+    }
+    setAdminAction(`status-${user.id}`);
+    setConfirmingAction(null);
+    try {
+      await api.patch(`/admin/users/${user.id}/status`, { isActive: nextStatus });
+      await fetchUsers();
+    } catch (err: any) {
+      setAdminError(err?.message || 'Failed to update account status.');
+    } finally {
+      setAdminAction(null);
+    }
+  };
+
+  const revokeAdminPat = async (pat: AdminPat) => {
+    if (confirmingAction !== `pat-${pat.id}`) {
+      setConfirmingAction(`pat-${pat.id}`);
+      return;
+    }
+    setAdminAction(`pat-${pat.id}`);
+    setConfirmingAction(null);
+    try {
+      await api.delete(`/admin/pats/${pat.id}`);
+      await fetchPats();
+    } catch (err: any) {
+      setAdminError(err?.message || 'Failed to revoke PAT.');
+    } finally {
+      setAdminAction(null);
+    }
+  };
+
+  const formatDate = (value?: string | null) => value ? new Date(value).toLocaleString() : 'Never';
 
   const handleCreateSpace = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -268,11 +373,26 @@ export const AdminView: React.FC = () => {
       {/* User Directory Tab Content */}
       {activeTab === 'users' && (
         <div className="space-y-4">
-          <div className="p-5 rounded-xl bg-surface border border-border shadow-sm">
-            <h2 className="text-sm font-bold text-foreground">User Management Directory</h2>
-            <p className="text-xs text-text-secondary mt-0.5">
-              Manage enterprise member accounts, role assignments (admin, moderator, author, reader), and access status.
-            </p>
+          <div className="p-5 rounded-xl bg-surface border border-border shadow-sm space-y-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h2 className="text-sm font-bold text-foreground">User Management Directory</h2>
+                <p className="text-xs text-text-secondary mt-0.5">Manage enterprise member accounts, roles, and access status.</p>
+              </div>
+              <button onClick={fetchUsers} disabled={adminLoading} className="p-2 rounded-lg border border-border text-text-secondary hover:text-foreground disabled:opacity-50" aria-label="Refresh users"><RefreshCw className={`w-4 h-4 ${adminLoading ? 'animate-spin' : ''}`} /></button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <input aria-label="Search users" value={userSearch} onChange={(e) => setUserSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && fetchUsers()} placeholder="Search name or email" className="p-2 rounded-lg bg-canvas border border-border text-foreground text-xs flex-1 min-w-48" />
+              <select aria-label="Filter users by role" value={userRole} onChange={(e) => setUserRole(e.target.value)} className="p-2 rounded-lg bg-canvas border border-border text-foreground text-xs"><option value="all">All roles</option><option value="admin">Admin</option><option value="moderator">Moderator</option><option value="author">Author</option><option value="reader">Reader</option></select>
+              <select aria-label="Filter users by status" value={userStatus} onChange={(e) => setUserStatus(e.target.value)} className="p-2 rounded-lg bg-canvas border border-border text-foreground text-xs"><option value="all">All statuses</option><option value="active">Active</option><option value="inactive">Inactive</option></select>
+              <button onClick={fetchUsers} className="px-3 py-2 rounded-lg bg-accent text-white text-xs font-semibold">Apply filters</button>
+            </div>
+            {adminError && <div role="alert" className="p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs">{adminError}</div>}
+            {adminLoading ? <div className="py-8 text-center text-xs text-text-secondary"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading users...</div> : adminUsers.length === 0 ? <p className="py-8 text-center text-xs text-text-muted italic">No users match these filters.</p> : (
+              <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-text-muted border-b border-border"><th className="p-2">User</th><th className="p-2">Role</th><th className="p-2">Status</th><th className="p-2">Provider</th><th className="p-2 text-right">Actions</th></tr></thead><tbody className="divide-y divide-border">
+                {adminUsers.map((user) => <tr key={user.id}><td className="p-2"><div className="font-semibold text-foreground">{user.fullName}</div><div className="text-text-secondary">{user.email}</div></td><td className="p-2"><select aria-label={`Role for ${user.email}`} value={user.role} disabled={adminAction === `role-${user.id}`} onChange={(e) => updateUserRole(user, e.target.value)} className="p-1.5 rounded bg-canvas border border-border text-foreground"><option value="admin">Admin</option><option value="moderator">Moderator</option><option value="author">Author</option><option value="reader">Reader</option></select>{confirmingAction?.startsWith(`role-${user.id}-`) && <div className="text-[10px] text-status-warning mt-1">Select again to confirm</div>}</td><td className="p-2"><span className={`px-2 py-1 rounded text-[10px] font-bold ${user.isActive ? 'bg-status-success/10 text-status-success' : 'bg-status-danger/10 text-status-danger'}`}>{user.isActive ? 'Active' : 'Inactive'}</span></td><td className="p-2 text-text-secondary">{user.ssoProvider || 'Local'}</td><td className="p-2 text-right"><button disabled={adminAction === `status-${user.id}`} onClick={() => updateUserStatus(user)} className="px-2 py-1 rounded border border-border text-text-secondary hover:text-foreground disabled:opacity-50">{confirmingAction === `status-${user.id}` ? 'Confirm?' : user.isActive ? 'Deactivate' : 'Activate'}</button></td></tr>)}
+              </tbody></table></div>
+            )}
           </div>
         </div>
       )}
@@ -280,11 +400,13 @@ export const AdminView: React.FC = () => {
       {/* PAT Token Inventory Tab Content */}
       {activeTab === 'pats' && (
         <div className="space-y-4">
-          <div className="p-5 rounded-xl bg-surface border border-border shadow-sm">
-            <h2 className="text-sm font-bold text-foreground">Personal Access Tokens (PAT) Inventory</h2>
-            <p className="text-xs text-text-secondary mt-0.5">
-              Active enterprise-wide personal access tokens, authorized scopes, and credential revocation controls.
-            </p>
+          <div className="p-5 rounded-xl bg-surface border border-border shadow-sm space-y-4">
+            <div className="flex items-start justify-between gap-3"><div><h2 className="text-sm font-bold text-foreground">Personal Access Tokens (PAT) Inventory</h2><p className="text-xs text-text-secondary mt-0.5">Enterprise-wide token ownership, scopes, usage, and revocation controls.</p></div><button onClick={fetchPats} disabled={adminLoading} className="p-2 rounded-lg border border-border text-text-secondary hover:text-foreground disabled:opacity-50" aria-label="Refresh PAT inventory"><RefreshCw className={`w-4 h-4 ${adminLoading ? 'animate-spin' : ''}`} /></button></div>
+            <div className="flex flex-wrap gap-2"><input aria-label="Search PATs" value={patSearch} onChange={(e) => setPatSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && fetchPats()} placeholder="Search token or owner" className="p-2 rounded-lg bg-canvas border border-border text-foreground text-xs flex-1 min-w-48" /><select aria-label="Filter PATs by status" value={patStatus} onChange={(e) => setPatStatus(e.target.value)} className="p-2 rounded-lg bg-canvas border border-border text-foreground text-xs"><option value="all">All tokens</option><option value="active">Active</option><option value="expired">Expired</option><option value="revoked">Revoked</option></select><button onClick={fetchPats} className="px-3 py-2 rounded-lg bg-accent text-white text-xs font-semibold">Apply filters</button></div>
+            {adminError && <div role="alert" className="p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs">{adminError}</div>}
+            {adminLoading ? <div className="py-8 text-center text-xs text-text-secondary"><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Loading PAT inventory...</div> : adminPats.length === 0 ? <p className="py-8 text-center text-xs text-text-muted italic">No tokens match these filters.</p> : (
+              <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="text-left text-text-muted border-b border-border"><th className="p-2">Token / Owner</th><th className="p-2">Scopes</th><th className="p-2">Last used</th><th className="p-2">Expires</th><th className="p-2 text-right">Action</th></tr></thead><tbody className="divide-y divide-border">{adminPats.map((pat) => <tr key={pat.id} className={pat.revokedAt ? 'opacity-60' : ''}><td className="p-2"><div className="font-semibold text-foreground">{pat.name}</div><div className="text-text-secondary">{pat.userFullName} · {pat.userEmail}</div></td><td className="p-2"><div className="flex flex-wrap gap-1">{pat.scopes.map((scope) => <span key={scope} className="px-1.5 py-0.5 rounded bg-canvas border border-border font-mono text-[10px]">{scope}</span>)}</div></td><td className="p-2 text-text-secondary">{formatDate(pat.lastUsedAt)}</td><td className="p-2 text-text-secondary">{pat.expiresAt ? formatDate(pat.expiresAt) : 'Never'}</td><td className="p-2 text-right">{pat.revokedAt ? <span className="text-status-danger font-semibold">Revoked</span> : <button disabled={adminAction === `pat-${pat.id}`} onClick={() => revokeAdminPat(pat)} className="px-2 py-1 rounded border border-status-danger/40 text-status-danger hover:bg-status-danger/10 disabled:opacity-50">{confirmingAction === `pat-${pat.id}` ? 'Confirm revoke?' : 'Revoke'}</button>}</td></tr>)}</tbody></table></div>
+            )}
           </div>
         </div>
       )}
