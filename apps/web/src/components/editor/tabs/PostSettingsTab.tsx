@@ -41,6 +41,7 @@ export interface PostSettingsTabProps {
     spaceId?: string | null;
     visibility?: 'space' | 'invited_only';
     isPromoted?: boolean;
+    tags?: string[];
     status: string;
   };
   onMetadataUpdate?: (metadata: any) => void;
@@ -70,7 +71,7 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
   const [spacesOptions, setSpacesOptions] = useState<Array<{ id: string; name: string }>>([]);
   const [promotionLoading, setPromotionLoading] = useState(false);
   const [promotionError, setPromotionError] = useState<string | null>(null);
-  const [tags, setTags] = useState<string[]>(['engineering', 'collaborative']);
+  const [tags, setTags] = useState<string[]>(postMetadata?.tags || []);
   const [tagInput, setTagInput] = useState('');
 
   // Delete document state
@@ -169,6 +170,7 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
       setSpaceId(postMetadata.spaceId || '');
       setVisibility(postMetadata.visibility || 'space');
       setIsPromoted(Boolean(postMetadata.isPromoted));
+      setTags(postMetadata.tags || []);
     }
   }, [postMetadata]);
 
@@ -190,13 +192,13 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
     e.preventDefault();
     const clean = tagInput.trim().toLowerCase().replace(/[^a-z0-9-]/g, '');
     if (clean && !tags.includes(clean)) {
-      setTags([...tags, clean]);
+      setTags((currentTags) => [...currentTags, clean]);
       setTagInput('');
     }
   };
 
   const handleRemoveTag = (tagToRemove: string) => {
-    setTags(tags.filter((t) => t !== tagToRemove));
+    setTags((currentTags) => currentTags.filter((t) => t !== tagToRemove));
   };
 
   // Check if form is dirty
@@ -206,7 +208,8 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
     excerpt !== (postMetadata?.excerpt || '') ||
     coeId !== (postMetadata?.coeId || '') ||
     spaceId !== (postMetadata?.spaceId || '') ||
-    visibility !== (postMetadata?.visibility || 'space');
+    visibility !== (postMetadata?.visibility || 'space') ||
+    JSON.stringify(tags) !== JSON.stringify(postMetadata?.tags || []);
 
   const handlePromoteToCompany = async () => {
     setPromotionLoading(true);
@@ -258,6 +261,7 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
         coeId: coeId || null,
         spaceId: spaceId || null,
         visibility,
+        tags,
       };
 
       const res = await api.patch<{ post: any }>(`/posts/${postId}`, payload);
@@ -493,6 +497,7 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={handleAddTag}
+                maxLength={50}
                 placeholder="Add tag and press Enter..."
                 className="flex-1 px-3 py-1 rounded-lg bg-canvas border border-border focus:outline-none focus:border-accent text-foreground text-xs"
               />

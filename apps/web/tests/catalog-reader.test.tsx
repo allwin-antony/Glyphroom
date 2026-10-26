@@ -175,6 +175,37 @@ describe('Phase C & E: Knowledge Catalog & Reader View Suite', () => {
         expect(screen.getByText(/No matching publications found/i)).toBeDefined();
       });
     });
+
+    it('loads the next server page without replacing the current catalog', async () => {
+      (api.get as any).mockResolvedValueOnce({
+        posts: [mockPosts[0]],
+        pagination: { page: 1, limit: 1, total: 2, totalPages: 2, hasNextPage: true },
+      });
+
+      render(
+        <AuthContext.Provider value={createMockAuth()}>
+          <MemoryRouter>
+            <CatalogView />
+          </MemoryRouter>
+        </AuthContext.Provider>
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Distributed Systems Patterns in 2026')).toBeDefined();
+        expect(screen.getByRole('button', { name: /Load more/i })).toBeDefined();
+      });
+
+      (api.get as any).mockResolvedValueOnce({
+        posts: [mockPosts[1]],
+        pagination: { page: 2, limit: 1, total: 2, totalPages: 2, hasNextPage: false },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /Load more/i }));
+
+      await waitFor(() => {
+        expect(screen.getByText('Automated CRDT Convergence & Myers Diff')).toBeDefined();
+        expect(api.get).toHaveBeenLastCalledWith('/posts?page=2');
+      });
+    });
   });
 
   describe('ReaderView Component', () => {

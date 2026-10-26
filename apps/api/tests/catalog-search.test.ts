@@ -107,6 +107,32 @@ describe('Phase 4: Catalog, Search, Publication Snapshots & Detached View Counte
     expect(publicPosts.find((p: any) => p.id === draftPostId)).toBeUndefined();
   });
 
+  it('returns typed pagination metadata and applies filters before limiting results', async () => {
+    const firstPage = await app.inject({
+      method: 'GET',
+      url: '/api/v1/posts?limit=1&page=1&status=published&sort=oldest',
+    });
+
+    expect(firstPage.statusCode).toBe(200);
+    expect(firstPage.json()).toMatchObject({
+      posts: [{ id: publishedPostId, status: 'published' }],
+      pagination: {
+        page: 1,
+        limit: 1,
+        total: 1,
+        totalPages: 1,
+        hasNextPage: false,
+      },
+    });
+
+    const invalidQuery = await app.inject({
+      method: 'GET',
+      url: '/api/v1/posts?limit=0',
+    });
+    expect(invalidQuery.statusCode).toBe(400);
+    expect(invalidQuery.json().error).toBe('Bad Request');
+  });
+
   it('detached view counter accumulates in-memory and flushes to database without locking posts', async () => {
     // Read post multiple times
     await app.inject({ method: 'GET', url: `/api/v1/posts/${publishedPostId}` });
@@ -131,7 +157,7 @@ describe('Phase 4: Catalog, Search, Publication Snapshots & Detached View Counte
     expect(Number(viewRow.totalViews)).toBe(3);
   });
 
-  it('publication creates discrete version snapshot in post_versions with published_markdown', async () => {
+  it('rejects publication before an approved review checkpoint exists', async () => {
     // Moderator logs in via SSO
     const modLogin = await app.inject({
       method: 'POST',
@@ -156,12 +182,8 @@ describe('Phase 4: Catalog, Search, Publication Snapshots & Detached View Counte
       },
     });
 
-    expect(pubRes.statusCode).toBe(200);
-    const body = pubRes.json();
-    expect(body.post.status).toBe('published');
-    expect(body.version).toBeDefined();
-    expect(body.version.versionNumber).toBe(1);
-    expect(body.version.triggerReason).toBe('publication');
+    expect(pubRes.statusCode).toBe(409);
+    expect(pubRes.json().message).toContain('published after approval');
 
     // Verify row in post_versions
     const [savedVersion] = await db
@@ -169,8 +191,6 @@ describe('Phase 4: Catalog, Search, Publication Snapshots & Detached View Counte
       .from(postVersions)
       .where(eq(postVersions.postId, draftPostId));
 
-    expect(savedVersion).toBeDefined();
-    expect(savedVersion.versionNumber).toBe(1);
-    expect(savedVersion.triggerReason).toBe('publication');
+    expect(savedVersion).toBeUndefined();
   });
 });

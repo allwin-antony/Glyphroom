@@ -37,12 +37,27 @@ export interface CatalogPost {
   updatedAt: string;
 }
 
+interface CatalogPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
+interface CatalogResponse {
+  posts: CatalogPost[];
+  pagination?: CatalogPagination;
+}
+
 export const CatalogView: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
   const [posts, setPosts] = useState<CatalogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [pagination, setPagination] = useState<CatalogPagination | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Filters & Controls
@@ -59,17 +74,29 @@ export const CatalogView: React.FC = () => {
     localStorage.setItem('glyphroom_catalog_view', mode);
   };
 
-  // Fetch posts from API
+  const buildCatalogUrl = (page: number) => {
+    const params = new URLSearchParams();
+    if (searchTerm.trim()) params.set('search', searchTerm.trim());
+    if (selectedCoe !== 'all') params.set('coe', selectedCoe);
+    if (selectedStatus !== 'all') params.set('status', selectedStatus);
+    if (sortBy !== 'newest') params.set('sort', sortBy);
+    if (page > 1) params.set('page', String(page));
+    return params.toString() ? `/posts?${params.toString()}` : '/posts';
+  };
+
+  // Fetch one server-filtered page from the API. The debounce keeps live search responsive.
   useEffect(() => {
     let isCurrent = true;
     const fetchTimer = setTimeout(async () => {
       setIsLoading(true);
       setError(null);
+      setPagination(null);
       try {
-        const queryParams = searchTerm.trim() ? `?search=${encodeURIComponent(searchTerm.trim())}` : '';
-        const res = await api.get<{ posts: CatalogPost[] }>(`/posts${queryParams}`);
+        const res = await api.get<CatalogResponse>(buildCatalogUrl(1));
         if (isCurrent) {
           setPosts(res.posts || []);
+          // Older API-shaped mocks remain usable while the server always returns this metadata.
+          setPagination(res.pagination || null);
         }
       } catch (err: any) {
         if (isCurrent) {
@@ -87,7 +114,27 @@ export const CatalogView: React.FC = () => {
       isCurrent = false;
       clearTimeout(fetchTimer);
     };
-  }, [searchTerm]);
+  }, [searchTerm, selectedCoe, selectedStatus, sortBy]);
+
+  const loadMore = async () => {
+    if (!pagination?.hasNextPage || isLoadingMore) return;
+    setIsLoadingMore(true);
+    setError(null);
+    try {
+      const res = await api.get<CatalogResponse>(buildCatalogUrl(pagination.page + 1));
+      setPosts((current) => [...current, ...(res.posts || [])]);
+      setPagination(res.pagination || {
+        ...pagination,
+        page: pagination.page + 1,
+        hasNextPage: false,
+      });
+    } catch (err: any) {
+      console.error('Failed to load more catalog posts:', err);
+      setError(err.message || 'Unable to retrieve more catalog posts.');
+    } finally {
+      setIsLoadingMore(false);
+    }
+  };
 
   // Extract distinct COEs for filter dropdown
   const coeOptions = useMemo(() => {
@@ -98,35 +145,6 @@ export const CatalogView: React.FC = () => {
     });
     return Array.from(set).sort();
   }, [posts]);
-
-  // Filtered and sorted post list
-  const filteredPosts = useMemo(() => {
-    return posts
-      .filter((post) => {
-        // COE filter
-        if (selectedCoe !== 'all') {
-          const postCoe = (post.coeName || '').toLowerCase();
-          if (postCoe !== selectedCoe.toLowerCase()) {
-            return false;
-          }
-        }
-        // Status filter
-        if (selectedStatus !== 'all') {
-          if (post.status !== selectedStatus) {
-            return false;
-          }
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        if (sortBy === 'title') {
-          return a.title.localeCompare(b.title);
-        }
-        const timeA = new Date(a.publishedAt || a.createdAt).getTime();
-        const timeB = new Date(b.publishedAt || b.createdAt).getTime();
-        return sortBy === 'newest' ? timeB - timeA : timeA - timeB;
-      });
-  }, [posts, selectedCoe, selectedStatus, sortBy]);
 
   const canEditPost = (post: CatalogPost) => {
     if (!user) return false;
@@ -324,7 +342,7 @@ export const CatalogView: React.FC = () => {
       )}
 
       {/* Empty State */}
-      {!isLoading && filteredPosts.length === 0 && (
+      {!isLoading && posts.length === 0 && (
         <div className="text-center py-16 px-4 rounded-2xl bg-surface border border-border border-dashed space-y-4">
           <div className="w-12 h-12 mx-auto rounded-full bg-accent-bg flex items-center justify-center text-accent-main">
             <BookOpen className="w-6 h-6" />
@@ -362,9 +380,9 @@ export const CatalogView: React.FC = () => {
       )}
 
       {/* Catalog Posts Grid / List */}
-      {!isLoading && filteredPosts.length > 0 && (
+      {!isLoading && posts.length > 0 && (
         <div className={viewMode === 'grid' ? 'grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5' : 'space-y-3'}>
-          {filteredPosts.map((post) => {
+          {posts.map((post) => {
             const readTime = getEstimatedReadTime(post);
             const dateDisplay = formatDate(post.publishedAt || post.createdAt);
             const isAuthorOrAdmin = canEditPost(post);
@@ -497,6 +515,19 @@ export const CatalogView: React.FC = () => {
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!isLoading && pagination?.hasNextPage && (
+        <div className="flex justify-center pt-2">
+          <button
+            type="button"
+            onClick={loadMore}
+            disabled={isLoadingMore}
+            className="px-4 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-elevated disabled:opacity-60 transition-colors"
+          >
+            {isLoadingMore ? 'Loading…' : `Load more${pagination.total ? ` (${posts.length} of ${pagination.total})` : ''}`}
+          </button>
         </div>
       )}
     </div>
