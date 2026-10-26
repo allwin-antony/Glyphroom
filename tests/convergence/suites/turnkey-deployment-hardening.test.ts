@@ -260,7 +260,20 @@ describe('Milestone M5: Turnkey Production Deployment Hardening Suite', () => {
 
     it('FAILS GRACEFULLY: reports error when Docker is missing', () => {
       try {
-        execSync('bash ./scripts/deploy.sh --status', { cwd: ROOT_DIR, encoding: 'utf8', stdio: 'pipe' });
+        const cleanPath = (process.env.PATH || '')
+          .split(path.delimiter)
+          .filter(
+            (p) =>
+              !fs.existsSync(path.join(p, 'docker')) &&
+              !fs.existsSync(path.join(p, 'docker.exe'))
+          )
+          .join(path.delimiter);
+        execSync('bash ./scripts/deploy.sh --status', {
+          cwd: ROOT_DIR,
+          encoding: 'utf8',
+          stdio: 'pipe',
+          env: { ...process.env, PATH: cleanPath },
+        });
         expect.unreachable('Should have failed when docker is missing');
       } catch (err: any) {
         expect([1, 127]).toContain(err.status);

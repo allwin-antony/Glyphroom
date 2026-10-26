@@ -16,6 +16,7 @@ A self-hosted collaborative blogging and knowledge platform for private corporat
 | [DATA_MODEL.md](DATA_MODEL.md) | Engineering / DBA | Full PostgreSQL schema, indexes, search visibility rules, versioning |
 | [TECH_STACK.md](TECH_STACK.md) | Engineering / DevOps | All technology choices with justifications and locked version targets |
 | [ROADMAP.md](ROADMAP.md) | Engineering / PM | Phased delivery plan, estimates, Phase 0 spike go/no-go criteria, risks |
+| [FEATURE_IMPROVEMENT_PLAN.md](FEATURE_IMPROVEMENT_PLAN.md) | Product / Engineering | Core feature gaps, improvement workstreams, priorities, and acceptance criteria |
 
 ---
 

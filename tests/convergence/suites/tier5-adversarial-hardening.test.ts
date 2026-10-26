@@ -1013,8 +1013,8 @@ describe('Tier 5: Adversarial Coverage Hardening Suite (challenger_m5_1)', () =>
       await new Promise((r) => setTimeout(r, 600));
 
       // Assert that both Alice and Bob received all 15 appended sections and reach 100% convergence
-      const aliceText = aliceDoc.getXmlFragment('default').toString();
-      const bobText = bobDoc.getXmlFragment('default').toString();
+      const aliceText = getDocumentFragment(aliceDoc).toString();
+      const bobText = getDocumentFragment(bobDoc).toString();
 
       expect(aliceText.length).toBeGreaterThan(500);
       expect(bobText.length).toBeGreaterThan(500);
