@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { ThemeToggle } from '../ui/ThemeToggle.js';
+import { NotificationBell } from './NotificationBell.js';
 import {
   Search,
   Plus,
@@ -77,6 +78,7 @@ export const TopBar: React.FC<TopBarProps> = ({
       <div className="flex items-center gap-2 sm:gap-3">
         {/* Theme Mode Switcher */}
         <ThemeToggle />
+        <NotificationBell />
 
         <button
           onClick={() => navigate('/posts/new')}

@@ -5,6 +5,7 @@ import type { Database } from '../db/index.js';
 import { posts, postCollaborators, users } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
+import type { NotificationService } from '../services/notifications.js';
 
 const AddCollaboratorSchema = z.object({
   userId: z.string().uuid().optional(),
@@ -18,8 +19,9 @@ export const collaboratorRoutes: FastifyPluginAsync<{
   db: Database;
   permissionService: PermissionService;
   auditService: AuditService;
+  notificationService: NotificationService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService } = options;
+  const { db, permissionService, auditService, notificationService } = options;
 
   // 0. Search / List available active users to invite as collaborators
   fastify.get('/collaborators/users', { preHandler: (fastify as any).requireAuth }, async (_request, reply) => {
@@ -140,6 +142,16 @@ export const collaboratorRoutes: FastifyPluginAsync<{
       ipAddress: request.ip,
     });
 
+    await notificationService.create({
+      userId: targetUserId,
+      type: 'collaborator_changed',
+      title: 'You were added as a collaborator',
+      body: `You can now access ${post.title} with ${permission} permission.`,
+      entityType: 'post',
+      entityId: id,
+      href: `/posts/${id}`,
+    });
+
     return reply.status(200).send({ success: true, targetUserId, permission });
   });
 
@@ -171,6 +183,16 @@ export const collaboratorRoutes: FastifyPluginAsync<{
       entityId: id,
       metadata: { targetUserId },
       ipAddress: request.ip,
+    });
+
+    await notificationService.create({
+      userId: targetUserId,
+      type: 'collaborator_changed',
+      title: 'Collaborator access removed',
+      body: `Your access to ${post.title} was removed.`,
+      entityType: 'post',
+      entityId: id,
+      href: `/posts/${id}`,
     });
 
     return reply.send({ success: true, message: 'Collaborator removed' });
