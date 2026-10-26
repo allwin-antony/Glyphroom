@@ -1,20 +1,65 @@
 import type { FastifyPluginAsync } from 'fastify';
 import fs from 'fs';
 import { z } from 'zod';
-import { eq, and, desc, or, ne } from 'drizzle-orm';
+import { eq, and, desc, asc, or, ne, inArray, ilike, isNull, sql } from 'drizzle-orm';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown, TagSchema } from '@enterprise-blogger/shared';
 import type { Database } from '../db/index.js';
-import { posts, postViewCounts, postVersions, users, centersOfExcellence, postAttachments, spaces, spaceMembers, postCollaborators } from '../db/schema.js';
+import { posts, postViewCounts, postVersions, postReviews, users, centersOfExcellence, postAttachments, spaces, spaceMembers, postCollaborators, tags, postTags } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 import type { BufferedViewCounter } from '../services/view-counter.js';
+import type { NotificationService } from '../services/notifications.js';
+
+const PostTagsSchema = z.array(TagSchema).max(20, 'Cannot exceed 20 tags').optional();
+
+function normalizeTagNames(tagNames: string[]): string[] {
+  return [...new Set(tagNames.map((name) => name.trim().toLowerCase()).filter(Boolean))];
+}
+
+async function loadTagsForPosts(db: Database, postIds: string[]): Promise<Map<string, string[]>> {
+  const result = new Map<string, string[]>();
+  if (postIds.length === 0) return result;
+
+  const rows = await db
+    .select({ postId: postTags.postId, name: tags.name })
+    .from(postTags)
+    .innerJoin(tags, eq(postTags.tagId, tags.id))
+    .where(inArray(postTags.postId, postIds));
+
+  for (const row of rows) {
+    const postTagNames = result.get(row.postId) || [];
+    postTagNames.push(row.name);
+    result.set(row.postId, postTagNames);
+  }
+  return result;
+}
+
+async function replacePostTags(db: Database, postId: string, tagNames: string[]): Promise<string[]> {
+  const normalizedNames = normalizeTagNames(tagNames);
+  await db.delete(postTags).where(eq(postTags.postId, postId));
+
+  for (const name of normalizedNames) {
+    await db
+      .insert(tags)
+      .values({ name, slug: name })
+      .onConflictDoNothing({ target: tags.slug });
+
+    const [tag] = await db.select({ id: tags.id }).from(tags).where(eq(tags.slug, name)).limit(1);
+    if (tag) {
+      await db.insert(postTags).values({ postId, tagId: tag.id }).onConflictDoNothing();
+    }
+  }
+
+  return normalizedNames;
+}
 
 const CreatePostSchema = z.object({
   title: z.string().min(1).max(500),
   slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/),
   excerpt: z.string().optional(),
+  tags: PostTagsSchema,
   coeId: z.string().uuid().optional(),
   spaceId: z.string().uuid().optional(),
   visibility: z.enum(['space', 'invited_only']).optional(),
@@ -35,20 +80,56 @@ const UpdatePostSchema = z.object({
   coeId: z.string().uuid().nullable().optional(),
   spaceId: z.string().uuid().nullable().optional(),
   visibility: z.enum(['space', 'invited_only']).optional(),
+  tags: PostTagsSchema,
 });
+
+/** Query contract for the catalog endpoint. Defaults keep existing clients compatible. */
+export const CatalogQuerySchema = z.object({
+  search: z.string().trim().max(200).optional(),
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(24),
+  coe: z.string().trim().min(1).max(255).optional(),
+  coeId: z.string().uuid().optional(),
+  status: z.enum(['draft', 'in_review', 'approved', 'published', 'archived']).optional(),
+  sort: z.enum(['newest', 'oldest', 'title']).default('newest'),
+});
+
+export type CatalogQuery = z.infer<typeof CatalogQuerySchema>;
+
+export interface CatalogPagination {
+  page: number;
+  limit: number;
+  total: number;
+  totalPages: number;
+  hasNextPage: boolean;
+}
+
+function escapeSearchTerm(value: string): string {
+  // Keep search a substring match while preventing user supplied LIKE wildcards.
+  return value.replace(/[\\%_]/g, (character) => `\\${character}`);
+}
 
 export const postRoutes: FastifyPluginAsync<{
   db: Database;
   permissionService: PermissionService;
   auditService: AuditService;
   viewCounter?: BufferedViewCounter;
+  notificationService: NotificationService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService, viewCounter } = options;
+  const { db, permissionService, auditService, viewCounter, notificationService } = options;
 
   // 1. List & Search Posts with strict visibility rules
   fastify.get('/', async (request, reply) => {
     const user = request.user;
-    const { search } = request.query as { search?: string };
+    const parsedQuery = CatalogQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      return reply.status(400).send({
+        error: 'Bad Request',
+        message: 'Invalid catalog query parameters',
+        details: parsedQuery.error.flatten().fieldErrors,
+      });
+    }
+    const query = parsedQuery.data;
 
     const baseSelection = {
       id: posts.id,
@@ -73,32 +154,18 @@ export const postRoutes: FastifyPluginAsync<{
       updatedAt: posts.updatedAt,
     };
 
-    let queryResult;
+    let visibilityCondition;
+    let collabMap = new Map<string, 'edit' | 'review' | 'view'>();
 
     if (!user) {
-      // Unauthenticated public requests see ONLY published posts in company library or standalone
-      queryResult = await db
-        .select(baseSelection)
-        .from(posts)
-        .leftJoin(users, eq(posts.authorId, users.id))
-        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
-        .leftJoin(spaces, eq(posts.spaceId, spaces.id))
-        .where(
-          and(
-            eq(posts.status, 'published'),
-            or(eq(posts.isPromoted, true), eq(posts.spaceId, null as any))
-          )
-        )
-        .orderBy(desc(posts.publishedAt), desc(posts.createdAt));
+      // Unauthenticated public requests see ONLY published posts in company library or standalone.
+      visibilityCondition = and(
+        eq(posts.status, 'published'),
+        or(eq(posts.isPromoted, true), isNull(posts.spaceId))
+      );
     } else if (user.role === 'admin') {
-      // Global Admins see all posts across all spaces
-      queryResult = await db
-        .select(baseSelection)
-        .from(posts)
-        .leftJoin(users, eq(posts.authorId, users.id))
-        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
-        .leftJoin(spaces, eq(posts.spaceId, spaces.id))
-        .orderBy(desc(posts.createdAt));
+      // Global Admins see all posts across all spaces.
+      visibilityCondition = undefined;
     } else {
       // Fetch spaces user is a member of
       const userSpaces = await db
@@ -120,58 +187,93 @@ export const postRoutes: FastifyPluginAsync<{
         .from(postCollaborators)
         .where(eq(postCollaborators.userId, user.userId));
 
-      const collabMap = new Map(directCollabs.map((c) => [c.postId, c.permission]));
+      collabMap = new Map(directCollabs.map((c) => [c.postId, c.permission]));
 
-      const allRows = await db
-        .select(baseSelection)
-        .from(posts)
-        .leftJoin(users, eq(posts.authorId, users.id))
-        .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
-        .leftJoin(spaces, eq(posts.spaceId, spaces.id))
-        .orderBy(desc(posts.createdAt));
-
-      // Filter rows based on access rules:
-      // 1. Author's own posts
-      // 2. Direct page guest / collaborator invitation
-      // 3. Promoted and published (Company Library)
-      // 4. User is member of post's space:
-      //    - If post is 'space' visibility -> can see
-      //    - If post is 'invited_only' -> only maintainers/owners of that space can see without guest invite
-      // 5. Standalone published posts without a space
-      queryResult = allRows
-        .filter((p) => {
-          if (p.authorId === user.userId) return true;
-          if (collabMap.has(p.id)) return true;
-          if (p.isPromoted && p.status === 'published') return true;
-          if (!p.spaceId && p.status === 'published') return true;
-          if (p.spaceId && joinedSpaceIds.includes(p.spaceId)) {
-            if (p.visibility === 'space') return true;
-            if (maintainerSpaceIds.includes(p.spaceId)) return true;
-          }
-          return false;
-        })
-        .map((p) => ({
-          ...p,
-          isCollaborator: collabMap.has(p.id),
-          collaboratorPermission: collabMap.get(p.id) || null,
-        }));
+      // Apply the same access rules in SQL so pagination never fetches an entire catalog:
+      // author, direct guest, promoted publication, standalone publication, or an allowed space.
+      const accessConditions = [
+        eq(posts.authorId, user.userId),
+        ...(directCollabs.length ? [inArray(posts.id, directCollabs.map((c) => c.postId))] : []),
+        and(eq(posts.isPromoted, true), eq(posts.status, 'published')),
+        and(isNull(posts.spaceId), eq(posts.status, 'published')),
+      ];
+      if (joinedSpaceIds.length) {
+        accessConditions.push(
+          and(
+            inArray(posts.spaceId, joinedSpaceIds),
+            or(
+              eq(posts.visibility, 'space'),
+              ...(maintainerSpaceIds.length ? [inArray(posts.spaceId, maintainerSpaceIds)] : [])
+            )
+          )
+        );
+      }
+      visibilityCondition = or(...accessConditions);
     }
 
-    // Apply search filter if query string provided
-    if (search && search.trim().length > 0) {
-      const q = search.trim().toLowerCase();
-      queryResult = queryResult.filter(
-        (p) =>
-          p.title.toLowerCase().includes(q) ||
-          (p.excerpt && p.excerpt.toLowerCase().includes(q)) ||
-          (p.workingMarkdown && p.workingMarkdown.toLowerCase().includes(q)) ||
-          (p.publishedMarkdown && p.publishedMarkdown.toLowerCase().includes(q)) ||
-          (p.authorName && p.authorName.toLowerCase().includes(q)) ||
-          (p.coeName && p.coeName.toLowerCase().includes(q))
-      );
+    const filters = [];
+    if (visibilityCondition) filters.push(visibilityCondition);
+    if (query.status) filters.push(eq(posts.status, query.status));
+    if (query.coeId) filters.push(eq(posts.coeId, query.coeId));
+    if (query.coe) filters.push(eq(centersOfExcellence.name, query.coe));
+    if (query.search) {
+      const pattern = `%${escapeSearchTerm(query.search)}%`;
+      filters.push(or(
+        ilike(posts.title, pattern),
+        ilike(posts.excerpt, pattern),
+        ilike(posts.workingMarkdown, pattern),
+        ilike(posts.publishedMarkdown, pattern),
+        ilike(users.fullName, pattern),
+        ilike(centersOfExcellence.name, pattern)
+      ));
     }
 
-    return reply.send({ posts: queryResult });
+    const where = filters.length ? and(...filters) : undefined;
+    const fromQuery = db
+      .select(baseSelection)
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
+      .leftJoin(spaces, eq(posts.spaceId, spaces.id));
+
+    const countQuery = db
+      .select({ count: sql<number>`count(*)` })
+      .from(posts)
+      .leftJoin(users, eq(posts.authorId, users.id))
+      .leftJoin(centersOfExcellence, eq(posts.coeId, centersOfExcellence.id))
+      .leftJoin(spaces, eq(posts.spaceId, spaces.id));
+
+    const catalogDate = sql`coalesce(${posts.publishedAt}, ${posts.createdAt})`;
+    const orderBy = query.sort === 'title'
+      ? [asc(posts.title), asc(posts.id)]
+      : query.sort === 'oldest'
+        ? [asc(catalogDate), asc(posts.id)]
+        : [desc(catalogDate), desc(posts.id)];
+    const offset = (query.page - 1) * query.limit;
+    const [queryResult, countRows] = await Promise.all([
+      (where ? fromQuery.where(where) : fromQuery).orderBy(...orderBy).limit(query.limit).offset(offset),
+      (where ? countQuery.where(where) : countQuery),
+    ]);
+    const total = Number(countRows[0]?.count ?? 0);
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.limit);
+    const tagsByPost = await loadTagsForPosts(db, queryResult.map((post) => post.id));
+
+    return reply.send({
+      posts: queryResult.map((post) => ({
+        ...post,
+        tags: tagsByPost.get(post.id) || [],
+        ...(user && user.role !== 'admin'
+          ? { isCollaborator: collabMap.has(post.id), collaboratorPermission: collabMap.get(post.id) || null }
+          : {}),
+      })),
+      pagination: {
+        page: query.page,
+        limit: query.limit,
+        total,
+        totalPages,
+        hasNextPage: query.page < totalPages,
+      } satisfies CatalogPagination,
+    });
   });
 
   // 1.5 Get Centers of Excellence (COE)
@@ -187,6 +289,30 @@ export const postRoutes: FastifyPluginAsync<{
       .orderBy(centersOfExcellence.name);
 
     return reply.send({ coes });
+  });
+
+  // 1.6 Load tags for a post. The post read response also includes this field,
+  // but this endpoint is useful to settings clients that only need taxonomy data.
+  fastify.get('/:id/tags', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const permission = request.user
+      ? await permissionService.resolvePostPermission(
+          { id: request.user.userId, role: request.user.role },
+          { postId: post.id, authorId: post.authorId, status: post.status, spaceId: post.spaceId, visibility: post.visibility, isPromoted: post.isPromoted }
+        )
+      : (post.status === 'published' && (post.isPromoted || !post.spaceId)) ? 'view' : 'none';
+
+    if (!permissionService.canView(permission)) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'You do not have access to view this post' });
+    }
+
+    const tagsByPost = await loadTagsForPosts(db, [id]);
+    return reply.send({ tags: tagsByPost.get(id) || [] });
   });
 
   // 2. Get Post by ID or Slug
@@ -248,6 +374,8 @@ export const postRoutes: FastifyPluginAsync<{
       return reply.status(403).send({ error: 'Forbidden', message: 'You do not have access to view this post' });
     }
 
+    const tagsByPost = await loadTagsForPosts(db, [post.id]);
+
     // Increment detached in-memory view counter (Task 4.5)
     viewCounter?.increment(post.id);
 
@@ -267,6 +395,7 @@ export const postRoutes: FastifyPluginAsync<{
     return reply.send({
       post: {
         ...post,
+        tags: tagsByPost.get(post.id) || [],
         derivedMarkdown,
       },
       userPermission: permission,
@@ -446,7 +575,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
     }
 
-    const { title, slug, excerpt, coeId, spaceId, visibility, templateId } = parseResult.data;
+    const { title, slug, excerpt, tags: tagNames, coeId, spaceId, visibility, templateId } = parseResult.data;
 
     // Check slug collision
     const [existing] = await db.select({ id: posts.id }).from(posts).where(eq(posts.slug, slug)).limit(1);
@@ -476,6 +605,8 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       })
       .returning();
 
+    const savedTags = await replacePostTags(db, newPost.id, tagNames || []);
+
     // Initialize post view count
     await db.insert(postViewCounts).values({
       postId: newPost.id,
@@ -492,7 +623,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       ipAddress: request.ip,
     });
 
-    return reply.status(201).send({ post: newPost });
+    return reply.status(201).send({ post: { ...newPost, tags: savedTags } });
   });
 
   // 4. Update Post Metadata
@@ -519,7 +650,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
     }
 
-    const updates = parseResult.data;
+    const { tags: tagNames, ...updates } = parseResult.data;
     const [updatedPost] = await db
       .update(posts)
       .set({
@@ -528,6 +659,10 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       })
       .where(eq(posts.id, id))
       .returning();
+
+    const savedTags = tagNames === undefined
+      ? (await loadTagsForPosts(db, [id])).get(id) || []
+      : await replacePostTags(db, id, tagNames);
 
     await auditService.appendLog({
       actorUserId: user.userId,
@@ -539,7 +674,34 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       ipAddress: request.ip,
     });
 
-    return reply.send({ post: updatedPost });
+    return reply.send({ post: { ...updatedPost, tags: savedTags } });
+  });
+
+  // Replace all tags for a post without requiring the caller to send metadata.
+  fastify.put('/:id/tags', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
+    const user = request.user!;
+    const { id } = request.params as { id: string };
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const permission = await permissionService.resolvePostPermission(
+      { id: user.userId, role: user.role },
+      { postId: post.id, authorId: post.authorId, status: post.status }
+    );
+    if (!permissionService.canEdit(permission)) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'You do not have permission to edit this post' });
+    }
+
+    const body = z.object({ tags: PostTagsSchema.default([]) }).safeParse(request.body);
+    if (!body.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: body.error.format() });
+    }
+
+    const savedTags = await replacePostTags(db, id, body.data.tags || []);
+    await db.update(posts).set({ updatedAt: new Date() }).where(eq(posts.id, id));
+    return reply.send({ tags: savedTags });
   });
 
   // 4b. Delete Post
@@ -614,6 +776,48 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       return reply.status(403).send({ error: 'Forbidden', message: 'You do not have permission to submit this post for review' });
     }
 
+    if (post.status !== 'draft') {
+      return reply.status(409).send({
+        error: 'Invalid transition',
+        message: `A post can only be submitted from draft (current status: ${post.status})`,
+      });
+    }
+
+    // Pin exactly what was submitted. Reviewers and publication must never read
+    // mutable working content after this point.
+    let submittedMarkdown = post.workingMarkdown || '';
+    if (!submittedMarkdown) {
+      try {
+        const doc = new Y.Doc();
+        if (post.yjsState && post.yjsState.length > 0) {
+          Y.applyUpdate(doc, new Uint8Array(post.yjsState));
+          const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
+          submittedMarkdown = exportDerivedMarkdown(pmJson as any);
+        }
+      } catch {
+        submittedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+      }
+    }
+
+    const [latestVersion] = await db
+      .select({ versionNumber: postVersions.versionNumber })
+      .from(postVersions)
+      .where(eq(postVersions.postId, id))
+      .orderBy(desc(postVersions.versionNumber))
+      .limit(1);
+
+    const [submittedVersion] = await db
+      .insert(postVersions)
+      .values({
+        postId: id,
+        versionNumber: (latestVersion?.versionNumber || 0) + 1,
+        triggerReason: 'review_submission',
+        yjsStateSnapshot: post.yjsState,
+        markdownSnapshot: submittedMarkdown,
+        createdBy: user.userId,
+      })
+      .returning();
+
     const [updatedPost] = await db
       .update(posts)
       .set({
@@ -632,7 +836,16 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       ipAddress: request.ip,
     });
 
-    return reply.send({ post: updatedPost });
+    await notificationService.notifyAdminsAndModerators({
+      type: 'review_submitted',
+      title: 'Post submitted for review',
+      body: `${post.title} was submitted for editorial review.`,
+      entityType: 'post',
+      entityId: id,
+      href: `/posts/${id}`,
+    }, user.userId);
+
+    return reply.send({ post: updatedPost, submittedVersion });
   });
 
   // 6. Publish Post with Discrete Milestone Snapshot (Task 4.3)
@@ -660,47 +873,50 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       });
     }
 
-    // Derive markdown snapshot from canonical Yjs binary state
-    let publishedMarkdown = '';
-    try {
-      const doc = new Y.Doc();
-      if (post.yjsState && post.yjsState.length > 0) {
-        Y.applyUpdate(doc, new Uint8Array(post.yjsState));
-        const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
-        publishedMarkdown = exportDerivedMarkdown(pmJson as any);
-      }
-    } catch {
-      publishedMarkdown = `# ${post.title}\n\nPublished content.`;
+    if (post.status !== 'approved') {
+      return reply.status(409).send({
+        error: 'Invalid transition',
+        message: `A post can only be published after approval (current status: ${post.status})`,
+      });
     }
 
-    // Monotonically increment version number
-    const [latestVersion] = await db
-      .select({ versionNumber: postVersions.versionNumber })
-      .from(postVersions)
-      .where(eq(postVersions.postId, id))
-      .orderBy(desc(postVersions.versionNumber))
+    const [approvedReview] = await db
+      .select({ submittedVersionId: postReviews.submittedVersionId })
+      .from(postReviews)
+      .where(and(eq(postReviews.postId, id), eq(postReviews.decision, 'approved')))
+      .orderBy(desc(postReviews.createdAt))
       .limit(1);
 
-    const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+    if (!approvedReview?.submittedVersionId) {
+      return reply.status(409).send({
+        error: 'Invalid transition',
+        message: 'No approved submitted version is available for publication',
+      });
+    }
 
-    // Create immutable post_versions row
-    const [version] = await db
-      .insert(postVersions)
-      .values({
-        postId: id,
-        versionNumber: nextVersionNumber,
-        triggerReason: 'publication',
-        yjsStateSnapshot: post.yjsState,
-        markdownSnapshot: publishedMarkdown,
-        createdBy: user.userId,
-      })
-      .returning();
+    const [submittedVersion] = await db
+      .select()
+      .from(postVersions)
+      .where(and(eq(postVersions.id, approvedReview.submittedVersionId), eq(postVersions.postId, id)))
+      .limit(1);
+
+    if (!submittedVersion) {
+      return reply.status(409).send({
+        error: 'Invalid transition',
+        message: 'The approved submitted version could not be found',
+      });
+    }
+
+    // Publish the immutable review checkpoint, never the mutable working copy.
+    const publishedMarkdown = submittedVersion.markdownSnapshot;
 
     const [publishedPost] = await db
       .update(posts)
       .set({
         status: 'published',
-        publishedVersionId: version.id,
+        // The reader-facing pointer is the exact immutable checkpoint that
+        // was reviewed, rather than a new snapshot of mutable working state.
+        publishedVersionId: submittedVersion.id,
         publishedMarkdown,
         publishedAt: new Date(),
         updatedAt: new Date(),
@@ -714,11 +930,21 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       action: 'post_published',
       entityType: 'post',
       entityId: id,
-      metadata: { versionNumber: nextVersionNumber, versionId: version.id },
+      metadata: { versionNumber: submittedVersion.versionNumber, versionId: submittedVersion.id },
       ipAddress: request.ip,
     });
 
-    return reply.send({ post: publishedPost, version });
+    await notificationService.create({
+      userId: post.authorId,
+      type: 'published',
+      title: 'Post published',
+      body: `${post.title} is now published.`,
+      entityType: 'post',
+      entityId: id,
+      href: `/posts/${id}`,
+    });
+
+    return reply.send({ post: publishedPost, version: submittedVersion });
   });
 
   // 6.5 Promote Page to Company Library
@@ -980,6 +1206,13 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       return reply.status(403).send({ error: 'Forbidden', message: 'Insufficient permission to republish' });
     }
 
+    if (post.status !== 'published') {
+      return reply.status(409).send({
+        error: 'Invalid transition',
+        message: `A post can only be republished from published (current status: ${post.status})`,
+      });
+    }
+
     const { changeSummary } = (request.body as any) || {};
     if (!changeSummary || typeof changeSummary !== 'string' || changeSummary.trim().length < 3) {
       return reply.status(400).send({
@@ -1046,6 +1279,16 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
         changeSummary: changeSummary.trim(),
       },
       ipAddress: request.ip,
+    });
+
+    await notificationService.create({
+      userId: post.authorId,
+      type: 'published',
+      title: 'Post republished',
+      body: `${post.title} was republished.`,
+      entityType: 'post',
+      entityId: id,
+      href: `/posts/${id}`,
     });
 
     return reply.send({

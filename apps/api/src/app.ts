@@ -17,6 +17,10 @@ import { patRoutes } from './routes/pats.js';
 import { auditRoutes } from './routes/audit.js';
 import { attachmentRoutes } from './routes/attachments.js';
 import { spaceRoutes } from './routes/spaces.js';
+import { notificationRoutes } from './routes/notifications.js';
+import { NotificationService } from './services/notifications.js';
+import { adminRoutes } from './routes/admin.js';
+import { bookmarkRoutes } from './routes/bookmarks.js';
 
 export interface ApiAppOptions {
   db?: Database;
@@ -64,6 +68,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   const auditService = new AuditService(db);
   const permissionService = new PermissionService(db);
   const viewCounter = new BufferedViewCounter(db);
+  const notificationService = new NotificationService(db);
   viewCounter.start();
 
   await app.register(authPlugin, { authService, db });
@@ -85,6 +90,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     permissionService,
     auditService,
     viewCounter,
+    notificationService,
   });
 
   await app.register(collaboratorRoutes, {
@@ -92,6 +98,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     db,
     permissionService,
     auditService,
+    notificationService,
   });
 
   await app.register(collaboratorRoutes, {
@@ -99,6 +106,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     db,
     permissionService,
     auditService,
+    notificationService,
   });
 
   await app.register(reviewRoutes, {
@@ -106,6 +114,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     db,
     permissionService,
     auditService,
+    notificationService,
   });
 
   await app.register(commentRoutes, {
@@ -152,6 +161,21 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     db,
     permissionService,
     auditService,
+    notificationService,
+  });
+
+  await app.register(adminRoutes, {
+    prefix: '/api/v1/admin',
+    db,
+    auditService,
+  });
+
+  await app.register(notificationRoutes, { prefix: '/api/v1/notifications', db });
+
+  await app.register(bookmarkRoutes, {
+    prefix: '/api/v1/bookmarks',
+    db,
+    permissionService,
   });
 
   const close = async () => {
