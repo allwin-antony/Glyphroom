@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import bcrypt from 'bcryptjs';
 import { createInMemoryDatabase } from './helpers/test-db.js';
 import { createApiApp } from '../src/app.js';
-import { users } from '../src/db/schema.js';
+import { users, posts, postReviews, postVersions } from '../src/db/schema.js';
+import { eq } from 'drizzle-orm';
 import type { Database } from '../src/db/index.js';
 
 describe('Fastify REST API End-to-End Integration Suite', () => {
@@ -194,7 +195,8 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     const post = postRes.json().post;
     expect(post.status).toBe('draft');
 
-    // 3. Author submits post for review
+    // 3. Flush working content, then submit post for review
+    await db.update(posts).set({ workingMarkdown: '# Pinned review content' }).where(eq(posts.id, post.id));
     const submitRes = await app.inject({
       method: 'POST',
       url: `/api/v1/posts/${post.id}/submit-review`,
@@ -205,6 +207,11 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     });
     expect(submitRes.statusCode).toBe(200);
     expect(submitRes.json().post.status).toBe('in_review');
+    const submittedVersionId = submitRes.json().submittedVersion.id;
+    expect(submitRes.json().submittedVersion.triggerReason).toBe('review_submission');
+
+    // Working content may continue to change, but the review remains pinned.
+    await db.update(posts).set({ workingMarkdown: '# Mutable post-review edit' }).where(eq(posts.id, post.id));
 
     // 4. Author tries to approve their own post -> must be strictly rejected (403)
     const selfApproveRes = await app.inject({
@@ -237,7 +244,32 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     const modSession = modLogin.cookies.find((c: any) => c.name === 'blogger_session')?.value;
     const modCsrf = modLogin.json().csrfToken;
 
-    // 6. Moderator reviews and approves the post
+    // 6. A changes-requested review returns the post to draft.
+    const changesRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/posts/${post.id}/reviews`,
+      headers: {
+        cookie: `blogger_session=${modSession}`,
+        'x-csrf-token': modCsrf,
+      },
+      payload: { decision: 'changes_requested', notes: 'Please revise.' },
+    });
+    expect(changesRes.statusCode).toBe(201);
+    expect(changesRes.json().review.submittedVersionId).toBe(submittedVersionId);
+    const draftAfterChanges = await db.select({ status: posts.status }).from(posts).where(eq(posts.id, post.id));
+    expect(draftAfterChanges[0].status).toBe('draft');
+
+    // 7. Resubmit the revised draft and approve that new checkpoint.
+    await db.update(posts).set({ workingMarkdown: '# Pinned approved content' }).where(eq(posts.id, post.id));
+    const resubmitRes = await app.inject({
+      method: 'POST',
+      url: `/api/v1/posts/${post.id}/submit-review`,
+      headers: { cookie: `blogger_session=${authorSession}`, 'x-csrf-token': authorCsrf },
+    });
+    expect(resubmitRes.statusCode).toBe(200);
+    const approvedSubmittedVersionId = resubmitRes.json().submittedVersion.id;
+
+    // 8. Moderator reviews and approves the post
     const reviewRes = await app.inject({
       method: 'POST',
       url: `/api/v1/posts/${post.id}/reviews`,
@@ -251,8 +283,9 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       },
     });
     expect(reviewRes.statusCode).toBe(201);
+    expect(reviewRes.json().review.submittedVersionId).toBe(approvedSubmittedVersionId);
 
-    // 7. Moderator publishes the post
+    // 9. Moderator publishes the pinned submitted version, not mutable working content
     const publishRes = await app.inject({
       method: 'POST',
       url: `/api/v1/posts/${post.id}/publish`,
@@ -263,8 +296,16 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     });
     expect(publishRes.statusCode).toBe(200);
     expect(publishRes.json().post.status).toBe('published');
+    expect(publishRes.json().post.publishedVersionId).toBe(approvedSubmittedVersionId);
+    expect(publishRes.json().post.publishedMarkdown).toBe('# Pinned approved content');
+    expect(publishRes.json().post.publishedMarkdown).not.toContain('Mutable post-review edit');
 
-    // 8. Public / Reader user can now view the published post
+    const reviews = await db.select().from(postReviews).where(eq(postReviews.postId, post.id));
+    expect(reviews).toHaveLength(2);
+    const versions = await db.select().from(postVersions).where(eq(postVersions.postId, post.id));
+    expect(versions.filter((version) => version.triggerReason === 'review_submission')).toHaveLength(2);
+
+    // 10. Public / Reader user can now view the published post
     const readerRes = await app.inject({
       method: 'GET',
       url: `/api/v1/posts/${post.id}`,
@@ -420,5 +461,70 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       },
     });
     expect(getRes.statusCode).toBe(404);
+  });
+
+  it('persists post tags across create, update, dedicated tag routes, and reads', async () => {
+    const loginRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/login',
+      payload: {
+        email: 'admin@enterprise-blogger.local',
+        password: 'admin2026!',
+      },
+    });
+    const sessionCookie = loginRes.cookies.find((c: any) => c.name === 'blogger_session')?.value;
+    const csrfToken = loginRes.json().csrfToken;
+    const headers = {
+      cookie: `blogger_session=${sessionCookie}`,
+      'x-csrf-token': csrfToken,
+    };
+
+    const createRes = await app.inject({
+      method: 'POST',
+      url: '/api/v1/posts',
+      headers,
+      payload: {
+        title: 'Tagged Post',
+        slug: 'tagged-post',
+        tags: ['Engineering', 'collaborative', 'engineering'],
+      },
+    });
+    expect(createRes.statusCode).toBe(201);
+    const created = createRes.json().post;
+    expect(created.tags).toEqual(['engineering', 'collaborative']);
+
+    const readRes = await app.inject({ method: 'GET', url: `/api/v1/posts/${created.id}`, headers });
+    expect(readRes.statusCode).toBe(200);
+    expect(readRes.json().post.tags).toEqual(['engineering', 'collaborative']);
+
+    const updateRes = await app.inject({
+      method: 'PATCH',
+      url: `/api/v1/posts/${created.id}`,
+      headers,
+      payload: { tags: ['platform'] },
+    });
+    expect(updateRes.statusCode).toBe(200);
+    expect(updateRes.json().post.tags).toEqual(['platform']);
+
+    const dedicatedUpdateRes = await app.inject({
+      method: 'PUT',
+      url: `/api/v1/posts/${created.id}/tags`,
+      headers,
+      payload: { tags: ['docs', 'platform'] },
+    });
+    expect(dedicatedUpdateRes.statusCode).toBe(200);
+    expect(dedicatedUpdateRes.json().tags).toEqual(['docs', 'platform']);
+
+    const dedicatedReadRes = await app.inject({
+      method: 'GET',
+      url: `/api/v1/posts/${created.id}/tags`,
+      headers,
+    });
+    expect(dedicatedReadRes.statusCode).toBe(200);
+    expect(dedicatedReadRes.json().tags).toEqual(['docs', 'platform']);
+
+    const listRes = await app.inject({ method: 'GET', url: '/api/v1/posts', headers });
+    expect(listRes.statusCode).toBe(200);
+    expect(listRes.json().posts.find((post: any) => post.id === created.id).tags).toEqual(['docs', 'platform']);
   });
 });

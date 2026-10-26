@@ -1,10 +1,11 @@
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, and } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { posts, postReviews, users } from '../db/schema.js';
+import { posts, postReviews, postVersions, users } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
+import type { NotificationService } from '../services/notifications.js';
 
 const SubmitReviewSchema = z.object({
   decision: z.enum(['approved', 'changes_requested']),
@@ -15,8 +16,9 @@ export const reviewRoutes: FastifyPluginAsync<{
   db: Database;
   permissionService: PermissionService;
   auditService: AuditService;
+  notificationService: NotificationService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService } = options;
+  const { db, permissionService, auditService, notificationService } = options;
 
   // 1. List reviews for a post
   fastify.get('/:id/reviews', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
@@ -45,6 +47,7 @@ export const reviewRoutes: FastifyPluginAsync<{
         createdAt: postReviews.createdAt,
         resolvedAt: postReviews.resolvedAt,
         reviewerId: postReviews.reviewerId,
+        submittedVersionId: postReviews.submittedVersionId,
         reviewerName: users.fullName,
       })
       .from(postReviews)
@@ -85,6 +88,13 @@ export const reviewRoutes: FastifyPluginAsync<{
       });
     }
 
+    if (post.status !== 'in_review') {
+      return reply.status(409).send({
+        error: 'Invalid transition',
+        message: `A review can only be submitted for a post in_review (current status: ${post.status})`,
+      });
+    }
+
     const parseResult = SubmitReviewSchema.safeParse(request.body);
     if (!parseResult.success) {
       return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
@@ -92,24 +102,36 @@ export const reviewRoutes: FastifyPluginAsync<{
 
     const { decision, notes } = parseResult.data;
 
+    const [submittedVersion] = await db
+      .select()
+      .from(postVersions)
+      .where(and(eq(postVersions.postId, id), eq(postVersions.triggerReason, 'review_submission')))
+      .orderBy(desc(postVersions.versionNumber))
+      .limit(1);
+
+    if (!submittedVersion) {
+      return reply.status(409).send({
+        error: 'Invalid transition',
+        message: 'The submitted review checkpoint could not be found',
+      });
+    }
+
     const [review] = await db
       .insert(postReviews)
       .values({
         postId: id,
         reviewerId: user.userId,
+        submittedVersionId: submittedVersion.id,
         decision,
         notes,
         resolvedAt: new Date(),
       })
       .returning();
 
-    // If approved, update post status to approved
-    if (decision === 'approved') {
-      await db
-        .update(posts)
-        .set({ status: 'approved', updatedAt: new Date() })
-        .where(eq(posts.id, id));
-    }
+    await db
+      .update(posts)
+      .set({ status: decision === 'approved' ? 'approved' : 'draft', updatedAt: new Date() })
+      .where(eq(posts.id, id));
 
     await auditService.appendLog({
       actorUserId: user.userId,
@@ -119,6 +141,16 @@ export const reviewRoutes: FastifyPluginAsync<{
       entityId: review.id,
       metadata: { postId: id, decision },
       ipAddress: request.ip,
+    });
+
+    await notificationService.create({
+      userId: post.authorId,
+      type: 'review_decision',
+      title: decision === 'approved' ? 'Review approved' : 'Changes requested',
+      body: `${post.title}: ${decision === 'approved' ? 'your review was approved.' : 'the reviewer requested changes.'}`,
+      entityType: 'post',
+      entityId: id,
+      href: `/posts/${id}`,
     });
 
     return reply.status(201).send({ review });
