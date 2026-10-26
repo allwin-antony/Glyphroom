@@ -179,6 +179,41 @@ describe('Spaces, Access Model & MCP Bearer PAT Integration Suite', () => {
     expect(members.length).toBe(3);
   });
 
+  it('2b. Space owner can update and archive the Space, but cannot remove the last owner', async () => {
+    const maintAuth = createSessionCookie(maintainerUser);
+
+    const updateRes = await appInstance.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/spaces/${testSpace.id}`,
+      headers: { cookie: maintAuth.cookie, 'x-csrf-token': maintAuth.csrf },
+      payload: {
+        name: 'Payments Revamp Platform',
+        description: 'Updated team workspace description',
+      },
+    });
+
+    expect(updateRes.statusCode).toBe(200);
+    expect(JSON.parse(updateRes.body).space.name).toBe('Payments Revamp Platform');
+
+    const removeOwnerRes = await appInstance.app.inject({
+      method: 'DELETE',
+      url: `/api/v1/spaces/${testSpace.id}/members/${maintainerUser.id}`,
+      headers: { cookie: maintAuth.cookie, 'x-csrf-token': maintAuth.csrf },
+    });
+
+    expect(removeOwnerRes.statusCode).toBe(409);
+
+    const archiveRes = await appInstance.app.inject({
+      method: 'PATCH',
+      url: `/api/v1/spaces/${testSpace.id}`,
+      headers: { cookie: maintAuth.cookie, 'x-csrf-token': maintAuth.csrf },
+      payload: { isArchived: true },
+    });
+
+    expect(archiveRes.statusCode).toBe(200);
+    expect(JSON.parse(archiveRes.body).space.isArchived).toBe(true);
+  });
+
   it('3. User Space Requests: Non-admin can request space, Admin can approve it', async () => {
     const authorAuth = createSessionCookie(authorUser);
     const slug = `cloud-infra-${Date.now()}`;

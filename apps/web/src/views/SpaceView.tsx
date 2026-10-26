@@ -73,6 +73,10 @@ export const SpaceView: React.FC = () => {
   const [selectedRole, setSelectedRole] = useState<'viewer' | 'reviewer' | 'author' | 'maintainer'>('author');
   const [isAddingMember, setIsAddingMember] = useState(false);
   const [memberActionError, setMemberActionError] = useState<string | null>(null);
+  const [spaceName, setSpaceName] = useState('');
+  const [spaceDescription, setSpaceDescription] = useState('');
+  const [isSavingSpace, setIsSavingSpace] = useState(false);
+  const [spaceSettingsMessage, setSpaceSettingsMessage] = useState<string | null>(null);
 
   const fetchSpaceDetails = async () => {
     if (!idOrSlug) return;
@@ -81,6 +85,8 @@ export const SpaceView: React.FC = () => {
     try {
       const res = await api.get<{ space: any }>(`/spaces/${idOrSlug}`);
       setSpace(res.space);
+      setSpaceName(res.space?.name || '');
+      setSpaceDescription(res.space?.description || '');
 
       // Fetch space members
       if (res.space?.isMember || user?.role === 'admin') {
@@ -188,6 +194,40 @@ export const SpaceView: React.FC = () => {
   const canManageMembers =
     user?.role === 'admin' || space?.userRole === 'owner' || space?.userRole === 'maintainer';
 
+  const handleSaveSpace = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!space || !spaceName.trim() || isSavingSpace) return;
+    setIsSavingSpace(true);
+    setSpaceSettingsMessage(null);
+    try {
+      const result = await api.patch<{ space: any }>(`/spaces/${space.id}`, {
+        name: spaceName.trim(),
+        description: spaceDescription.trim() || undefined,
+      });
+      setSpace(result.space);
+      setSpaceSettingsMessage('Space settings saved.');
+    } catch (err: any) {
+      setSpaceSettingsMessage(err?.message || 'Failed to save Space settings.');
+    } finally {
+      setIsSavingSpace(false);
+    }
+  };
+
+  const handleArchiveSpace = async () => {
+    if (!space || !canManageMembers || isSavingSpace) return;
+    setIsSavingSpace(true);
+    setSpaceSettingsMessage(null);
+    try {
+      const result = await api.patch<{ space: any }>(`/spaces/${space.id}`, { isArchived: !space.isArchived });
+      setSpace(result.space);
+      setSpaceSettingsMessage(result.space.isArchived ? 'Space archived.' : 'Space restored.');
+    } catch (err: any) {
+      setSpaceSettingsMessage(err?.message || 'Failed to update Space status.');
+    } finally {
+      setIsSavingSpace(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-3">
@@ -270,6 +310,7 @@ export const SpaceView: React.FC = () => {
         {[
           { id: 'pages', label: 'Pages & Documentation', icon: FileText, count: posts.length },
           { id: 'members', label: 'Team Members & Roles', icon: Users, count: members.length },
+          ...(canManageMembers ? [{ id: 'settings', label: 'Space Settings', icon: Settings, count: null }] : []),
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -284,9 +325,11 @@ export const SpaceView: React.FC = () => {
             >
               <Icon className="w-4 h-4" />
               <span>{tab.label}</span>
-              <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface border border-border text-text-muted">
-                {tab.count}
-              </span>
+              {tab.count !== null && (
+                <span className="text-[10px] px-1.5 py-0.2 rounded-full bg-surface border border-border text-text-muted">
+                  {tab.count}
+                </span>
+              )}
             </button>
           );
         })}
@@ -436,6 +479,38 @@ export const SpaceView: React.FC = () => {
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {activeTab === 'settings' && canManageMembers && (
+        <div className="max-w-2xl space-y-4">
+          <form onSubmit={handleSaveSpace} className="p-5 rounded-xl bg-surface border border-border shadow-sm space-y-4">
+            <div>
+              <h2 className="text-sm font-bold text-foreground">Space Settings</h2>
+              <p className="text-xs text-text-secondary mt-1">Update the workspace name and description shown to team members.</p>
+            </div>
+            {spaceSettingsMessage && (
+              <div className="p-3 rounded-lg bg-accent-bg border border-accent/20 text-accent text-xs" role="status">
+                {spaceSettingsMessage}
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-foreground" htmlFor="space-name">Name</label>
+              <input id="space-name" value={spaceName} onChange={(event) => setSpaceName(event.target.value)} className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground" maxLength={255} />
+            </div>
+            <div className="space-y-2">
+              <label className="block text-xs font-semibold text-foreground" htmlFor="space-description">Description</label>
+              <textarea id="space-description" value={spaceDescription} onChange={(event) => setSpaceDescription(event.target.value)} className="w-full p-2 rounded-lg bg-canvas border border-border text-foreground resize-y min-h-24" maxLength={2000} />
+            </div>
+            <div className="flex items-center gap-2">
+              <button type="submit" disabled={isSavingSpace || !spaceName.trim()} className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold disabled:opacity-50">
+                {isSavingSpace ? 'Saving…' : 'Save Settings'}
+              </button>
+              <button type="button" onClick={handleArchiveSpace} disabled={isSavingSpace} className="px-3 py-1.5 rounded-lg border border-status-warning/30 bg-status-warning/10 text-status-warning text-xs font-semibold disabled:opacity-50">
+                {space.isArchived ? 'Restore Space' : 'Archive Space'}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

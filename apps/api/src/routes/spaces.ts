@@ -5,6 +5,7 @@ import type { Database } from '../db/index.js';
 import { spaces, spaceMembers, spaceRequests, users, posts, centersOfExcellence } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
+import type { NotificationService } from '../services/notifications.js';
 
 const CreateSpaceSchema = z.object({
   name: z.string().min(1).max(255),
@@ -41,8 +42,9 @@ export const spaceRoutes: FastifyPluginAsync<{
   db: Database;
   permissionService: PermissionService;
   auditService: AuditService;
+  notificationService: NotificationService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService } = options;
+  const { db, permissionService, auditService, notificationService } = options;
 
   // 0. Space Directory Users (active users that can be invited to a space)
   fastify.get('/directory/users', { preHandler: (fastify as any).requireAuth }, async (_request, reply) => {
@@ -251,6 +253,16 @@ export const spaceRoutes: FastifyPluginAsync<{
         ipAddress: request.ip,
       });
 
+      await notificationService.create({
+        userId: req.requestedBy,
+        type: 'space_request_decision',
+        title: 'Space request approved',
+        body: `Your request for ${req.name} was approved.`,
+        entityType: 'space_request',
+        entityId: id,
+        href: `/spaces/${newSpace.id}`,
+      });
+
       return reply.send({ message: 'Space approved and created', space: newSpace });
     } else {
       await db
@@ -265,6 +277,16 @@ export const spaceRoutes: FastifyPluginAsync<{
         entityType: 'space_requests',
         entityId: id,
         ipAddress: request.ip,
+      });
+
+      await notificationService.create({
+        userId: req.requestedBy,
+        type: 'space_request_decision',
+        title: 'Space request rejected',
+        body: `Your request for ${req.name} was rejected.`,
+        entityType: 'space_request',
+        entityId: id,
+        href: '/spaces',
       });
 
       return reply.send({ message: 'Space request rejected' });
@@ -310,6 +332,46 @@ export const spaceRoutes: FastifyPluginAsync<{
         maintainers: membersList.filter((m) => m.role === 'maintainer' || m.role === 'owner'),
       },
     });
+  });
+
+  // 6.5 Update Space (Owner, Maintainer, or Admin)
+  fastify.patch('/:id', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = request.user!;
+    const [space] = await db.select().from(spaces).where(eq(spaces.id, id)).limit(1);
+
+    if (!space) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Space not found' });
+    }
+
+    const spaceRole = user.role === 'admin' ? 'owner' : await permissionService.getSpaceRole(id, user.userId);
+    if (user.role !== 'admin' && spaceRole !== 'owner' && spaceRole !== 'maintainer') {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Only space maintainers or owners can update this space' });
+    }
+
+    const parseResult = UpdateSpaceSchema.safeParse(request.body);
+    if (!parseResult.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
+    }
+
+    const updates = parseResult.data;
+    const [updated] = await db
+      .update(spaces)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(spaces.id, id))
+      .returning();
+
+    await auditService.appendLog({
+      actorUserId: user.userId,
+      actorType: 'human',
+      action: updates.isArchived === true ? 'space_archived' : updates.isArchived === false ? 'space_restored' : 'space_updated',
+      entityType: 'spaces',
+      entityId: id,
+      metadata: updates,
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ space: updated });
   });
 
   // 7. List Space Members
@@ -439,6 +501,27 @@ export const spaceRoutes: FastifyPluginAsync<{
     const spaceRole = user.role === 'admin' ? 'owner' : await permissionService.getSpaceRole(id, user.userId);
     if (user.role !== 'admin' && spaceRole !== 'owner' && spaceRole !== 'maintainer') {
       return reply.status(403).send({ error: 'Forbidden', message: 'Only space maintainers or owners can remove members' });
+    }
+
+    const [targetMembership] = await db
+      .select({ role: spaceMembers.role })
+      .from(spaceMembers)
+      .where(and(eq(spaceMembers.spaceId, id), eq(spaceMembers.userId, userId)))
+      .limit(1);
+
+    if (!targetMembership) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Space member not found' });
+    }
+
+    if (targetMembership.role === 'owner') {
+      const owners = await db
+        .select({ userId: spaceMembers.userId })
+        .from(spaceMembers)
+        .where(and(eq(spaceMembers.spaceId, id), eq(spaceMembers.role, 'owner')));
+
+      if (owners.length <= 1) {
+        return reply.status(409).send({ error: 'Conflict', message: 'A Space must retain at least one owner' });
+      }
     }
 
     await db
