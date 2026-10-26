@@ -128,6 +128,20 @@ CREATE INDEX IF NOT EXISTS idx_posts_search_vector ON posts USING GIN(search_vec
 CREATE INDEX IF NOT EXISTS idx_posts_working_search_vector ON posts USING GIN(working_search_vector);
 CREATE INDEX IF NOT EXISTS idx_posts_title_trgm ON posts USING GIN(title gin_trgm_ops);
 
+-- ==========================================================================
+-- 5.5 Personal Reader Bookmarks
+-- ==========================================================================
+CREATE TABLE IF NOT EXISTS bookmarks (
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    post_id UUID REFERENCES posts(id) ON DELETE CASCADE NOT NULL,
+    note TEXT,
+    bookmarked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY (user_id, post_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_bookmarks_user_id ON bookmarks(user_id);
+CREATE INDEX IF NOT EXISTS idx_bookmarks_post_id ON bookmarks(post_id);
+
 -- ===========================================================================
 -- 6. Post Milestone Versions (Discrete Snapshots, Never Per-Keystroke)
 -- ===========================================================================
@@ -169,12 +183,33 @@ CREATE TABLE IF NOT EXISTS post_collaborators (
 );
 
 -- ===========================================================================
+-- 7.5 Durable In-App Notifications (polling-ready delivery)
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS notifications (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES users(id) ON DELETE CASCADE NOT NULL,
+    type VARCHAR(50) NOT NULL,
+    title VARCHAR(255) NOT NULL,
+    body TEXT NOT NULL,
+    entity_type VARCHAR(50),
+    entity_id UUID,
+    href VARCHAR(500),
+    read_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at);
+
+
+-- ===========================================================================
 -- 8. Post Reviews (Workflow Gate: Reviewer != Author Enforced)
 -- ===========================================================================
 CREATE TABLE IF NOT EXISTS post_reviews (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     post_id UUID REFERENCES posts(id) ON DELETE CASCADE NOT NULL,
     reviewer_id UUID REFERENCES users(id) ON DELETE RESTRICT NOT NULL,
+    submitted_version_id UUID REFERENCES post_versions(id) ON DELETE RESTRICT NOT NULL,
     decision VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (decision IN ('pending', 'approved', 'changes_requested')),
     notes TEXT,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -182,6 +217,7 @@ CREATE TABLE IF NOT EXISTS post_reviews (
 );
 
 CREATE INDEX IF NOT EXISTS idx_post_reviews_post_id ON post_reviews(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_reviews_submitted_version_id ON post_reviews(submitted_version_id);
 
 -- ===========================================================================
 -- 9. Comments & Yjs Relative Anchors

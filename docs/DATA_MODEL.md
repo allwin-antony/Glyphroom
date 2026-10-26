@@ -144,6 +144,7 @@ The post author always has implicit `edit` permission; this table stores explici
 | `id` | `uuid` | PK | |
 | `post_id` | `uuid` | FK → `posts.id`, ON DELETE CASCADE, NOT NULL | |
 | `reviewer_id` | `uuid` | FK → `users.id`, ON DELETE RESTRICT, NOT NULL | |
+| `submitted_version_id` | `uuid` | FK → `post_versions.id`, ON DELETE RESTRICT, NOT NULL | Immutable review checkpoint submitted for this decision; publication points to this version |
 | `decision` | `varchar(20)` | NOT NULL, CHECK IN (`pending`, `approved`, `changes_requested`), DEFAULT `pending` | |
 | `notes` | `text` | NULLABLE | |
 | `created_at` | `timestamptz` | NOT NULL | |

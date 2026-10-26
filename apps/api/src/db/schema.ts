@@ -176,6 +176,22 @@ export const posts = pgTable(
   ]
 );
 
+// Personal reader bookmarks. A user can save a post once and optionally add a note.
+export const bookmarks = pgTable(
+  'bookmarks',
+  {
+    userId: uuid('user_id').references(() => users.id, { onDelete: 'cascade' }).notNull(),
+    postId: uuid('post_id').references(() => posts.id, { onDelete: 'cascade' }).notNull(),
+    note: text('note'),
+    bookmarkedAt: timestamp('bookmarked_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.userId, table.postId] }),
+    index('idx_bookmarks_user_id').on(table.userId),
+    index('idx_bookmarks_post_id').on(table.postId),
+  ]
+);
+
 // 4. Post Versions Table
 export const postVersions = pgTable(
   'post_versions',
@@ -229,6 +245,9 @@ export const postReviews = pgTable(
       .notNull(),
     reviewerId: uuid('reviewer_id')
       .references(() => users.id, { onDelete: 'restrict' })
+      .notNull(),
+    submittedVersionId: uuid('submitted_version_id')
+      .references(() => postVersions.id, { onDelete: 'restrict' })
       .notNull(),
     decision: varchar('decision', { length: 20 })
       .notNull()
@@ -389,4 +408,30 @@ export const postAttachments = pgTable(
     index('idx_post_attachments_post_id').on(table.postId),
     index('idx_post_attachments_sha256').on(table.sha256),
   ]
+);
+
+
+// 14. In-app Notifications
+// Notifications are durable and intentionally independent from the collaboration
+// transport so clients can consume them by polling (or a future SSE adapter).
+export const notifications = pgTable(
+  'notifications',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    userId: uuid('user_id')
+      .references(() => users.id, { onDelete: 'cascade' })
+      .notNull(),
+    type: varchar('type', { length: 50 }).notNull(),
+    title: varchar('title', { length: 255 }).notNull(),
+    body: text('body').notNull(),
+    entityType: varchar('entity_type', { length: 50 }),
+    entityId: uuid('entity_id'),
+    href: varchar('href', { length: 500 }),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    index('idx_notifications_user_created').on(table.userId, table.createdAt),
+    index('idx_notifications_user_unread').on(table.userId, table.readAt),
+  ],
 );

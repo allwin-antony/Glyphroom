@@ -44,6 +44,32 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_promoted BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMPTZ;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_by UUID REFERENCES users(id);
+      ALTER TABLE post_reviews ADD COLUMN IF NOT EXISTS submitted_version_id UUID REFERENCES post_versions(id) ON DELETE RESTRICT;
+
+      CREATE TABLE IF NOT EXISTS bookmarks (
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        note TEXT,
+        bookmarked_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY (user_id, post_id)
+      );
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_user_id ON bookmarks(user_id);
+      CREATE INDEX IF NOT EXISTS idx_bookmarks_post_id ON bookmarks(post_id);
+
+      CREATE TABLE IF NOT EXISTS notifications (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        type VARCHAR(50) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        body TEXT NOT NULL,
+        entity_type VARCHAR(50),
+        entity_id UUID,
+        href VARCHAR(500),
+        read_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
+      CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at);
 
       -- Ensure default "General Engineering" Space exists
       INSERT INTO spaces (id, slug, name, description)

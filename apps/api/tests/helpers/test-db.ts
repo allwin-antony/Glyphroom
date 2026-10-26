@@ -96,6 +96,14 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       updated_at timestamp NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE bookmarks (
+      user_id text NOT NULL,
+      post_id text NOT NULL,
+      note text,
+      bookmarked_at timestamp NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, post_id)
+    );
+
     CREATE TABLE post_versions (
       id text PRIMARY KEY DEFAULT gen_random_uuid(),
       post_id text NOT NULL,
@@ -118,6 +126,7 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       id text PRIMARY KEY DEFAULT gen_random_uuid(),
       post_id text NOT NULL,
       reviewer_id text NOT NULL,
+      submitted_version_id text NOT NULL,
       decision text NOT NULL DEFAULT 'pending',
       notes text,
       created_at timestamp NOT NULL DEFAULT NOW(),
@@ -203,6 +212,19 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       storage_path text NOT NULL,
       scan_status text NOT NULL DEFAULT 'clean',
       uploaded_by text NOT NULL,
+      created_at timestamp NOT NULL DEFAULT NOW()
+    );
+
+    CREATE TABLE notifications (
+      id text PRIMARY KEY DEFAULT gen_random_uuid(),
+      user_id text NOT NULL,
+      type text NOT NULL,
+      title text NOT NULL,
+      body text NOT NULL,
+      entity_type text,
+      entity_id text,
+      href text,
+      read_at timestamp,
       created_at timestamp NOT NULL DEFAULT NOW()
     );
   `);
