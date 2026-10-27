@@ -1,3 +1,4 @@
+import { SlotRenderer } from '../plugins/SlotRenderer.js';
 import React, { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
@@ -306,6 +307,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
               </div>
             </div>
           )}
+          <SlotRenderer slot="sidebar:navigation" context={{ isCollapsed }} />
         </nav>
 
         {/* Footer Session / Theme Toggle */}

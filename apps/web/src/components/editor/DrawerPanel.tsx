@@ -1,3 +1,4 @@
+import { SlotRenderer } from '../plugins/SlotRenderer.js';
 import React, { useState } from 'react';
 import * as Y from 'yjs';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '../ui/tabs.js';
@@ -90,6 +91,7 @@ export const DrawerPanel: React.FC<DrawerPanelProps> = ({
               <span className="hidden sm:inline">Settings</span>
             </TabsTrigger>
           </TabsList>
+          <SlotRenderer slot="editor:drawer:tabs" context={{ postId, editor }} />
 
           <button
             onClick={onClose}

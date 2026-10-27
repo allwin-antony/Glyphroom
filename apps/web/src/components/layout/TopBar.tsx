@@ -3,6 +3,7 @@ import { useNavigate, Link } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext.js';
 import { ThemeToggle } from '../ui/ThemeToggle.js';
 import { NotificationBell } from './NotificationBell.js';
+import { SlotRenderer } from '../plugins/SlotRenderer.js';
 import {
   Search,
   Plus,
@@ -79,6 +80,7 @@ export const TopBar: React.FC<TopBarProps> = ({
         {/* Theme Mode Switcher */}
         <ThemeToggle />
         <NotificationBell />
+        <SlotRenderer slot="topbar:actions" />
 
         <button
           onClick={() => navigate('/posts/new')}

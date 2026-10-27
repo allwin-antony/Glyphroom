@@ -1,3 +1,4 @@
+import { SlotRenderer } from '../components/plugins/SlotRenderer.js';
 import React, { useState, useEffect, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
@@ -32,6 +33,7 @@ interface PostDetails {
   authorId: string;
   authorName?: string;
   authorEmail?: string;
+  spaceId?: string | null;
   coeId?: string;
   coeName?: string;
   publishedMarkdown?: string;
@@ -516,6 +518,8 @@ export const ReaderView: React.FC = () => {
               <Bookmark className={`w-3.5 h-3.5 ${isBookmarked ? 'fill-current' : ''}`} />
               <span>{isBookmarked ? 'Saved' : 'Save'}</span>
             </button>
+
+            <SlotRenderer slot="reader:header:actions" context={{ postId: post?.id, spaceId: post?.spaceId }} />
 
             {/* Reader Preferences Toggle */}
             <button

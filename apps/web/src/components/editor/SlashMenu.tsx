@@ -1,3 +1,5 @@
+import { usePluginSlashCommands } from '../../plugins/PluginProvider.js';
+import { SlotRenderer } from '../plugins/SlotRenderer.js';
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   Table, 
@@ -44,6 +46,7 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
   onUploadAttachment,
   onOpenTemplates,
 }) => {
+  const pluginCommands = usePluginSlashCommands();
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -319,6 +322,7 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
         <span>↵ Select</span>
         <span>Esc Dismiss</span>
       </div>
+      <SlotRenderer slot="editor:slash:commands" context={{ editor }} />
     </div>
   );
 };

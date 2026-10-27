@@ -1,3 +1,5 @@
+import { usePluginEditorExtensions } from '../plugins/PluginProvider.js';
+import { SlotRenderer } from './plugins/SlotRenderer.js';
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
@@ -331,6 +333,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     [postId]
   );
 
+  const pluginExtensions = usePluginEditorExtensions();
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -361,6 +364,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       SuggestionInsert,
       SuggestionDelete,
       Alert,
+      ...pluginExtensions,
       Collaboration.configure({
         fragment,
         provider,
@@ -1080,6 +1084,8 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           <Plus size={13} className="text-accent" />
           <span>Insert</span>
         </button>
+
+        <SlotRenderer slot="editor:toolbar:actions" context={{ editor, postId }} />
 
         {/* Templates Picker Trigger */}
         <button
