@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import * as Y from 'yjs';
 import { 
   History, 
   Globe, 
@@ -6,15 +7,22 @@ import {
   Save, 
   Clock, 
   Loader2, 
-  RefreshCw,
-  Calendar,
-  RotateCcw,
-  Eye,
-  CheckCircle2,
-  AlertTriangle,
-  X
+  RefreshCw, 
+  RotateCcw, 
+  Eye, 
+  CheckCircle2, 
+  AlertTriangle, 
+  X 
 } from 'lucide-react';
 import { api, ApiError } from '../../../lib/api.js';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '../../ui/dialog.js';
 
 export interface PostVersion {
   id: string;
@@ -29,9 +37,11 @@ export interface PostVersion {
 
 export interface VersionsTabProps {
   postId: string;
+  ydoc?: Y.Doc;
+  editor?: any;
 }
 
-export const VersionsTab: React.FC<VersionsTabProps> = ({ postId }) => {
+export const VersionsTab: React.FC<VersionsTabProps> = ({ postId, ydoc, editor }) => {
   const [versions, setVersions] = useState<PostVersion[]>([]);
   const [selectedVersion, setSelectedVersion] = useState<PostVersion | null>(null);
   const [snapshotContent, setSnapshotContent] = useState<string | null>(null);
@@ -40,6 +50,7 @@ export const VersionsTab: React.FC<VersionsTabProps> = ({ postId }) => {
   const [restoreSuccess, setRestoreSuccess] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [confirmVersion, setConfirmVersion] = useState<PostVersion | null>(null);
 
   const fetchVersions = useCallback(async () => {
     try {
@@ -73,22 +84,43 @@ export const VersionsTab: React.FC<VersionsTabProps> = ({ postId }) => {
     }
   };
 
-  // Restore historical version
-  const handleRestoreVersion = async (versionId: string, versionNumber: number) => {
-    if (!window.confirm(`Are you sure you want to restore version v${versionNumber}? A safety checkpoint of your current draft will be created automatically.`)) {
-      return;
-    }
-
+  // Restore historical version handler
+  const handleExecuteRestore = async () => {
+    if (!confirmVersion) return;
+    const v = confirmVersion;
     setIsRestoring(true);
+    setError(null);
     try {
-      await api.post(`/posts/${postId}/versions/${versionId}/restore`);
-      setRestoreSuccess(`Restored v${versionNumber}! Reloading draft...`);
+      const res = await api.post<{
+        success: boolean;
+        yjsState?: any;
+        restoredVersionNumber: number;
+        message?: string;
+      }>(`/posts/${postId}/versions/${v.id}/restore`);
+
+      if (ydoc && res?.yjsState) {
+        try {
+          let binary: Uint8Array | null = null;
+          if (res.yjsState.data && Array.isArray(res.yjsState.data)) {
+            binary = new Uint8Array(res.yjsState.data);
+          } else if (typeof res.yjsState === 'string') {
+            binary = new Uint8Array(res.yjsState.match(/.{1,2}/g)?.map((b: string) => parseInt(b, 16)) || []);
+          } else if (res.yjsState instanceof Uint8Array) {
+            binary = res.yjsState;
+          }
+          if (binary && binary.length > 0) {
+            Y.applyUpdate(ydoc, binary);
+          }
+        } catch (yErr) {
+          console.warn('Failed to apply restored Yjs update:', yErr);
+        }
+      }
+
+      setRestoreSuccess(`Restored v${v.versionNumber} successfully! Draft updated.`);
+      setConfirmVersion(null);
       await fetchVersions();
-      setTimeout(() => {
-        window.location.reload();
-      }, 1200);
     } catch (err: any) {
-      alert(err?.message || 'Failed to restore version.');
+      setError(err?.message || 'Failed to restore version.');
     } finally {
       setIsRestoring(false);
     }
@@ -153,6 +185,13 @@ export const VersionsTab: React.FC<VersionsTabProps> = ({ postId }) => {
         </div>
       )}
 
+      {error && (
+        <div className="m-3 p-2.5 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-center gap-2">
+          <AlertTriangle className="w-4 h-4 shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
       {/* Snapshot Preview Drawer Modal */}
       {selectedVersion && (
         <div className="p-3 border-b border-border bg-canvas text-xs space-y-2">
@@ -176,17 +215,38 @@ export const VersionsTab: React.FC<VersionsTabProps> = ({ postId }) => {
             </div>
           ) : (
             <>
-              <div className="max-h-40 overflow-y-auto p-2 bg-surface rounded-lg border border-border font-mono text-[11px] whitespace-pre-wrap">
-                {snapshotContent}
+              <div className="max-h-56 overflow-y-auto p-3 bg-surface rounded-lg border border-border text-xs text-foreground space-y-2">
+                {snapshotContent ? (
+                  snapshotContent.split('\n').map((line, idx) => {
+                    if (line.startsWith('# ')) {
+                      return <h1 key={idx} className="text-base font-bold text-foreground border-b border-border pb-1">{line.slice(2)}</h1>;
+                    }
+                    if (line.startsWith('## ')) {
+                      return <h2 key={idx} className="text-sm font-bold text-foreground mt-2">{line.slice(3)}</h2>;
+                    }
+                    if (line.startsWith('### ')) {
+                      return <h3 key={idx} className="text-xs font-bold text-foreground mt-1.5">{line.slice(4)}</h3>;
+                    }
+                    if (line.startsWith('- ') || line.startsWith('* ')) {
+                      return <li key={idx} className="ml-4 list-disc text-text-secondary">{line.slice(2)}</li>;
+                    }
+                    if (!line.trim()) {
+                      return <div key={idx} className="h-1" />;
+                    }
+                    return <p key={idx} className="text-text-secondary leading-relaxed">{line}</p>;
+                  })
+                ) : (
+                  <span className="text-text-muted italic">No content recorded.</span>
+                )}
               </div>
               <div className="flex justify-end gap-2 pt-1">
                 <button
                   type="button"
-                  onClick={() => handleRestoreVersion(selectedVersion.id, selectedVersion.versionNumber)}
+                  onClick={() => setConfirmVersion(selectedVersion)}
                   disabled={isRestoring}
                   className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white font-semibold text-xs shadow-xs hover:opacity-95"
                 >
-                  <RotateCcw className={`w-3 h-3 ${isRestoring ? 'animate-spin' : ''}`} />
+                  <RotateCcw className="w-3 h-3" />
                   <span>Restore v{selectedVersion.versionNumber}</span>
                 </button>
               </div>
@@ -201,10 +261,6 @@ export const VersionsTab: React.FC<VersionsTabProps> = ({ postId }) => {
           <div className="py-12 flex flex-col items-center justify-center text-text-muted">
             <Loader2 className="w-5 h-5 animate-spin mb-2 text-accent" />
             <span>Loading version history...</span>
-          </div>
-        ) : error ? (
-          <div className="p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger">
-            {error}
           </div>
         ) : versions.length === 0 ? (
           <div className="py-12 text-center text-text-muted">
@@ -252,6 +308,51 @@ export const VersionsTab: React.FC<VersionsTabProps> = ({ postId }) => {
           })
         )}
       </div>
+
+      {/* Confirmation Dialog for Restore (Bug #1 & #16) */}
+      <Dialog open={Boolean(confirmVersion)} onOpenChange={(open) => !open && setConfirmVersion(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-foreground">
+              <RotateCcw className="w-4 h-4 text-accent" />
+              <span>Restore Version v{confirmVersion?.versionNumber}</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-text-secondary mt-1">
+              Are you sure you want to restore <strong className="text-foreground">Version v{confirmVersion?.versionNumber}</strong>?
+              A safety snapshot of your current draft will be automatically recorded before applying the restore.
+            </DialogDescription>
+          </DialogHeader>
+
+          <DialogFooter className="flex items-center justify-end gap-2 pt-3">
+            <button
+              type="button"
+              onClick={() => setConfirmVersion(null)}
+              disabled={isRestoring}
+              className="px-3 py-1.5 rounded-lg border border-border bg-canvas text-xs font-semibold text-foreground hover:bg-elevated transition-colors"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleExecuteRestore}
+              disabled={isRestoring}
+              className="px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:opacity-90 transition-colors flex items-center gap-1.5 disabled:opacity-50"
+            >
+              {isRestoring ? (
+                <>
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  <span>Restoring...</span>
+                </>
+              ) : (
+                <>
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Confirm Restore</span>
+                </>
+              )}
+            </button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

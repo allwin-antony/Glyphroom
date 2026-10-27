@@ -588,4 +588,48 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
   user-select: none;
 }
 
+.enterprise-block-mode .ProseMirror > div.enterprise-alert {
+  border-left-width: 4px !important;
+}
+
+.enterprise-block-mode .ProseMirror > div.enterprise-alert::before {
+  content: "Alert Callout";
+  display: table;
+  font-size: 9px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-bottom: 8px;
+  user-select: none;
+}
+
+.enterprise-block-mode .ProseMirror > div.enterprise-alert-note::before {
+  content: "Note Callout";
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.enterprise-block-mode .ProseMirror > div.enterprise-alert-tip::before {
+  content: "Tip Callout";
+  color: var(--success);
+  background: color-mix(in srgb, var(--success) 12%, transparent);
+}
+
+.enterprise-block-mode .ProseMirror > div.enterprise-alert-warning::before {
+  content: "Warning Callout";
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 12%, transparent);
+}
+
+.enterprise-block-mode .ProseMirror > div.enterprise-alert-caution::before {
+  content: "Caution Callout";
+  color: var(--danger);
+  background: color-mix(in srgb, var(--danger) 12%, transparent);
+}
+
+
 

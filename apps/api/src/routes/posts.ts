@@ -1213,6 +1213,8 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       success: true,
       restoredVersionNumber: targetVersion.versionNumber,
       message: `Successfully restored version v${targetVersion.versionNumber}`,
+      yjsState: targetVersion.yjsStateSnapshot,
+      markdownSnapshot: targetVersion.markdownSnapshot,
     });
   });
 

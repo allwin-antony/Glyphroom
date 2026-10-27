@@ -7,7 +7,8 @@ import {
   ArrowRight, 
   Loader2, 
   AlertCircle, 
-  RefreshCw 
+  RefreshCw,
+  ShieldAlert
 } from 'lucide-react';
 import { api, ApiError } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.js';
@@ -20,8 +21,10 @@ export const NewPostView: React.FC = () => {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
   const [isProvisioning, setIsProvisioning] = useState(false);
 
+  const isReader = user?.role === 'reader';
+
   const handleSelectTemplate = async (templateId: string, templateTitle?: string) => {
-    if (isProvisioning) return;
+    if (isProvisioning || isReader) return;
     setError(null);
     setSelectedTemplateId(templateId);
     setIsProvisioning(true);
@@ -87,6 +90,19 @@ export const NewPostView: React.FC = () => {
         </p>
       </div>
 
+      {/* Reader Account Notice */}
+      {isReader && (
+        <div className="p-4 rounded-xl bg-status-warning/10 border border-status-warning/30 text-status-warning mb-6 flex items-start gap-3">
+          <ShieldAlert className="w-5 h-5 shrink-0 mt-0.5" />
+          <div className="flex-1 text-xs">
+            <div className="font-bold">Reader Account Notice</div>
+            <div className="mt-0.5 text-text-secondary leading-relaxed">
+              Your account currently has the Reader role. Authors, space maintainers, and administrators can provision new technical documents. If you need authoring access, please contact your workspace administrator or space maintainer.
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Error alert if provisioning fails */}
       {error && (
         <div className="p-4 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger mb-6 flex items-start gap-3">
@@ -109,10 +125,14 @@ export const NewPostView: React.FC = () => {
         {/* Blank Draft Card */}
         <div
           onClick={() => handleSelectTemplate('blank', 'Untitled Draft')}
-          className={`group p-5 rounded-2xl border bg-surface transition-all cursor-pointer flex flex-col justify-between text-left relative overflow-hidden ${
+          className={`group p-5 rounded-2xl border bg-surface transition-all flex flex-col justify-between text-left relative overflow-hidden ${
+            isReader
+              ? 'opacity-60 cursor-not-allowed border-border'
+              : 'cursor-pointer hover:border-accent hover:shadow-md'
+          } ${
             selectedTemplateId === 'blank'
               ? 'border-accent ring-2 ring-accent/30 shadow-md'
-              : 'border-border hover:border-accent hover:shadow-md'
+              : 'border-border'
           } ${isProvisioning && selectedTemplateId !== 'blank' ? 'opacity-50 pointer-events-none' : ''}`}
         >
           <div>
@@ -156,10 +176,14 @@ export const NewPostView: React.FC = () => {
             <div
               key={tpl.id}
               onClick={() => handleSelectTemplate(tpl.id, tpl.title)}
-              className={`group p-5 rounded-2xl border bg-surface transition-all cursor-pointer flex flex-col justify-between text-left relative overflow-hidden ${
+              className={`group p-5 rounded-2xl border bg-surface transition-all flex flex-col justify-between text-left relative overflow-hidden ${
+                isReader
+                  ? 'opacity-60 cursor-not-allowed border-border'
+                  : 'cursor-pointer hover:border-accent hover:shadow-md'
+              } ${
                 isSelected
                   ? 'border-accent ring-2 ring-accent/30 shadow-md'
-                  : 'border-border hover:border-accent hover:shadow-md'
+                  : 'border-border'
               } ${isProvisioning && !isSelected ? 'opacity-50 pointer-events-none' : ''}`}
             >
               <div>

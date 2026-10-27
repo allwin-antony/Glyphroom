@@ -1,6 +1,6 @@
 import { usePluginSlashCommands } from '../../plugins/PluginProvider.js';
 import { SlotRenderer } from '../plugins/SlotRenderer.js';
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { 
   Table, 
   CheckSquare, 
@@ -25,8 +25,9 @@ export interface SlashMenuItem {
   title: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
-  group: 'Basic' | 'Structure & Tables' | 'Project & Technical' | 'Alerts';
+  group: 'Basic' | 'Structure & Tables' | 'Project & Technical' | 'Alerts' | 'Extensions';
   action: (editor: any) => void;
+  keywords?: string[];
 }
 
 export interface SlashMenuProps {
@@ -180,9 +181,18 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
       id: 'alert-note',
       title: 'Note Callout',
       description: 'Helpful background context and tips',
-      icon: AlertCircle,
+      icon: HelpCircle,
       group: 'Alerts',
-      action: (ed) => ed.chain().focus().insertContent({ type: 'alert', attrs: { type: 'note' } }).run(),
+      action: (ed) =>
+        ed
+          .chain()
+          .focus()
+          .insertContent({
+            type: 'alert',
+            attrs: { type: 'note' },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Note content...' }] }],
+          })
+          .run(),
     },
     {
       id: 'alert-tip',
@@ -190,7 +200,16 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
       description: 'Best practices and recommendations',
       icon: Sparkles,
       group: 'Alerts',
-      action: (ed) => ed.chain().focus().insertContent({ type: 'alert', attrs: { type: 'tip' } }).run(),
+      action: (ed) =>
+        ed
+          .chain()
+          .focus()
+          .insertContent({
+            type: 'alert',
+            attrs: { type: 'tip' },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Pro-tip recommendation...' }] }],
+          })
+          .run(),
     },
     {
       id: 'alert-warning',
@@ -198,17 +217,63 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
       description: 'Deprecation and breaking change alerts',
       icon: AlertCircle,
       group: 'Alerts',
-      action: (ed) => ed.chain().focus().insertContent({ type: 'alert', attrs: { type: 'warning' } }).run(),
+      action: (ed) =>
+        ed
+          .chain()
+          .focus()
+          .insertContent({
+            type: 'alert',
+            attrs: { type: 'warning' },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Warning alert...' }] }],
+          })
+          .run(),
     },
-  ], []);
+
+    // 5. Plugin Extensions
+    ...pluginCommands.map((cmd) => ({
+      id: cmd.id,
+      title: cmd.label,
+      description: cmd.description,
+      icon: Sparkles,
+      group: 'Extensions' as const,
+      action: (ed: any) => cmd.execute(ed),
+      keywords: cmd.keywords,
+    })),
+  ], [pluginCommands, onUploadAttachment, onOpenTemplates]);
 
   const filteredItems = useMemo(() => {
     if (!search.trim()) return menuItems;
     const q = search.toLowerCase();
     return menuItems.filter(
-      (item) => item.title.toLowerCase().includes(q) || item.description.toLowerCase().includes(q)
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.description.toLowerCase().includes(q) ||
+        item.keywords?.some((k) => k.toLowerCase().includes(q))
     );
   }, [menuItems, search]);
+
+  const executeItem = useCallback(
+    (item: SlashMenuItem) => {
+      if (!editor) return;
+      try {
+        // Strip triggering '/' from current line before running action
+        const { state } = editor;
+        const { from } = state.selection;
+        const $from = state.doc.resolve(from);
+        if ($from.parentOffset > 0) {
+          const textBefore = $from.parent.textBetween(0, $from.parentOffset);
+          if (textBefore.startsWith('/')) {
+            editor.chain().deleteRange({ from: $from.start(), to: $from.pos }).run();
+          }
+        }
+      } catch {
+        // Ignore fallback
+      }
+      item.action(editor);
+      onClose();
+    },
+    [editor, onClose]
+  );
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -235,8 +300,7 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
       } else if (e.key === 'Enter') {
         e.preventDefault();
         if (filteredItems[selectedIndex]) {
-          filteredItems[selectedIndex].action(editor);
-          onClose();
+          executeItem(filteredItems[selectedIndex]);
         }
       } else if (e.key === 'Escape') {
         e.preventDefault();
@@ -246,7 +310,7 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isOpen, filteredItems, selectedIndex, editor, onClose]);
+  }, [isOpen, filteredItems, selectedIndex, executeItem, onClose]);
 
   // Click outside to close
   useEffect(() => {
@@ -295,10 +359,7 @@ export const SlashMenu: React.FC<SlashMenuProps> = ({
               <button
                 key={item.id}
                 type="button"
-                onClick={() => {
-                  item.action(editor);
-                  onClose();
-                }}
+                onClick={() => executeItem(item)}
                 onMouseEnter={() => setSelectedIndex(idx)}
                 className={`w-full flex items-start gap-2.5 px-2.5 py-2 rounded-lg text-left transition-colors cursor-pointer ${
                   isSelected ? 'bg-accent-bg text-accent' : 'hover:bg-canvas text-foreground'

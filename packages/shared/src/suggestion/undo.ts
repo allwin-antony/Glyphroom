@@ -52,7 +52,7 @@ export function createHumanUndoManager(
 ): Y.UndoManager {
   const trackedOrigins =
     options?.trackedOrigins ??
-    new Set<any>([ySyncPluginKey, ...(options?.additionalTrackedOrigins || [])]);
+    new Set<any>([ySyncPluginKey, null, ...(options?.additionalTrackedOrigins || [])]);
 
   return new Y.UndoManager(scope, {
     trackedOrigins,
@@ -86,7 +86,7 @@ export function createHumanUndoPlugin(options?: {
 }): Plugin {
   return yUndoPlugin({
     undoManager: options?.undoManager || null,
-    trackedOrigins: options?.trackedOrigins || [ySyncPluginKey],
+    trackedOrigins: options?.trackedOrigins || [ySyncPluginKey, null],
   });
 }
 

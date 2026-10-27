@@ -114,7 +114,7 @@ export const DrawerPanel: React.FC<DrawerPanelProps> = ({
           </TabsContent>
 
           <TabsContent value="versions" className="m-0 h-full data-[state=inactive]:hidden">
-            <VersionsTab postId={postId} />
+            <VersionsTab postId={postId} ydoc={ydoc} editor={editor} />
           </TabsContent>
 
           <TabsContent value="settings" className="m-0 h-full data-[state=inactive]:hidden">

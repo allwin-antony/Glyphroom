@@ -378,7 +378,17 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         }`,
       },
       handleKeyDown: (view, event) => {
-        // Shift+Enter: In Notebook mode, split or insert a new card below
+        // Mod-/ : Keyboard shortcut to open Slash Menu (Bug #18)
+        if ((event.metaKey || event.ctrlKey) && event.key === '/') {
+          event.preventDefault();
+          const { $from } = view.state.selection;
+          const coords = view.coordsAtPos($from.pos);
+          setSlashMenuPos({ top: coords.bottom + 8, left: coords.left });
+          setIsSlashMenuOpen(true);
+          return true;
+        }
+
+        // Shift+Enter: In Notebook mode, split or insert a new card below (Bug #19)
         if (event.key === 'Enter' && event.shiftKey) {
           event.preventDefault();
           const { state, dispatch } = view;
@@ -391,9 +401,27 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           }
           const pNode = state.schema.nodes.paragraph.create();
           const tr = state.tr.insert(pos, pNode);
-          dispatch(tr);
+          const targetPos = Math.min(pos + 1, tr.doc.content.size);
+          const resolved = tr.doc.resolve(targetPos);
+          tr.setSelection(TextSelection.near(resolved));
+          dispatch(tr.scrollIntoView());
           view.focus();
           return true;
+        }
+
+        // Enter (without Shift) in Block View: Soft line break within the same block card (Bug #19 & #23)
+        if (viewMode === 'block' && event.key === 'Enter' && !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey) {
+          const { $from } = view.state.selection;
+          const parentType = $from.parent.type.name;
+          if (parentType === 'paragraph' || parentType === 'heading') {
+            event.preventDefault();
+            const hardBreak = view.state.schema.nodes.hardBreak?.create();
+            if (hardBreak) {
+              const tr = view.state.tr.replaceSelectionWith(hardBreak);
+              view.dispatch(tr.scrollIntoView());
+              return true;
+            }
+          }
         }
 
         // Trigger slash menu when user presses '/' on an empty block
@@ -619,6 +647,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         | 'projectStatusBlock'
         | 'taskList'
         | 'heading'
+        | 'alert'
     ) => {
       if (!editor) return;
       const { from } = editor.state.selection;
@@ -718,6 +747,16 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                 content: [{ type: 'paragraph', content: [{ type: 'text', text: 'New deliverable' }] }],
               },
             ],
+          })
+          .focus(pos + 1)
+          .run();
+      } else if (type === 'alert') {
+        editor
+          .chain()
+          .insertContentAt(pos, {
+            type: 'alert',
+            attrs: { type: 'warning' },
+            content: [{ type: 'paragraph', content: [{ type: 'text', text: 'Warning callout note...' }] }],
           })
           .focus(pos + 1)
           .run();
@@ -1664,6 +1703,15 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                   >
                     <Sigma size={12} className="text-accent" />
                     <span>+ Math</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleInsertCardBelow('alert')}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                    title="Add Callout Alert Card"
+                  >
+                    <AlertCircle size={12} className="text-status-warning" />
+                    <span>+ Callout</span>
                   </button>
                 </div>
               </div>

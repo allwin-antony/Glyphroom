@@ -169,7 +169,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
         setReplyingToId(null);
       }
     } catch (err: any) {
-      alert(err?.message || 'Failed to submit reply.');
+      setError(err?.message || 'Failed to submit reply.');
     } finally {
       setIsSubmitting(false);
     }
@@ -183,7 +183,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
         prev.map((c) => (c.id === commentId ? { ...c, status: 'resolved' as const } : c))
       );
     } catch (err: any) {
-      alert(err?.message || 'Failed to resolve comment.');
+      setError(err?.message || 'Failed to resolve comment.');
     }
   };
 

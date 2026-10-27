@@ -42,6 +42,7 @@ export const EditorView: React.FC = () => {
 
   // 1. Stable Y.Doc per post ID
   const ydoc = useMemo(() => new Y.Doc(), [id]);
+  const isWsSyncedRef = useRef(false);
 
   // 2. Fetch post metadata from REST API
   useEffect(() => {
@@ -68,7 +69,7 @@ export const EditorView: React.FC = () => {
               } else if (res.post.yjsState instanceof Uint8Array) {
                 binary = res.post.yjsState;
               }
-              if (binary && binary.length > 0 && ydoc.share.size === 0) {
+              if (binary && binary.length > 0 && !isWsSyncedRef.current && ydoc.share.size === 0) {
                 Y.applyUpdate(ydoc, binary);
               }
             } catch (yErr) {
@@ -110,6 +111,11 @@ export const EditorView: React.FC = () => {
       name: roomName,
       document: ydoc,
       token,
+      onSynced: (data) => {
+        if (data.state) {
+          isWsSyncedRef.current = true;
+        }
+      },
     });
 
     // Awareness local user profile setup
@@ -210,11 +216,11 @@ export const EditorView: React.FC = () => {
   return (
     <div className="flex flex-col h-full bg-canvas text-foreground overflow-hidden">
       {/* Editor Sub-Header / Status Bar */}
-      <header className="h-12 bg-surface border-b border-border flex items-center justify-between px-4 sm:px-6 shadow-xs shrink-0 select-none">
-        <div className="flex items-center gap-3">
+      <header className="h-12 bg-surface border-b border-border flex items-center justify-between px-3 sm:px-6 shadow-xs shrink-0 select-none gap-2">
+        <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
           <button
             onClick={() => navigate('/my-work')}
-            className="p-1 rounded-md text-text-muted hover:text-foreground hover:bg-canvas transition-colors"
+            className="p-1 rounded-md text-text-muted hover:text-foreground hover:bg-canvas transition-colors shrink-0"
             aria-label="Back to My Work"
             title="Back to My Work"
           >
@@ -223,7 +229,7 @@ export const EditorView: React.FC = () => {
           <input
             value={title}
             onChange={(e) => handleTitleChange(e.target.value)}
-            className="bg-transparent border-none text-sm font-semibold text-foreground focus:outline-none w-56 sm:w-80 md:w-96 placeholder:text-text-muted truncate"
+            className="bg-transparent border-none text-sm font-semibold text-foreground focus:outline-none min-w-0 flex-1 max-w-xs sm:max-w-md placeholder:text-text-muted truncate"
             placeholder="Untitled Post..."
           />
         </div>

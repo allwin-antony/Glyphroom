@@ -100,6 +100,7 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
   const [collaborators, setCollaborators] = useState<CollaboratorItem[]>([]);
   const [availableUsers, setAvailableUsers] = useState<Array<{ id: string; email: string; fullName: string }>>([]);
   const [selectedUserEmail, setSelectedUserEmail] = useState('');
+  const [inviteSource, setInviteSource] = useState<'directory' | 'email'>('directory');
   const [collaboratorRole, setCollaboratorRole] = useState<'edit' | 'review' | 'view'>('edit');
   const [isAddingCollab, setIsAddingCollab] = useState(false);
   const [collabError, setCollabError] = useState<string | null>(null);
@@ -179,6 +180,7 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
     const generated = title
       .toLowerCase()
       .trim()
+      .replace(/[._]/g, '-')
       .replace(/[^a-z0-9\s-]/g, '')
       .replace(/\s+/g, '-')
       .replace(/-+/g, '-');
@@ -323,6 +325,11 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
         <div className="flex items-center gap-1.5 text-xs font-semibold text-foreground">
           <Settings className="w-4 h-4 text-text-secondary" />
           <span>Post Settings & Co-Authors</span>
+          {isDirty && (
+            <span className="ml-1.5 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-500 border border-amber-500/30">
+              Unsaved
+            </span>
+          )}
         </div>
 
         {saveSuccess && (
@@ -684,33 +691,59 @@ export const PostSettingsTab: React.FC<PostSettingsTabProps> = ({
             </label>
 
             <div className="space-y-2">
-              {/* Quick Select Teammate from Enterprise Directory */}
               {availableUsers.length > 0 && (
-                <div className="flex gap-1.5">
+                <div className="flex rounded-lg border border-border p-0.5 bg-canvas text-[11px]">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInviteSource('directory');
+                      setSelectedUserEmail('');
+                    }}
+                    className={`flex-1 py-1 rounded-md font-semibold transition-colors ${
+                      inviteSource === 'directory' ? 'bg-surface text-foreground shadow-2xs' : 'text-text-muted hover:text-foreground'
+                    }`}
+                  >
+                    Directory
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setInviteSource('email');
+                      setSelectedUserEmail('');
+                    }}
+                    className={`flex-1 py-1 rounded-md font-semibold transition-colors ${
+                      inviteSource === 'email' ? 'bg-surface text-foreground shadow-2xs' : 'text-text-muted hover:text-foreground'
+                    }`}
+                  >
+                    Direct Email
+                  </button>
+                </div>
+              )}
+
+              <div className="flex gap-2">
+                {inviteSource === 'directory' && availableUsers.length > 0 ? (
                   <select
                     value={selectedUserEmail}
                     onChange={(e) => setSelectedUserEmail(e.target.value)}
-                    className="w-full px-2.5 py-1.5 rounded-lg bg-canvas border border-border text-xs text-foreground focus:outline-none focus:border-accent"
+                    className="flex-1 px-2.5 py-1.5 rounded-lg bg-canvas border border-border text-xs text-foreground focus:outline-none focus:border-accent"
                   >
-                    <option value="">Select from organization directory...</option>
+                    <option value="">Select teammate...</option>
                     {availableUsers.map((u) => (
                       <option key={u.id} value={u.email}>
                         {u.fullName} ({u.email})
                       </option>
                     ))}
                   </select>
-                </div>
-              )}
+                ) : (
+                  <input
+                    type="email"
+                    value={selectedUserEmail}
+                    onChange={(e) => setSelectedUserEmail(e.target.value)}
+                    placeholder="Enter teammate's corporate email..."
+                    className="flex-1 px-3 py-1.5 rounded-lg bg-canvas border border-border text-xs text-foreground focus:outline-none focus:border-accent"
+                  />
+                )}
 
-              {/* Or manual email typing */}
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={selectedUserEmail}
-                  onChange={(e) => setSelectedUserEmail(e.target.value)}
-                  placeholder="Or enter teammate's corporate email..."
-                  className="flex-1 px-3 py-1.5 rounded-lg bg-canvas border border-border text-xs text-foreground focus:outline-none focus:border-accent"
-                />
                 <select
                   value={collaboratorRole}
                   onChange={(e) => setCollaboratorRole(e.target.value as any)}

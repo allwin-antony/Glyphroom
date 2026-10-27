@@ -43,19 +43,22 @@ const MermaidComponent: React.FC<MermaidComponentProps> = ({ node, updateAttribu
         const mermaid = (await import('mermaid')).default;
         mermaid.initialize({
           startOnLoad: false,
-          securityLevel: 'strict', // Strict sandboxing
+          securityLevel: 'antiscript',
           theme: 'neutral',
+          fontFamily: 'inherit',
         });
 
         const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
         const { svg } = await mermaid.render(id, node.attrs.code);
 
         if (!isCancelled) {
-          // Strict DOMPurify SVG sanitization to eliminate script/iframe injection
+          // Sanitize SVG while allowing foreignObject and its HTML container elements so node labels render
           const sanitized = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true, svgFilters: true },
+            USE_PROFILES: { svg: true, svgFilters: true, html: true },
+            ADD_TAGS: ['foreignObject'],
+            ADD_ATTR: ['dominant-baseline'],
           });
-          setSvgHtml(sanitized);
+          setSvgHtml(sanitized || svg);
           setRenderError(null);
         }
       } catch (err: any) {
