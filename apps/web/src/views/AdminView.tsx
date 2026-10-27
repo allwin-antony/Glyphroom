@@ -1,10 +1,16 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Users, Key, Shield, CheckCircle2, AlertCircle, Loader2, Layers, Plus, Check, X, ArrowRight, RefreshCw } from 'lucide-react';
+import { Users, Key, Shield, CheckCircle2, AlertCircle, Loader2, Layers, Plus, Check, X, ArrowRight, RefreshCw, Cpu, CheckCircle } from 'lucide-react';
+import { SlotRenderer } from '../components/plugins/SlotRenderer.js';
 import { api } from '../lib/api.js';
 
 export const AdminView: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'audit' | 'spaces' | 'users' | 'pats'>('audit');
+  const [activeTab, setActiveTab] = useState<'audit' | 'spaces' | 'users' | 'pats' | 'plugins'>('audit');
+  const [pluginList, setPluginList] = useState<any[]>([]);
+  const [failedEvents, setFailedEvents] = useState<any[]>([]);
+  const [failedCount, setFailedCount] = useState(0);
+  const [isRetryingOutbox, setIsRetryingOutbox] = useState(false);
+  const [retryMessage, setRetryMessage] = useState<string | null>(null);
   const [verifyStatus, setVerifyStatus] = useState<string | null>(null);
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [isVerifying, setIsVerifying] = useState(false);
@@ -84,7 +90,43 @@ export const AdminView: React.FC = () => {
   useEffect(() => {
     if (activeTab === 'users') fetchUsers();
     if (activeTab === 'pats') fetchPats();
+    if (activeTab === 'plugins') {
+      api.get<{ plugins: any[]; totalFailedOutboxEvents: number }>('/admin/plugins')
+        .then((res) => {
+          if (res) {
+            setPluginList(res.plugins || []);
+            setFailedCount(res.totalFailedOutboxEvents || 0);
+          }
+        })
+        .catch(() => {});
+      api.get<{ failedEvents: any[] }>('/admin/plugins/outbox/failed')
+        .then((res) => {
+          if (res) setFailedEvents(res.failedEvents || []);
+        })
+        .catch(() => {});
+    }
   }, [activeTab]);
+
+  const handleRetryOutbox = async (eventId?: string) => {
+    setIsRetryingOutbox(true);
+    setRetryMessage(null);
+    try {
+      const res = await api.post<{ retriedCount: number }>('/admin/plugins/outbox/retry', { eventId });
+      setRetryMessage(`Successfully retried ${res.retriedCount} event(s).`);
+      // Refresh
+      const listRes = await api.get<{ plugins: any[]; totalFailedOutboxEvents: number }>('/admin/plugins');
+      if (listRes) {
+        setPluginList(listRes.plugins || []);
+        setFailedCount(listRes.totalFailedOutboxEvents || 0);
+      }
+      const failRes = await api.get<{ failedEvents: any[] }>('/admin/plugins/outbox/failed');
+      if (failRes) setFailedEvents(failRes.failedEvents || []);
+    } catch (err: any) {
+      setRetryMessage(`Retry failed: ${err.message || 'Server error'}`);
+    } finally {
+      setIsRetryingOutbox(false);
+    }
+  };
 
   const updateUserRole = async (user: AdminUser, role: string) => {
     if (role === user.role) return;
@@ -216,6 +258,7 @@ export const AdminView: React.FC = () => {
           { id: 'users', label: 'User Directory', icon: Users },
           { id: 'pats', label: 'PAT Token Inventory', icon: Key },
           { id: 'audit', label: 'Audit Log & Chain Verification', icon: Shield },
+          { id: 'plugins', label: 'Plugins & Outbox Diagnostics', icon: Cpu },
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -456,6 +499,137 @@ export const AdminView: React.FC = () => {
             <p className="text-xs text-text-secondary">
               Immutable append-only ledger of platform governance actions, authentication events, and document updates.
             </p>
+          </div>
+        </div>
+      )}
+
+      {/* Plugins & Diagnostics Tab Content */}
+      {activeTab === 'plugins' && (
+        <div className="space-y-6">
+          <SlotRenderer slot="admin:console:tabs" />
+
+          {/* Installed Plugins Card */}
+          <div className="p-5 rounded-xl bg-surface border border-border shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-foreground">Registered Plugin Architecture</h2>
+                <p className="text-xs text-text-secondary">
+                  Microkernel extension host inventory with verified manifest capabilities.
+                </p>
+              </div>
+              <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-accent/10 text-accent">
+                {pluginList.length} Installed
+              </span>
+            </div>
+
+            {pluginList.length === 0 ? (
+              <div className="p-6 rounded-lg border border-dashed border-border text-center text-xs text-text-muted">
+                No external plugins enabled. System running with core microkernel.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {pluginList.map((p) => (
+                  <div key={p.id} className="p-4 rounded-lg border border-border bg-canvas space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="font-bold text-xs text-foreground flex items-center gap-2">
+                        <span>{p.name}</span>
+                        <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-surface border border-border text-text-muted">
+                          v{p.version}
+                        </span>
+                      </div>
+                      <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-status-success/20 text-status-success flex items-center gap-1">
+                        <CheckCircle className="w-3 h-3" />
+                        Active
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-text-secondary">{p.description || 'No description provided.'}</p>
+
+                    <div className="flex flex-wrap gap-1 pt-1">
+                      {p.capabilities?.map((cap: string) => (
+                        <span key={cap} className="px-2 py-0.5 rounded text-[10px] font-mono bg-elevated text-text-muted border border-border">
+                          {cap}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Durable Outbox Diagnostics */}
+          <div className="p-5 rounded-xl bg-surface border border-border shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-sm font-bold text-foreground">Durable Domain Event Outbox</h2>
+                <p className="text-xs text-text-secondary">
+                  Dead-letter event queue and automatic retry telemetry for webhook integrations.
+                </p>
+              </div>
+
+              <div className="flex items-center gap-3">
+                <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${failedCount > 0 ? 'bg-status-danger/10 text-status-danger' : 'bg-status-success/10 text-status-success'}`}>
+                  {failedCount} Dead Letter{failedCount !== 1 ? 's' : ''}
+                </span>
+
+                <button
+                  onClick={() => handleRetryOutbox()}
+                  disabled={isRetryingOutbox || failedCount === 0}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-accent text-white text-xs font-semibold hover:opacity-90 disabled:opacity-50 transition-all shadow-xs"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${isRetryingOutbox ? 'animate-spin' : ''}`} />
+                  <span>Retry All Failed</span>
+                </button>
+              </div>
+            </div>
+
+            {retryMessage && (
+              <div className="p-3 rounded-lg bg-accent/10 border border-accent/20 text-accent text-xs font-medium">
+                {retryMessage}
+              </div>
+            )}
+
+            {failedEvents.length === 0 ? (
+              <div className="p-6 rounded-lg border border-dashed border-border text-center text-xs text-text-muted">
+                All durable events delivered successfully. Outbox queue is healthy.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs">
+                  <thead>
+                    <tr className="border-b border-border text-text-muted font-medium">
+                      <th className="pb-2">Event ID</th>
+                      <th className="pb-2">Type</th>
+                      <th className="pb-2">Attempts</th>
+                      <th className="pb-2">Last Error</th>
+                      <th className="pb-2 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {failedEvents.map((evt) => (
+                      <tr key={evt.id} className="text-foreground">
+                        <td className="py-2.5 font-mono text-[11px] text-text-muted">{evt.id.slice(0, 8)}...</td>
+                        <td className="py-2.5 font-mono text-accent">{evt.eventType}</td>
+                        <td className="py-2.5 font-semibold text-status-danger">{evt.attempts}</td>
+                        <td className="py-2.5 text-text-secondary max-w-xs truncate" title={evt.lastError}>
+                          {evt.lastError || 'Unknown error'}
+                        </td>
+                        <td className="py-2.5 text-right">
+                          <button
+                            onClick={() => handleRetryOutbox(evt.id)}
+                            disabled={isRetryingOutbox}
+                            className="px-2 py-1 rounded bg-elevated hover:bg-canvas border border-border text-[11px] font-medium"
+                          >
+                            Retry
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </div>
       )}

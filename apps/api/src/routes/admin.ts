@@ -2,7 +2,9 @@ import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { and, desc, eq, ilike, isNull, isNotNull, or, lt, gt } from 'drizzle-orm';
 import type { Database } from '../db/index.js';
-import { personalAccessTokens, users } from '../db/schema.js';
+import { personalAccessTokens, users, pluginEventOutbox } from '../db/schema.js';
+import type { BackendPluginRegistry } from '../plugins/registry.js';
+import type { OutboxService } from '../plugins/outbox.js';
 import type { AuditService } from '../services/audit.js';
 
 const RoleSchema = z.enum(['admin', 'moderator', 'author', 'reader']);
@@ -20,8 +22,10 @@ function boundedInteger(value: unknown, fallback: number, maximum: number): numb
 export const adminRoutes: FastifyPluginAsync<{
   db: Database;
   auditService: AuditService;
+  pluginRegistry?: BackendPluginRegistry;
+  outboxService?: OutboxService;
 }> = async (fastify, options) => {
-  const { db, auditService } = options;
+  const { db, auditService, pluginRegistry, outboxService } = options;
   const adminOnly = [(fastify as any).requireAuth, (fastify as any).requireRole(['admin'])];
 
   // User directory. Search is intentionally limited to identity fields and never exposes credentials.
@@ -159,4 +163,66 @@ export const adminRoutes: FastifyPluginAsync<{
 
   fastify.delete('/pats/:id', { preHandler: adminOnly }, revokePat);
   fastify.post('/pats/:id/revoke', { preHandler: adminOnly }, revokePat);
+
+  // 3. Plugin Inventory & Diagnostics
+  fastify.get('/plugins', { preHandler: adminOnly }, async () => {
+    const plugins = pluginRegistry?.getPlugins() || [];
+    const failedRows = await db
+      .select({ id: pluginEventOutbox.id })
+      .from(pluginEventOutbox)
+      .where(eq(pluginEventOutbox.status, 'failed'));
+
+    const list = plugins.map((p) => ({
+      id: p.manifest.id,
+      name: p.manifest.name,
+      version: p.manifest.version,
+      description: p.manifest.description,
+      capabilities: p.manifest.capabilities,
+      status: 'active',
+      failedOutboxEventsCount: failedRows.length,
+    }));
+
+    return { plugins: list, totalFailedOutboxEvents: failedRows.length };
+  });
+
+  fastify.get('/plugins/outbox/failed', { preHandler: adminOnly }, async () => {
+    const failed = await db
+      .select({
+        id: pluginEventOutbox.id,
+        eventType: pluginEventOutbox.eventType,
+        attempts: pluginEventOutbox.attempts,
+        lastError: pluginEventOutbox.lastError,
+        createdAt: pluginEventOutbox.createdAt,
+        processedAt: pluginEventOutbox.processedAt,
+      })
+      .from(pluginEventOutbox)
+      .where(eq(pluginEventOutbox.status, 'failed'))
+      .orderBy(desc(pluginEventOutbox.processedAt))
+      .limit(50);
+
+    return { failedEvents: failed };
+  });
+
+  fastify.post('/plugins/outbox/retry', { preHandler: adminOnly }, async (request, reply) => {
+    const body = (request.body as { eventId?: string }) || {};
+    if (!outboxService) {
+      return reply.status(503).send({ error: 'Service Unavailable', message: 'Outbox service is not available' });
+    }
+
+    const retriedCount = await outboxService.retryFailed(body.eventId);
+    const actor = (request as any).user!;
+
+    await auditService.appendLog({
+      actorUserId: actor.userId,
+      actorType: 'human',
+      action: 'plugin_outbox_retry',
+      entityType: 'plugin_event_outbox',
+      entityId: body.eventId || 'all',
+      metadata: { retriedCount },
+      ipAddress: request.ip,
+    });
+
+    return reply.send({ success: true, retriedCount });
+  });
+
 };
