@@ -381,8 +381,10 @@ export const postRoutes: FastifyPluginAsync<{
     // Increment detached in-memory view counter (Task 4.5)
     viewCounter?.increment(post.id);
 
-    // Derive markdown if not already pre-rendered
-    let derivedMarkdown = post.publishedMarkdown || post.workingMarkdown || '';
+    // Derive markdown for reader view:
+    // If published, use immutable published snapshot.
+    // If draft, derive directly from live yjsState so readers/previewers see exact working state.
+    let derivedMarkdown = post.publishedMarkdown || '';
     if (!derivedMarkdown && post.yjsState && post.yjsState.length > 0) {
       try {
         const doc = new Y.Doc();
@@ -390,8 +392,11 @@ export const postRoutes: FastifyPluginAsync<{
         const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
         derivedMarkdown = exportDerivedMarkdown(pmJson as any);
       } catch {
-        derivedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+        derivedMarkdown = post.workingMarkdown || `# ${post.title}\n\n${post.excerpt || ''}`;
       }
+    }
+    if (!derivedMarkdown) {
+      derivedMarkdown = post.workingMarkdown || `# ${post.title}\n\n${post.excerpt || ''}`;
     }
 
     return reply.send({
@@ -439,7 +444,7 @@ export const postRoutes: FastifyPluginAsync<{
       return reply.status(403).send({ error: 'Forbidden', message: 'You do not have access to export this post' });
     }
 
-    let markdown = post.publishedMarkdown || post.workingMarkdown || '';
+    let markdown = post.publishedMarkdown || '';
     if (!markdown && post.yjsState && post.yjsState.length > 0) {
       try {
         const doc = new Y.Doc();
@@ -447,8 +452,11 @@ export const postRoutes: FastifyPluginAsync<{
         const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
         markdown = exportDerivedMarkdown(pmJson as any);
       } catch {
-        markdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+        markdown = post.workingMarkdown || `# ${post.title}\n\n${post.excerpt || ''}`;
       }
+    }
+    if (!markdown) {
+      markdown = post.workingMarkdown || `# ${post.title}\n\n${post.excerpt || ''}`;
     }
 
     reply.header('Content-Type', 'text/markdown; charset=utf-8');

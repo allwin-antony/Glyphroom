@@ -16,7 +16,7 @@ import {
   tableHeaderNode,
   tableCellNode,
 } from './table.js';
-import { calloutAlertNode } from './alert.js';
+import { calloutAlertNode, alertNode } from './alert.js';
 import { mathDisplayNode, mathInlineNode } from './math.js';
 import { mermaidBlockNode } from './mermaid.js';
 import { codeBlockNode } from './code.js';
@@ -43,6 +43,7 @@ export const blogNodes: Record<string, NodeSpec> = {
   table_header: tableHeaderNode,
   table_cell: tableCellNode,
   callout_alert: calloutAlertNode,
+  alert: alertNode,
   math_display: mathDisplayNode,
   math_inline: mathInlineNode,
   mermaid_block: mermaidBlockNode,

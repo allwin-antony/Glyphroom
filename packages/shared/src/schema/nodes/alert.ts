@@ -72,3 +72,52 @@ export const calloutAlertNode: NodeSpec = {
     ];
   },
 };
+
+/**
+ * Tiptap-compatible alert node spec (name: 'alert', attr: 'type')
+ */
+export const alertNode: NodeSpec = {
+  attrs: {
+    type: { default: 'note' },
+    alertType: { default: 'NOTE' },
+  },
+  content: 'block+',
+  group: 'block',
+  defining: true,
+  isolating: true,
+  parseDOM: [
+    {
+      tag: 'div.enterprise-alert',
+      getAttrs(dom) {
+        const el = dom as HTMLElement;
+        const rawType = el.getAttribute('data-alert-type') || el.className.match(/enterprise-alert-(\w+)/)?.[1] || 'note';
+        return {
+          type: rawType.toLowerCase(),
+          alertType: normalizeAlertType(rawType),
+        };
+      },
+    },
+    {
+      tag: 'div.callout-alert',
+      getAttrs(dom) {
+        const el = dom as HTMLElement;
+        const rawType = el.getAttribute('data-alert-type') || el.className.match(/callout-alert-(\w+)/)?.[1] || 'note';
+        return {
+          type: rawType.toLowerCase(),
+          alertType: normalizeAlertType(rawType),
+        };
+      },
+    },
+  ],
+  toDOM(node) {
+    const rawType = (node.attrs.type || node.attrs.alertType || 'note').toLowerCase();
+    return [
+      'div',
+      {
+        class: `enterprise-alert enterprise-alert-${rawType}`,
+        'data-alert-type': rawType,
+      },
+      0,
+    ];
+  },
+};

@@ -70,7 +70,7 @@ export class ApiClient {
       slug: post.slug,
       status: post.status,
       author: { id: post.authorId, name: 'Author' },
-      content: post.workingMarkdown || post.publishedMarkdown || `# ${post.title}\n\nDraft content.`,
+      content: post.derivedMarkdown || post.publishedMarkdown || post.workingMarkdown || `# ${post.title}\n\nDraft content.`,
       format: 'markdown' as const,
       headings: [post.title],
       tags: [],

@@ -74,12 +74,14 @@ function serializeNodeToMarkdown(node: ProseMirrorNode): string {
         .join('\n');
     }
 
-    case 'callout_alert': {
+    case 'callout_alert':
+    case 'alert': {
       const inner = serializeBlockChildren(node);
       if (!inner.trim()) {
         return '';
       }
-      const type = node.attrs.alertType || 'NOTE';
+      const rawType = node.attrs.alertType || node.attrs.type || 'NOTE';
+      const type = typeof rawType === 'string' ? rawType.toUpperCase() : 'NOTE';
       const header = `> [!${type}]`;
       const body = inner
         ? '\n' +
@@ -274,6 +276,15 @@ function serializeJsonToMarkdown(json: ProseMirrorNodeJSON): string {
       .split('\n')
       .map((line) => `> ${line}`)
       .join('\n');
+  }
+  if ((json.type === 'alert' || json.type === 'callout_alert') && json.content) {
+    const inner = json.content.map(serializeJsonToMarkdown).filter(Boolean).join('\n\n');
+    if (!inner.trim()) {
+      return '';
+    }
+    const rawType = json.attrs?.alertType || json.attrs?.type || 'NOTE';
+    const type = typeof rawType === 'string' ? rawType.toUpperCase() : 'NOTE';
+    return `> [!${type}]\n` + inner.split('\n').map((line) => `> ${line}`).join('\n');
   }
   if (json.type === 'code_block') {
     const lang = json.attrs?.language || '';
