@@ -435,3 +435,42 @@ export const notifications = pgTable(
     index('idx_notifications_user_unread').on(table.userId, table.readAt),
   ],
 );
+
+// 15. Plugin Storage Table (Scoped key-value JSONB storage for plugins)
+export const pluginStorage = pgTable(
+  'plugin_storage',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    pluginId: varchar('plugin_id', { length: 50 }).notNull(),
+    scope: varchar('scope', { length: 50 }).notNull().default('global'),
+    key: varchar('key', { length: 200 }).notNull(),
+    value: jsonb('value').notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (table) => [
+    uniqueIndex('idx_plugin_storage_unique').on(table.pluginId, table.scope, table.key),
+    index('idx_plugin_storage_lookup').on(table.pluginId, table.scope),
+  ]
+);
+
+// 16. Plugin Event Outbox Table (Durable at-least-once domain event dispatch)
+export const pluginEventOutbox = pgTable(
+  'plugin_event_outbox',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    eventType: varchar('event_type', { length: 100 }).notNull(),
+    payload: jsonb('payload').notNull(),
+    status: varchar('status', { length: 20 })
+      .notNull()
+      .default('pending')
+      .$type<'pending' | 'processing' | 'delivered' | 'failed'>(),
+    attempts: integer('attempts').notNull().default(0),
+    availableAt: timestamp('available_at', { withTimezone: true }).notNull().defaultNow(),
+    lastError: text('last_error'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    processedAt: timestamp('processed_at', { withTimezone: true }),
+  },
+  (table) => [
+    index('idx_plugin_event_outbox_poll').on(table.status, table.availableAt),
+  ]
+);

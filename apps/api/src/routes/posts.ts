@@ -1,3 +1,4 @@
+import type { OutboxService } from '../plugins/outbox.js';
 import type { FastifyPluginAsync } from 'fastify';
 import fs from 'fs';
 import { z } from 'zod';
@@ -115,8 +116,9 @@ export const postRoutes: FastifyPluginAsync<{
   auditService: AuditService;
   viewCounter?: BufferedViewCounter;
   notificationService: NotificationService;
+  outboxService?: OutboxService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService, viewCounter, notificationService } = options;
+  const { db, permissionService, auditService, viewCounter, notificationService, outboxService } = options;
 
   // 1. List & Search Posts with strict visibility rules
   fastify.get('/', async (request, reply) => {
@@ -623,6 +625,15 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       ipAddress: request.ip,
     });
 
+    if (outboxService) {
+      await outboxService.enqueue(db, 'post:created', {
+        postId: newPost.id,
+        authorId: user.userId,
+        spaceId: newPost.spaceId,
+        title: newPost.title,
+      });
+    }
+
     return reply.status(201).send({ post: { ...newPost, tags: savedTags } });
   });
 
@@ -845,6 +856,14 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       href: `/posts/${id}`,
     }, user.userId);
 
+    if (outboxService) {
+      await outboxService.enqueue(db, 'post:submitted_for_review', {
+        postId: id,
+        authorId: post.authorId,
+        versionId: submittedVersion.id,
+      });
+    }
+
     return reply.send({ post: updatedPost, submittedVersion });
   });
 
@@ -943,6 +962,16 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       entityId: id,
       href: `/posts/${id}`,
     });
+
+    if (outboxService) {
+      await outboxService.enqueue(db, 'post:published', {
+        postId: id,
+        publishedVersionId: submittedVersion.id,
+        authorId: post.authorId,
+        spaceId: post.spaceId,
+        title: post.title,
+      });
+    }
 
     return reply.send({ post: publishedPost, version: submittedVersion });
   });

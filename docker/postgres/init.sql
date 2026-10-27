@@ -315,6 +315,38 @@ CREATE TABLE IF NOT EXISTS post_view_counts (
 );
 
 -- ===========================================================================
+-- 14.5 Plugin Scoped Storage (Key-Value JSONB store for plugins)
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS plugin_storage (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    plugin_id VARCHAR(50) NOT NULL,
+    scope VARCHAR(50) NOT NULL DEFAULT 'global',
+    key VARCHAR(200) NOT NULL,
+    value JSONB NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_storage_unique ON plugin_storage(plugin_id, scope, key);
+CREATE INDEX IF NOT EXISTS idx_plugin_storage_lookup ON plugin_storage(plugin_id, scope);
+
+-- ===========================================================================
+-- 14.6 Plugin Event Outbox (Durable at-least-once domain event dispatch)
+-- ===========================================================================
+CREATE TABLE IF NOT EXISTS plugin_event_outbox (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    event_type VARCHAR(100) NOT NULL,
+    payload JSONB NOT NULL,
+    status VARCHAR(20) NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'processing', 'delivered', 'failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    last_error TEXT,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    processed_at TIMESTAMPTZ
+);
+
+CREATE INDEX IF NOT EXISTS idx_plugin_event_outbox_poll ON plugin_event_outbox(status, available_at);
+
+-- ===========================================================================
 -- 15. Initial Seed: Genesis Audit Hash & Default System Admin
 -- ===========================================================================
 INSERT INTO _schema_migrations (version, name)

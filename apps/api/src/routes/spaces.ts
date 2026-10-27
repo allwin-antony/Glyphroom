@@ -1,3 +1,4 @@
+import type { OutboxService } from '../plugins/outbox.js';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { eq, and, desc, inArray } from 'drizzle-orm';
@@ -43,8 +44,9 @@ export const spaceRoutes: FastifyPluginAsync<{
   permissionService: PermissionService;
   auditService: AuditService;
   notificationService: NotificationService;
+  outboxService?: OutboxService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService, notificationService } = options;
+  const { db, permissionService, auditService, notificationService, outboxService } = options;
 
   // 0. Space Directory Users (active users that can be invited to a space)
   fastify.get('/directory/users', { preHandler: (fastify as any).requireAuth }, async (_request, reply) => {
@@ -143,6 +145,14 @@ export const spaceRoutes: FastifyPluginAsync<{
       metadata: { name, slug, maintainerId },
       ipAddress: request.ip,
     });
+
+    if (outboxService) {
+      await outboxService.enqueue(db, 'space:created', {
+        spaceId: newSpace.id,
+        name: newSpace.name,
+        ownerId: maintainerId,
+      });
+    }
 
     return reply.status(201).send({ space: newSpace });
   });
@@ -370,6 +380,12 @@ export const spaceRoutes: FastifyPluginAsync<{
       metadata: updates,
       ipAddress: request.ip,
     });
+
+    if (updates.isArchived === true && outboxService) {
+      await outboxService.enqueue(db, 'space:archived', {
+        spaceId: id,
+      });
+    }
 
     return reply.send({ space: updated });
   });

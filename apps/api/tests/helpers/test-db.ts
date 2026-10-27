@@ -215,6 +215,29 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       created_at timestamp NOT NULL DEFAULT NOW()
     );
 
+    CREATE TABLE plugin_storage (
+      id text PRIMARY KEY DEFAULT gen_random_uuid(),
+      plugin_id text NOT NULL,
+      scope text NOT NULL DEFAULT 'global',
+      key text NOT NULL,
+      value jsonb NOT NULL,
+      updated_at timestamp NOT NULL DEFAULT NOW()
+    );
+
+    CREATE UNIQUE INDEX idx_plugin_storage_unique ON plugin_storage (plugin_id, scope, key);
+
+    CREATE TABLE plugin_event_outbox (
+      id text PRIMARY KEY DEFAULT gen_random_uuid(),
+      event_type text NOT NULL,
+      payload jsonb NOT NULL,
+      status text NOT NULL DEFAULT 'pending',
+      attempts integer NOT NULL DEFAULT 0,
+      available_at timestamp NOT NULL DEFAULT NOW(),
+      last_error text,
+      created_at timestamp NOT NULL DEFAULT NOW(),
+      processed_at timestamp
+    );
+
     CREATE TABLE notifications (
       id text PRIMARY KEY DEFAULT gen_random_uuid(),
       user_id text NOT NULL,

@@ -21,18 +21,22 @@ import { notificationRoutes } from './routes/notifications.js';
 import { NotificationService } from './services/notifications.js';
 import { adminRoutes } from './routes/admin.js';
 import { bookmarkRoutes } from './routes/bookmarks.js';
+import { BackendPluginRegistry, defaultBackendRegistry, OutboxService } from './plugins/index.js';
 
 export interface ApiAppOptions {
   db?: Database;
   connectionString?: string;
   sessionSecret?: string;
   logger?: boolean | Record<string, unknown>;
+  pluginRegistry?: BackendPluginRegistry;
+  outboxService?: OutboxService;
 }
 
 export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   app: FastifyInstance;
   db: Database;
   viewCounter: BufferedViewCounter;
+  outboxService: OutboxService;
   close: () => Promise<void>;
 }> {
   let db: Database;
@@ -71,6 +75,10 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   const notificationService = new NotificationService(db);
   viewCounter.start();
 
+  const pluginRegistry = options.pluginRegistry ?? defaultBackendRegistry;
+  const outboxService = options.outboxService ?? new OutboxService(db, pluginRegistry.getEventBus());
+  outboxService.start();
+
   await app.register(authPlugin, { authService, db });
 
   // Health check endpoint
@@ -91,6 +99,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     auditService,
     viewCounter,
     notificationService,
+    outboxService,
   });
 
   await app.register(collaboratorRoutes, {
@@ -115,6 +124,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     permissionService,
     auditService,
     notificationService,
+    outboxService,
   });
 
   await app.register(commentRoutes, {
@@ -122,6 +132,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     db,
     permissionService,
     auditService,
+    outboxService,
   });
 
   await app.register(patRoutes, {
@@ -162,12 +173,15 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     permissionService,
     auditService,
     notificationService,
+    outboxService,
   });
 
   await app.register(adminRoutes, {
     prefix: '/api/v1/admin',
     db,
     auditService,
+    pluginRegistry,
+    outboxService,
   });
 
   await app.register(notificationRoutes, { prefix: '/api/v1/notifications', db });
@@ -178,11 +192,15 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     permissionService,
   });
 
+  await pluginRegistry.boot(app, db);
+
   const close = async () => {
+    await outboxService.stop();
+    await pluginRegistry.shutdown();
     await viewCounter.stop();
     await app.close();
     await closeDb();
   };
 
-  return { app, db, viewCounter, close };
+  return { app, db, viewCounter, outboxService, close };
 }

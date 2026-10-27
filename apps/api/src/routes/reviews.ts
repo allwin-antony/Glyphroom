@@ -1,3 +1,4 @@
+import type { OutboxService } from '../plugins/outbox.js';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { eq, desc, and } from 'drizzle-orm';
@@ -17,8 +18,9 @@ export const reviewRoutes: FastifyPluginAsync<{
   permissionService: PermissionService;
   auditService: AuditService;
   notificationService: NotificationService;
+  outboxService?: OutboxService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService, notificationService } = options;
+  const { db, permissionService, auditService, notificationService, outboxService } = options;
 
   // 1. List reviews for a post
   fastify.get('/:id/reviews', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
@@ -142,6 +144,16 @@ export const reviewRoutes: FastifyPluginAsync<{
       metadata: { postId: id, decision },
       ipAddress: request.ip,
     });
+
+    if (outboxService) {
+      await outboxService.enqueue(db, 'post:reviewed', {
+        postId: id,
+        reviewerId: user.userId,
+        decision: decision as 'approved' | 'changes_requested',
+        submittedVersionId: submittedVersion.id,
+        notes: notes || null,
+      });
+    }
 
     await notificationService.create({
       userId: post.authorId,

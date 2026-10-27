@@ -1,3 +1,4 @@
+import type { OutboxService } from '../plugins/outbox.js';
 import type { FastifyPluginAsync } from 'fastify';
 import { z } from 'zod';
 import { eq, desc, and } from 'drizzle-orm';
@@ -18,8 +19,9 @@ export const commentRoutes: FastifyPluginAsync<{
   db: Database;
   permissionService: PermissionService;
   auditService: AuditService;
+  outboxService?: OutboxService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService } = options;
+  const { db, permissionService, auditService, outboxService } = options;
 
   // 1. List comments for a post
   fastify.get('/:id/comments', async (request, reply) => {
@@ -122,6 +124,14 @@ export const commentRoutes: FastifyPluginAsync<{
       metadata: { postId: id, isReviewComment: newComment.isReviewComment },
       ipAddress: request.ip,
     });
+
+    if (outboxService) {
+      await outboxService.enqueue(db, 'comment:created', {
+        commentId: newComment.id,
+        postId: id,
+        authorId: user.userId,
+      });
+    }
 
     return reply.status(201).send({ comment: newComment });
   });

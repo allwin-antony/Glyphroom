@@ -71,6 +71,29 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
       CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at);
 
+      CREATE TABLE IF NOT EXISTS plugin_storage (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        plugin_id VARCHAR(50) NOT NULL,
+        scope VARCHAR(50) NOT NULL DEFAULT 'global',
+        key VARCHAR(200) NOT NULL,
+        value JSONB NOT NULL,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_plugin_storage_unique ON plugin_storage(plugin_id, scope, key);
+      CREATE INDEX IF NOT EXISTS idx_plugin_storage_lookup ON plugin_storage(plugin_id, scope);
+      CREATE TABLE IF NOT EXISTS plugin_event_outbox (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        event_type VARCHAR(100) NOT NULL,
+        payload JSONB NOT NULL,
+        status VARCHAR(20) NOT NULL DEFAULT 'pending',
+        attempts INTEGER NOT NULL DEFAULT 0,
+        available_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        last_error TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        processed_at TIMESTAMPTZ
+      );
+      CREATE INDEX IF NOT EXISTS idx_plugin_event_outbox_poll ON plugin_event_outbox(status, available_at);
+
       -- Ensure default "General Engineering" Space exists
       INSERT INTO spaces (id, slug, name, description)
       VALUES ('00000000-0000-0000-0000-000000000101', 'general-engineering', 'General Engineering', 'Default shared engineering workspace for core project documentation.')
