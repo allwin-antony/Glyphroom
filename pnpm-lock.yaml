@@ -644,6 +644,71 @@ importers:
         specifier: 3.0.5
         version: 3.0.5(@types/node@22.13.4)(jiti@1.21.7)(jsdom@26.0.0)(tsx@4.19.2)(yaml@2.9.1)
 
+  plugins/jira-embed:
+    dependencies:
+      '@enterprise-blogger/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+      '@tiptap/core':
+        specifier: 3.32.0
+        version: 3.32.0(@tiptap/pm@3.32.0)
+      '@tiptap/pm':
+        specifier: 3.32.0
+        version: 3.32.0
+      '@tiptap/react':
+        specifier: 3.32.0
+        version: 3.32.0(@floating-ui/dom@1.8.0)(@tiptap/core@3.32.0(@tiptap/pm@3.32.0))(@tiptap/pm@3.32.0)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      lucide-react:
+        specifier: ^1.16.0
+        version: 1.61.0(@types/react@18.3.31)(react@18.3.1)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+    devDependencies:
+      '@testing-library/react':
+        specifier: ^16.2.0
+        version: 16.3.3(@testing-library/dom@10.4.2)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+      '@types/node':
+        specifier: 22.13.4
+        version: 22.13.4
+      '@types/react':
+        specifier: ^18.3.18
+        version: 18.3.31
+      '@types/react-dom':
+        specifier: ^18.3.5
+        version: 18.3.7(@types/react@18.3.31)
+      jsdom:
+        specifier: ^26.0.0
+        version: 26.0.0
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 3.0.5
+        version: 3.0.5(@types/node@22.13.4)(jiti@1.21.7)(jsdom@26.0.0)(tsx@4.19.2)(yaml@2.9.1)
+
+  plugins/slack-notifier:
+    dependencies:
+      '@enterprise-blogger/shared':
+        specifier: workspace:*
+        version: link:../../packages/shared
+    devDependencies:
+      '@types/node':
+        specifier: 22.13.4
+        version: 22.13.4
+      fastify:
+        specifier: 5.2.1
+        version: 5.2.1
+      typescript:
+        specifier: 5.7.3
+        version: 5.7.3
+      vitest:
+        specifier: 3.0.5
+        version: 3.0.5(@types/node@22.13.4)(jiti@1.21.7)(jsdom@26.0.0)(tsx@4.19.2)(yaml@2.9.1)
+
   tests:
     dependencies:
       '@enterprise-blogger/collab':
