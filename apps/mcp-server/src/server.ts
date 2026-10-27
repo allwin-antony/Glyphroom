@@ -12,6 +12,7 @@ import { registerAddCommentTool } from './tools/add-comment.js';
 import { registerPublishPostTool } from './tools/publish-post.js';
 import { registerDocumentationResources } from './resources/documentation.js';
 import { registerPromptTemplates } from './prompts/templates.js';
+import { McpPluginRegistry, defaultMcpRegistry } from './plugins/index.js';
 
 export interface CreateMcpServerOptions {
   name?: string;
@@ -21,6 +22,7 @@ export interface CreateMcpServerOptions {
   apiUrl?: string;
   agentScopes?: string[];
   logger: pino.Logger;
+  pluginRegistry?: McpPluginRegistry;
 }
 
 export function createMcpServer(options: CreateMcpServerOptions): McpServer {
@@ -62,6 +64,16 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
   registerAddCommentTool(server, apiClient, options.logger);
   registerPublishPostTool(server, apiClient, options.logger, {
     agentScopes,
+  });
+
+  // MCP Plugin Tool Contributions (${pluginId}.${toolName})
+  const pluginRegistry = options.pluginRegistry || defaultMcpRegistry;
+  pluginRegistry.mount(server, {
+    apiClient,
+    gatewayClient: options.gatewayClient,
+    logger: options.logger,
+    agentScopes,
+    userId: process.env.MCP_USER_ID || process.env.DEFAULT_USER_ID,
   });
 
   // MCP Resources & Prompts for automated agent formatting context
