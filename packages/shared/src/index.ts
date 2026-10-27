@@ -6,4 +6,5 @@ export * from './export/index.js';
 export * from './types/index.js';
 export * from './suggestion/index.js';
 export * from './migration/quill-to-prosemirror.js';
+export * from './plugins/index.js';
 
