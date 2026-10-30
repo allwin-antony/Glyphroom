@@ -1,6 +1,14 @@
 import dotenv from 'dotenv';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 dotenv.config();
+try {
+  const dirname = path.dirname(fileURLToPath(import.meta.url));
+  dotenv.config({ path: path.resolve(dirname, '../.env'), override: true });
+} catch {
+  // Ignore fallback resolution errors
+}
 
 export interface McpServerConfig {
   port: number;

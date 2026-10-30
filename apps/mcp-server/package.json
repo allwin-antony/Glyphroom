@@ -8,7 +8,7 @@
   "scripts": {
     "build": "tsc -b",
     "test": "vitest run",
-    "dev": "tsx src/index.ts",
+    "dev": "tsx watch src/index.ts --http",
     "typecheck": "tsc --noEmit",
     "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true });\""
   },
