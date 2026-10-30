@@ -159,6 +159,7 @@ export const posts = pgTable(
     coeId: uuid('coe_id').references(() => centersOfExcellence.id),
     yjsState: customBytea('yjs_state').notNull(),
     workingMarkdown: text('working_markdown'),
+    submittedVersionId: uuid('submitted_version_id'),
     publishedVersionId: uuid('published_version_id'),
     publishedMarkdown: text('published_markdown'),
     searchVector: customTsvector('search_vector'),
@@ -213,6 +214,7 @@ export const postVersions = pgTable(
   },
   (table) => [
     index('idx_post_versions_post_id').on(table.postId),
+    uniqueIndex('idx_post_versions_post_version').on(table.postId, table.versionNumber),
   ]
 );
 

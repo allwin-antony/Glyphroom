@@ -87,6 +87,7 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       coe_id text,
       yjs_state bytea NOT NULL,
       working_markdown text,
+      submitted_version_id text,
       published_version_id text,
       published_markdown text,
       search_vector text,
@@ -114,6 +115,8 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       created_by text NOT NULL,
       created_at timestamp NOT NULL DEFAULT NOW()
     );
+
+    CREATE UNIQUE INDEX idx_post_versions_post_version ON post_versions (post_id, version_number);
 
     CREATE TABLE post_collaborators (
       post_id text NOT NULL,

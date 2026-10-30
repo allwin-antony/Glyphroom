@@ -9,6 +9,7 @@ import {
   Send,
   Eye,
   AlertCircle,
+  Loader2,
   X,
   ExternalLink,
   BookOpen,
@@ -24,9 +25,26 @@ export const ReviewQueueView: React.FC = () => {
   const [posts, setPosts] = useState<CatalogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [activeReviewPost, setActiveReviewPost] = useState<CatalogPost | null>(null);
+  const [isLoadingDetails, setIsLoadingDetails] = useState(false);
   const [reviewNotes, setReviewNotes] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ type: 'success' | 'error'; text: string } | null>(null);
+
+  const openReviewModal = async (post: CatalogPost) => {
+    setActiveReviewPost(post);
+    setReviewNotes('');
+    setIsLoadingDetails(true);
+    try {
+      const res = await api.get<{ post: CatalogPost }>(`/posts/${post.id}`);
+      if (res?.post) {
+        setActiveReviewPost(res.post);
+      }
+    } catch (err) {
+      console.warn('Failed to load full post details for review:', err);
+    } finally {
+      setIsLoadingDetails(false);
+    }
+  };
 
   const fetchReviewQueue = () => {
     setIsLoading(true);
@@ -207,10 +225,7 @@ export const ReviewQueueView: React.FC = () => {
                   </td>
                   <td className="px-5 py-4 text-right space-x-2">
                     <button
-                      onClick={() => {
-                        setActiveReviewPost(post);
-                        setReviewNotes('');
-                      }}
+                      onClick={() => openReviewModal(post)}
                       className="px-3 py-1 rounded bg-primary text-primary-foreground font-semibold text-xs shadow-sm hover:opacity-90 transition-all inline-flex items-center gap-1.5"
                     >
                       <Eye className="w-3.5 h-3.5" />
@@ -263,9 +278,34 @@ export const ReviewQueueView: React.FC = () => {
 
             {/* Modal Content / Preview */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
+              {/* Alert if author made newer working edits since submission */}
+              {activeReviewPost.submittedVersion &&
+                activeReviewPost.workingMarkdown &&
+                activeReviewPost.workingMarkdown !== activeReviewPost.submittedVersion.markdownSnapshot && (
+                  <div className="p-3 rounded-xl bg-status-warning/10 border border-status-warning/30 text-status-warning flex items-start gap-2.5">
+                    <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                    <div className="space-y-0.5">
+                      <div className="font-semibold text-foreground">
+                        Reviewing Submitted Snapshot v{activeReviewPost.submittedVersion.versionNumber}
+                      </div>
+                      <div className="text-[11px] text-text-secondary leading-relaxed">
+                        The author has made newer working edits since this review checkpoint was submitted.
+                        Your review and publication decisions will apply strictly to the immutable submitted snapshot v{activeReviewPost.submittedVersion.versionNumber}.
+                      </div>
+                    </div>
+                  </div>
+                )}
+
               <div className="space-y-2">
                 <div className="font-semibold text-foreground flex items-center justify-between">
-                  <span>Document Snapshot</span>
+                  <span className="flex items-center gap-2">
+                    <span>Document Snapshot</span>
+                    {activeReviewPost.submittedVersion && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono bg-accent/10 text-accent border border-accent/20">
+                        v{activeReviewPost.submittedVersion.versionNumber} checkpoint
+                      </span>
+                    )}
+                  </span>
                   <button
                     onClick={() => navigate(`/posts/${activeReviewPost.slug || activeReviewPost.id}`)}
                     className="text-accent-main hover:underline flex items-center gap-1 text-[11px]"
@@ -275,7 +315,8 @@ export const ReviewQueueView: React.FC = () => {
                   </button>
                 </div>
                 <div className="p-4 rounded-xl bg-canvas border border-border max-h-60 overflow-y-auto font-mono text-[11px] text-text-secondary leading-relaxed whitespace-pre-wrap">
-                  {activeReviewPost.workingMarkdown ||
+                  {activeReviewPost.submittedVersion?.markdownSnapshot ||
+                    activeReviewPost.workingMarkdown ||
                     activeReviewPost.publishedMarkdown ||
                     activeReviewPost.excerpt ||
                     '# ' + activeReviewPost.title}

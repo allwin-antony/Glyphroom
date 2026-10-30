@@ -80,7 +80,14 @@ export const reviewRoutes: FastifyPluginAsync<{
 
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
     );
 
     if (!permissionService.canReview(permission, false)) {
@@ -104,12 +111,25 @@ export const reviewRoutes: FastifyPluginAsync<{
 
     const { decision, notes } = parseResult.data;
 
-    const [submittedVersion] = await db
-      .select()
-      .from(postVersions)
-      .where(and(eq(postVersions.postId, id), eq(postVersions.triggerReason, 'review_submission')))
-      .orderBy(desc(postVersions.versionNumber))
-      .limit(1);
+    let submittedVersion: any = null;
+    if (post.submittedVersionId) {
+      const [v] = await db
+        .select()
+        .from(postVersions)
+        .where(and(eq(postVersions.id, post.submittedVersionId), eq(postVersions.postId, id)))
+        .limit(1);
+      submittedVersion = v;
+    }
+
+    if (!submittedVersion) {
+      const [v] = await db
+        .select()
+        .from(postVersions)
+        .where(and(eq(postVersions.postId, id), eq(postVersions.triggerReason, 'review_submission')))
+        .orderBy(desc(postVersions.versionNumber))
+        .limit(1);
+      submittedVersion = v;
+    }
 
     if (!submittedVersion) {
       return reply.status(409).send({
@@ -118,22 +138,30 @@ export const reviewRoutes: FastifyPluginAsync<{
       });
     }
 
-    const [review] = await db
-      .insert(postReviews)
-      .values({
-        postId: id,
-        reviewerId: user.userId,
-        submittedVersionId: submittedVersion.id,
-        decision,
-        notes,
-        resolvedAt: new Date(),
-      })
-      .returning();
+    const { review } = await db.transaction(async (tx) => {
+      const [newReview] = await tx
+        .insert(postReviews)
+        .values({
+          postId: id,
+          reviewerId: user.userId,
+          submittedVersionId: submittedVersion.id,
+          decision,
+          notes,
+          resolvedAt: new Date(),
+        })
+        .returning();
 
-    await db
-      .update(posts)
-      .set({ status: decision === 'approved' ? 'approved' : 'draft', updatedAt: new Date() })
-      .where(eq(posts.id, id));
+      await tx
+        .update(posts)
+        .set({
+          status: decision === 'approved' ? 'approved' : 'draft',
+          submittedVersionId: decision === 'approved' ? submittedVersion.id : null,
+          updatedAt: new Date(),
+        })
+        .where(eq(posts.id, id));
+
+      return { review: newReview };
+    });
 
     await auditService.appendLog({
       actorUserId: user.userId,

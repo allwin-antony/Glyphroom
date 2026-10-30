@@ -44,6 +44,8 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS is_promoted BOOLEAN NOT NULL DEFAULT false;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMPTZ;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_by UUID REFERENCES users(id);
+      ALTER TABLE posts ADD COLUMN IF NOT EXISTS submitted_version_id UUID REFERENCES post_versions(id) ON DELETE SET NULL;
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_post_versions_post_version ON post_versions(post_id, version_number);
       ALTER TABLE post_reviews ADD COLUMN IF NOT EXISTS submitted_version_id UUID REFERENCES post_versions(id) ON DELETE RESTRICT;
 
       CREATE TABLE IF NOT EXISTS bookmarks (

@@ -32,6 +32,14 @@ export interface CatalogPost {
   coeName?: string;
   publishedMarkdown?: string;
   workingMarkdown?: string;
+  submittedVersionId?: string;
+  submittedVersion?: {
+    id: string;
+    versionNumber: number;
+    triggerReason: string;
+    markdownSnapshot: string;
+    createdAt: string;
+  };
   publishedAt?: string;
   createdAt: string;
   updatedAt: string;

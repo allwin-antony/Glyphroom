@@ -92,6 +92,7 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
   let serverInstance: Server | null = null;
   registerAgentGatewayRoutes(app, () => serverInstance, {
     gatewaySecret: options.gatewaySecret,
+    adapter,
   });
 
   await app.ready();

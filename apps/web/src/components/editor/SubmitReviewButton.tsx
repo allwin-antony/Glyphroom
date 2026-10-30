@@ -89,15 +89,34 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
   const handleSaveDraft = async () => {
     setIsDropdownOpen(false);
     setIsSavingDraft(true);
+    setErrorMessage(null);
     try {
       await api.patch(`/posts/${postId}`, { status: 'draft' });
       setDraftSavedFeedback(true);
       onStatusChange?.('draft');
       setTimeout(() => setDraftSavedFeedback(false), 2500);
-    } catch (err) {
+    } catch (err: any) {
       console.warn('Failed to save draft explicitly:', err);
+      setErrorMessage(err?.message || 'Failed to save draft.');
     } finally {
       setIsSavingDraft(false);
+    }
+  };
+
+  const handlePublish = async () => {
+    setIsSubmitting(true);
+    setErrorMessage(null);
+    try {
+      await api.post(`/posts/${postId}/publish`);
+      onStatusChange?.('published');
+    } catch (err: any) {
+      if (err instanceof ApiError) {
+        setErrorMessage(err.message || 'Publishing failed.');
+      } else {
+        setErrorMessage('Failed to connect to publishing service.');
+      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -126,13 +145,70 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
     }
   };
 
-  // If already in review, display descriptive badge
+  // If already in review, display descriptive badge with revert option
   if (status === 'in_review') {
     return (
-      <Badge variant="in_review" className={cn("gap-1.5 py-1 px-3 text-xs font-semibold", className)}>
-        <Clock className="w-3.5 h-3.5" />
-        <span>In Review</span>
-      </Badge>
+      <div className={cn("flex items-center gap-2", className)}>
+        <Badge variant="in_review" className="gap-1.5 py-1 px-3 text-xs font-semibold">
+          <Clock className="w-3.5 h-3.5" />
+          <span>In Review</span>
+        </Badge>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleSaveDraft}
+          disabled={isSavingDraft}
+          className="text-xs text-text-muted hover:text-foreground h-7 px-2"
+          title="Withdraw from review and return to draft"
+        >
+          {isSavingDraft ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1 text-accent" />}
+          <span>Revert to Draft</span>
+        </Button>
+      </div>
+    );
+  }
+
+  // If approved: display Approved badge PLUS Publish action
+  if (status === 'approved') {
+    return (
+      <div className={cn("flex items-center gap-2", className)}>
+        <Badge variant="in_review" className="gap-1.5 py-1 px-3 text-xs font-semibold bg-status-success/15 text-status-success border-status-success/30">
+          <CheckCircle2 className="w-3.5 h-3.5" />
+          <span>Approved</span>
+        </Badge>
+
+        <Button
+          variant="default"
+          size="sm"
+          onClick={handlePublish}
+          disabled={isSubmitting}
+          className="gap-1.5 text-xs font-semibold bg-status-success text-white hover:opacity-95 shadow-sm h-7 px-3"
+        >
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              <span>Publishing...</span>
+            </>
+          ) : (
+            <>
+              <UploadCloud className="w-3.5 h-3.5" />
+              <span>Publish</span>
+            </>
+          )}
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={handleSaveDraft}
+          disabled={isSavingDraft}
+          className="text-xs text-text-muted hover:text-foreground h-7 px-2"
+          title="Return to draft to make further revisions"
+        >
+          {isSavingDraft ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1 text-accent" />}
+          <span>Revert to Draft</span>
+        </Button>
+      </div>
     );
   }
 

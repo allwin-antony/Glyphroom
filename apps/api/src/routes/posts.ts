@@ -12,6 +12,7 @@ import type { PermissionService } from '../services/permissions.js';
 import type { AuditService } from '../services/audit.js';
 import type { BufferedViewCounter } from '../services/view-counter.js';
 import type { NotificationService } from '../services/notifications.js';
+import type { CollabService } from '../services/collab.js';
 
 const PostTagsSchema = z.array(TagSchema).max(20, 'Cannot exceed 20 tags').optional();
 
@@ -82,6 +83,7 @@ const UpdatePostSchema = z.object({
   coeId: z.string().uuid().nullable().optional(),
   spaceId: z.string().uuid().nullable().optional(),
   visibility: z.enum(['space', 'invited_only']).optional(),
+  status: z.enum(['draft']).optional(),
   tags: PostTagsSchema,
 });
 
@@ -118,8 +120,9 @@ export const postRoutes: FastifyPluginAsync<{
   viewCounter?: BufferedViewCounter;
   notificationService: NotificationService;
   outboxService?: OutboxService;
+  collabService?: CollabService;
 }> = async (fastify, options) => {
-  const { db, permissionService, auditService, viewCounter, notificationService, outboxService } = options;
+  const { db, permissionService, auditService, viewCounter, notificationService, outboxService, collabService } = options;
 
   // 1. List & Search Posts with strict visibility rules
   fastify.get('/', async (request, reply) => {
@@ -150,6 +153,7 @@ export const postRoutes: FastifyPluginAsync<{
       visibility: posts.visibility,
       isPromoted: posts.isPromoted,
       promotedAt: posts.promotedAt,
+      submittedVersionId: posts.submittedVersionId,
       publishedMarkdown: posts.publishedMarkdown,
       workingMarkdown: posts.workingMarkdown,
       publishedAt: posts.publishedAt,
@@ -340,6 +344,7 @@ export const postRoutes: FastifyPluginAsync<{
         isPromoted: posts.isPromoted,
         promotedAt: posts.promotedAt,
         promotedBy: posts.promotedBy,
+        submittedVersionId: posts.submittedVersionId,
         yjsState: posts.yjsState,
         publishedMarkdown: posts.publishedMarkdown,
         workingMarkdown: posts.workingMarkdown,
@@ -357,7 +362,7 @@ export const postRoutes: FastifyPluginAsync<{
       return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
     }
 
-    const permission = request.user
+    let permission = request.user
       ? await permissionService.resolvePostPermission(
           { id: request.user.userId, role: request.user.role },
           {
@@ -373,6 +378,28 @@ export const postRoutes: FastifyPluginAsync<{
       ? 'view'
       : 'none';
 
+    // Dual-visibility: if post has published content, retain reader access even while working revision is in review or draft
+    if (permission === 'none' && post.publishedMarkdown) {
+      if (!request.user) {
+        if (post.isPromoted || !post.spaceId) permission = 'view';
+      } else {
+        const canViewPublished = await permissionService.resolvePostPermission(
+          { id: request.user.userId, role: request.user.role },
+          {
+            postId: post.id,
+            authorId: post.authorId,
+            status: 'published',
+            spaceId: post.spaceId,
+            visibility: post.visibility,
+            isPromoted: post.isPromoted,
+          }
+        );
+        if (permissionService.canView(canViewPublished)) {
+          permission = 'view';
+        }
+      }
+    }
+
     if (!permissionService.canView(permission)) {
       return reply.status(403).send({ error: 'Forbidden', message: 'You do not have access to view this post' });
     }
@@ -382,10 +409,58 @@ export const postRoutes: FastifyPluginAsync<{
     // Increment detached in-memory view counter (Task 4.5)
     viewCounter?.increment(post.id);
 
+    // Fetch submitted review version if present
+    let submittedVersion: {
+      id: string;
+      versionNumber: number;
+      triggerReason: string;
+      markdownSnapshot: string;
+      createdAt: Date;
+    } | null = null;
+
+    if (post.submittedVersionId) {
+      const [sv] = await db
+        .select({
+          id: postVersions.id,
+          versionNumber: postVersions.versionNumber,
+          triggerReason: postVersions.triggerReason,
+          markdownSnapshot: postVersions.markdownSnapshot,
+          createdAt: postVersions.createdAt,
+        })
+        .from(postVersions)
+        .where(eq(postVersions.id, post.submittedVersionId))
+        .limit(1);
+      if (sv) submittedVersion = sv;
+    } else if (post.status === 'in_review' || post.status === 'approved') {
+      const [sv] = await db
+        .select({
+          id: postVersions.id,
+          versionNumber: postVersions.versionNumber,
+          triggerReason: postVersions.triggerReason,
+          markdownSnapshot: postVersions.markdownSnapshot,
+          createdAt: postVersions.createdAt,
+        })
+        .from(postVersions)
+        .where(and(eq(postVersions.postId, post.id), eq(postVersions.triggerReason, 'review_submission')))
+        .orderBy(desc(postVersions.versionNumber))
+        .limit(1);
+      if (sv) submittedVersion = sv;
+    }
+
     // Derive markdown for reader view:
-    // If published, use immutable published snapshot.
-    // If draft, derive directly from live yjsState so readers/previewers see exact working state.
-    let derivedMarkdown = post.publishedMarkdown || '';
+    // If user has view-only permission and post was published, always use published snapshot.
+    // If author or reviewer, allow viewing working markdown or submitted snapshot.
+    let derivedMarkdown = '';
+    const isPureReader = permission === 'view' && !permissionService.canEdit(permission) && !permissionService.canReview(permission, request.user?.userId === post.authorId);
+
+    if (isPureReader && post.publishedMarkdown) {
+      derivedMarkdown = post.publishedMarkdown;
+    } else if (post.status === 'in_review' && submittedVersion) {
+      derivedMarkdown = submittedVersion.markdownSnapshot;
+    } else if (post.publishedMarkdown) {
+      derivedMarkdown = post.publishedMarkdown;
+    }
+
     if (!derivedMarkdown && post.yjsState && post.yjsState.length > 0) {
       try {
         const doc = new Y.Doc();
@@ -403,6 +478,7 @@ export const postRoutes: FastifyPluginAsync<{
     return reply.send({
       post: {
         ...post,
+        submittedVersion,
         tags: tagsByPost.get(post.id) || [],
         derivedMarkdown,
       },
@@ -668,7 +744,14 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
 
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
     );
 
     if (!permissionService.canEdit(permission)) {
@@ -681,18 +764,52 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     }
 
     const { tags: tagNames, ...updates } = parseResult.data;
-    const [updatedPost] = await db
-      .update(posts)
-      .set({
-        ...updates,
-        updatedAt: new Date(),
-      })
-      .where(eq(posts.id, id))
-      .returning();
 
-    const savedTags = tagNames === undefined
-      ? (await loadTagsForPosts(db, [id])).get(id) || []
-      : await replacePostTags(db, id, tagNames);
+    // Check slug collision
+    if (updates.slug && updates.slug !== post.slug) {
+      const [existingSlug] = await db
+        .select({ id: posts.id })
+        .from(posts)
+        .where(eq(posts.slug, updates.slug))
+        .limit(1);
+      if (existingSlug && existingSlug.id !== id) {
+        return reply.status(409).send({
+          error: 'Conflict',
+          message: `Slug "${updates.slug}" is already in use by another post`,
+        });
+      }
+    }
+
+    // Handle status changes (e.g. Save as Draft reversion)
+    const postUpdateData: Record<string, any> = {
+      ...updates,
+      updatedAt: new Date(),
+    };
+
+    if (updates.status === 'draft') {
+      if (post.status === 'published' || post.status === 'archived') {
+        return reply.status(400).send({
+          error: 'Bad Request',
+          message: `Cannot revert a ${post.status} post directly to draft`,
+        });
+      }
+      postUpdateData.status = 'draft';
+      postUpdateData.submittedVersionId = null;
+    }
+
+    const { updatedPost, savedTags } = await db.transaction(async (tx) => {
+      const [updated] = await tx
+        .update(posts)
+        .set(postUpdateData)
+        .where(eq(posts.id, id))
+        .returning();
+
+      const tags = tagNames === undefined
+        ? (await loadTagsForPosts(tx as any, [id])).get(id) || []
+        : await replacePostTags(tx as any, id, tagNames);
+
+      return { updatedPost: updated, savedTags: tags };
+    });
 
     await auditService.appendLog({
       actorUserId: user.userId,
@@ -771,6 +888,13 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       request.log.warn({ cleanupErr }, 'Attachment disk cleanup encountered an error');
     }
 
+    // Tombstone document on collab server to evict active room and prevent ghost resurrection
+    try {
+      await collabService?.tombstoneDocument(id);
+    } catch (tombErr) {
+      request.log.warn({ tombErr, id }, 'Failed to tombstone document on collab server');
+    }
+
     // Delete post row (cascades to all foreign-key tables in DB)
     await db.delete(posts).where(eq(posts.id, id));
 
@@ -799,28 +923,53 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
 
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
     );
 
     if (!permissionService.canEdit(permission)) {
       return reply.status(403).send({ error: 'Forbidden', message: 'You do not have permission to submit this post for review' });
     }
 
-    if (post.status !== 'draft') {
+    if (post.status !== 'draft' && post.status !== 'published') {
       return reply.status(409).send({
         error: 'Invalid transition',
-        message: `A post can only be submitted from draft (current status: ${post.status})`,
+        message: `A post can only be submitted for review from draft or published status (current status: ${post.status})`,
       });
+    }
+
+    // Flush live Yjs state from collab server so the snapshot captures up to the millisecond
+    let liveYjsState = post.yjsState;
+    let liveMarkdown = post.workingMarkdown;
+
+    if (collabService) {
+      try {
+        const flushed = await collabService.flushDocument(id);
+        if (flushed.inMemory && flushed.yjsState) {
+          liveYjsState = Buffer.from(flushed.yjsState);
+          if (flushed.workingMarkdown) {
+            liveMarkdown = flushed.workingMarkdown;
+          }
+        }
+      } catch (collabErr) {
+        request.log.warn({ collabErr, id }, 'Collab flush failed during review submission');
+      }
     }
 
     // Pin exactly what was submitted. Reviewers and publication must never read
     // mutable working content after this point.
-    let submittedMarkdown = post.workingMarkdown || '';
+    let submittedMarkdown = liveMarkdown || '';
     if (!submittedMarkdown) {
       try {
         const doc = new Y.Doc();
-        if (post.yjsState && post.yjsState.length > 0) {
-          Y.applyUpdate(doc, new Uint8Array(post.yjsState));
+        if (liveYjsState && liveYjsState.length > 0) {
+          Y.applyUpdate(doc, new Uint8Array(liveYjsState));
           const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
           submittedMarkdown = exportDerivedMarkdown(pmJson as any);
         }
@@ -828,34 +977,46 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
         submittedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
       }
     }
+    if (!submittedMarkdown) {
+      submittedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+    }
 
-    const [latestVersion] = await db
-      .select({ versionNumber: postVersions.versionNumber })
-      .from(postVersions)
-      .where(eq(postVersions.postId, id))
-      .orderBy(desc(postVersions.versionNumber))
-      .limit(1);
+    const { submittedVersion, updatedPost } = await db.transaction(async (tx) => {
+      const [latestVersion] = await tx
+        .select({ versionNumber: postVersions.versionNumber })
+        .from(postVersions)
+        .where(eq(postVersions.postId, id))
+        .orderBy(desc(postVersions.versionNumber))
+        .limit(1);
 
-    const [submittedVersion] = await db
-      .insert(postVersions)
-      .values({
-        postId: id,
-        versionNumber: (latestVersion?.versionNumber || 0) + 1,
-        triggerReason: 'review_submission',
-        yjsStateSnapshot: post.yjsState,
-        markdownSnapshot: submittedMarkdown,
-        createdBy: user.userId,
-      })
-      .returning();
+      const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
 
-    const [updatedPost] = await db
-      .update(posts)
-      .set({
-        status: 'in_review',
-        updatedAt: new Date(),
-      })
-      .where(eq(posts.id, id))
-      .returning();
+      const [version] = await tx
+        .insert(postVersions)
+        .values({
+          postId: id,
+          versionNumber: nextVersionNumber,
+          triggerReason: 'review_submission',
+          yjsStateSnapshot: liveYjsState,
+          markdownSnapshot: submittedMarkdown,
+          createdBy: user.userId,
+        })
+        .returning();
+
+      const [updated] = await tx
+        .update(posts)
+        .set({
+          status: 'in_review',
+          submittedVersionId: version.id,
+          yjsState: liveYjsState,
+          workingMarkdown: submittedMarkdown,
+          updatedAt: new Date(),
+        })
+        .where(eq(posts.id, id))
+        .returning();
+
+      return { submittedVersion: version, updatedPost: updated };
+    });
 
     await auditService.appendLog({
       actorUserId: user.userId,
@@ -863,6 +1024,10 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       action: 'post_submitted_for_review',
       entityType: 'post',
       entityId: id,
+      metadata: {
+        versionId: submittedVersion.id,
+        versionNumber: submittedVersion.versionNumber,
+      },
       ipAddress: request.ip,
     });
 
@@ -899,7 +1064,14 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     const isAuthor = post.authorId === user.userId;
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
     );
 
     if (!permissionService.canPublish(user.role, permission, isAuthor)) {
@@ -918,14 +1090,18 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       });
     }
 
-    const [approvedReview] = await db
-      .select({ submittedVersionId: postReviews.submittedVersionId })
-      .from(postReviews)
-      .where(and(eq(postReviews.postId, id), eq(postReviews.decision, 'approved')))
-      .orderBy(desc(postReviews.createdAt))
-      .limit(1);
+    let targetVersionId = post.submittedVersionId;
+    if (!targetVersionId) {
+      const [approvedReview] = await db
+        .select({ submittedVersionId: postReviews.submittedVersionId })
+        .from(postReviews)
+        .where(and(eq(postReviews.postId, id), eq(postReviews.decision, 'approved')))
+        .orderBy(desc(postReviews.createdAt))
+        .limit(1);
+      targetVersionId = approvedReview?.submittedVersionId ?? null;
+    }
 
-    if (!approvedReview?.submittedVersionId) {
+    if (!targetVersionId) {
       return reply.status(409).send({
         error: 'Invalid transition',
         message: 'No approved submitted version is available for publication',
@@ -935,7 +1111,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     const [submittedVersion] = await db
       .select()
       .from(postVersions)
-      .where(and(eq(postVersions.id, approvedReview.submittedVersionId), eq(postVersions.postId, id)))
+      .where(and(eq(postVersions.id, targetVersionId), eq(postVersions.postId, id)))
       .limit(1);
 
     if (!submittedVersion) {
@@ -948,19 +1124,24 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     // Publish the immutable review checkpoint, never the mutable working copy.
     const publishedMarkdown = submittedVersion.markdownSnapshot;
 
-    const [publishedPost] = await db
-      .update(posts)
-      .set({
-        status: 'published',
-        // The reader-facing pointer is the exact immutable checkpoint that
-        // was reviewed, rather than a new snapshot of mutable working state.
-        publishedVersionId: submittedVersion.id,
-        publishedMarkdown,
-        publishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(posts.id, id))
-      .returning();
+    const publishedPost = await db.transaction(async (tx) => {
+      const [published] = await tx
+        .update(posts)
+        .set({
+          status: 'published',
+          // The reader-facing pointer is the exact immutable checkpoint that
+          // was reviewed, rather than a new snapshot of mutable working state.
+          publishedVersionId: submittedVersion.id,
+          publishedMarkdown,
+          publishedAt: post.publishedAt || new Date(),
+          submittedVersionId: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(posts.id, id))
+        .returning();
+
+      return published;
+    });
 
     await auditService.appendLog({
       actorUserId: user.userId,
@@ -1169,7 +1350,14 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
 
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
     );
 
     if (!permissionService.canEdit(permission)) {
@@ -1186,33 +1374,47 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       return reply.status(404).send({ error: 'Not Found', message: 'Target version not found' });
     }
 
-    // 1. Create a safety checkpoint version of the current state before rolling back
-    const [latestVersion] = await db
-      .select({ versionNumber: postVersions.versionNumber })
-      .from(postVersions)
-      .where(eq(postVersions.postId, id))
-      .orderBy(desc(postVersions.versionNumber))
-      .limit(1);
+    // Restore active in-memory room on collab server so connected editors observe rollback
+    if (collabService && targetVersion.yjsStateSnapshot) {
+      try {
+        await collabService.restoreDocument(id, new Uint8Array(targetVersion.yjsStateSnapshot));
+      } catch (collabErr) {
+        request.log.warn({ collabErr, id }, 'Collab restoreDocument failed');
+      }
+    }
 
-    const safetyVersionNumber = (latestVersion?.versionNumber || 0) + 1;
-    await db.insert(postVersions).values({
-      postId: id,
-      versionNumber: safetyVersionNumber,
-      triggerReason: 'hourly_checkpoint',
-      yjsStateSnapshot: post.yjsState,
-      markdownSnapshot: post.workingMarkdown || `# ${post.title}`,
-      createdBy: user.userId,
+    // Transaction for safety checkpoint and historical state restore
+    const { safetyVersionNumber } = await db.transaction(async (tx) => {
+      // 1. Create a safety checkpoint version of the current state before rolling back
+      const [latestVersion] = await tx
+        .select({ versionNumber: postVersions.versionNumber })
+        .from(postVersions)
+        .where(eq(postVersions.postId, id))
+        .orderBy(desc(postVersions.versionNumber))
+        .limit(1);
+
+      const safetyVersion = (latestVersion?.versionNumber || 0) + 1;
+      await tx.insert(postVersions).values({
+        postId: id,
+        versionNumber: safetyVersion,
+        triggerReason: 'hourly_checkpoint',
+        yjsStateSnapshot: post.yjsState,
+        markdownSnapshot: post.workingMarkdown || `# ${post.title}`,
+        createdBy: user.userId,
+      });
+
+      // 2. Restore historical state
+      await tx
+        .update(posts)
+        .set({
+          yjsState: targetVersion.yjsStateSnapshot,
+          workingMarkdown: targetVersion.markdownSnapshot,
+          updatedAt: new Date(),
+        })
+        .where(eq(posts.id, id));
+
+      return { safetyVersionNumber: safetyVersion };
     });
-
-    // 2. Restore historical state
-    await db
-      .update(posts)
-      .set({
-        yjsState: targetVersion.yjsStateSnapshot,
-        workingMarkdown: targetVersion.markdownSnapshot,
-        updatedAt: new Date(),
-      })
-      .where(eq(posts.id, id));
 
     await auditService.appendLog({
       actorUserId: user.userId,
@@ -1249,7 +1451,14 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
 
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
     );
 
     if (!permissionService.canEdit(permission)) {
@@ -1271,51 +1480,77 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       });
     }
 
-    // Derive markdown from flushed yjsState
-    let publishedMarkdown = post.workingMarkdown || '';
+    // Flush live Yjs state from collab server so republish captures recent edits
+    let liveYjsState = post.yjsState;
+    let liveMarkdown = post.workingMarkdown;
+
+    if (collabService) {
+      try {
+        const flushed = await collabService.flushDocument(id);
+        if (flushed.inMemory && flushed.yjsState) {
+          liveYjsState = Buffer.from(flushed.yjsState);
+          if (flushed.workingMarkdown) {
+            liveMarkdown = flushed.workingMarkdown;
+          }
+        }
+      } catch (collabErr) {
+        request.log.warn({ collabErr, id }, 'Collab flush failed during republishing');
+      }
+    }
+
+    let publishedMarkdown = liveMarkdown || '';
     if (!publishedMarkdown) {
       try {
         const doc = new Y.Doc();
-        Y.applyUpdate(doc, new Uint8Array(post.yjsState));
-        const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
-        publishedMarkdown = exportDerivedMarkdown(pmJson as any);
+        if (liveYjsState && liveYjsState.length > 0) {
+          Y.applyUpdate(doc, new Uint8Array(liveYjsState));
+          const pmJson = yDocToProsemirrorJSON(doc, 'prosemirror');
+          publishedMarkdown = exportDerivedMarkdown(pmJson as any);
+        }
       } catch {
         publishedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
       }
     }
+    if (!publishedMarkdown) {
+      publishedMarkdown = `# ${post.title}\n\n${post.excerpt || ''}`;
+    }
 
-    const [latestVersion] = await db
-      .select({ versionNumber: postVersions.versionNumber })
-      .from(postVersions)
-      .where(eq(postVersions.postId, id))
-      .orderBy(desc(postVersions.versionNumber))
-      .limit(1);
+    const { newVersion, republishedPost } = await db.transaction(async (tx) => {
+      const [latestVersion] = await tx
+        .select({ versionNumber: postVersions.versionNumber })
+        .from(postVersions)
+        .where(eq(postVersions.postId, id))
+        .orderBy(desc(postVersions.versionNumber))
+        .limit(1);
 
-    const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
+      const nextVersionNumber = (latestVersion?.versionNumber || 0) + 1;
 
-    const [newVersion] = await db
-      .insert(postVersions)
-      .values({
-        postId: id,
-        versionNumber: nextVersionNumber,
-        triggerReason: 'publication',
-        yjsStateSnapshot: post.yjsState,
-        markdownSnapshot: publishedMarkdown,
-        createdBy: user.userId,
-      })
-      .returning();
+      const [version] = await tx
+        .insert(postVersions)
+        .values({
+          postId: id,
+          versionNumber: nextVersionNumber,
+          triggerReason: 'publication',
+          yjsStateSnapshot: liveYjsState,
+          markdownSnapshot: publishedMarkdown,
+          createdBy: user.userId,
+        })
+        .returning();
 
-    const [republishedPost] = await db
-      .update(posts)
-      .set({
-        status: 'published',
-        publishedVersionId: newVersion.id,
-        publishedMarkdown,
-        publishedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(eq(posts.id, id))
-      .returning();
+      const [updated] = await tx
+        .update(posts)
+        .set({
+          status: 'published',
+          publishedVersionId: version.id,
+          publishedMarkdown,
+          publishedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        .where(eq(posts.id, id))
+        .returning();
+
+      return { newVersion: version, republishedPost: updated };
+    });
 
     await auditService.appendLog({
       actorUserId: user.userId,
@@ -1324,7 +1559,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       entityType: 'post',
       entityId: id,
       metadata: {
-        versionNumber: nextVersionNumber,
+        versionNumber: newVersion.versionNumber,
         versionId: newVersion.id,
         changeSummary: changeSummary.trim(),
       },
@@ -1340,6 +1575,16 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       entityId: id,
       href: `/posts/${id}`,
     });
+
+    if (outboxService) {
+      await outboxService.enqueue(db, 'post:published', {
+        postId: id,
+        publishedVersionId: newVersion.id,
+        authorId: post.authorId,
+        spaceId: post.spaceId,
+        title: post.title,
+      });
+    }
 
     return reply.send({
       post: republishedPost,

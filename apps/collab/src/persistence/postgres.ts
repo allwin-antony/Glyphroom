@@ -10,6 +10,7 @@ export interface PostgresPersistenceOptions {
   connectionString?: string;
   tableName?: string; // default: 'posts'
   defaultAuthorId?: string; // default: '00000000-0000-0000-0000-000000000001'
+  allowAutoInsert?: boolean; // default: false in prod, true in test
 }
 
 /**
@@ -22,10 +23,15 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
   private readonly ownsPool: boolean;
   private readonly tableName: string;
   private readonly defaultAuthorId: string;
+  private readonly allowAutoInsert: boolean;
+  private readonly tombstones: Set<string> = new Set<string>();
 
   constructor(options: PostgresPersistenceOptions = {}) {
     this.tableName = options.tableName || 'posts';
     this.defaultAuthorId = options.defaultAuthorId || '00000000-0000-0000-0000-000000000001';
+    this.allowAutoInsert =
+      options.allowAutoInsert ??
+      (process.env.NODE_ENV === 'test' || process.env.VITEST !== undefined);
 
     if (options.pool) {
       this.pool = options.pool;
@@ -46,6 +52,13 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
 
   public getPool(): pg.Pool {
     return this.pool;
+  }
+
+  public tombstone(documentName: string): void {
+    const id = this.normalizeDocId(documentName);
+    this.tombstones.add(id);
+    this.tombstones.add(documentName);
+    this.tombstones.add(`post-${id}`);
   }
 
   private normalizeDocId(documentName: string): string {
@@ -83,6 +96,9 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
 
   async store(documentName: string, state: Uint8Array, doc?: Y.Doc): Promise<void> {
     const id = this.normalizeDocId(documentName);
+    if (this.tombstones.has(id) || this.tombstones.has(documentName) || this.tombstones.has(`post-${id}`)) {
+      return;
+    }
     const hex = Buffer.from(state).toString('hex');
 
     let workingMarkdown: string | null = null;
@@ -117,8 +133,9 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
       `;
     const updateRes = await this.pool.query(updateSql, [hex, workingMarkdown, id, documentName]);
 
-    // 2. If no record was updated, auto-insert for development/test seeding
-    if (updateRes.rowCount === 0) {
+    // 2. Only auto-insert for development/test seeding if explicitly allowed;
+    // in normal operation, prevents recreating deleted posts from delayed flush.
+    if (updateRes.rowCount === 0 && this.allowAutoInsert) {
       const rowId = isUuid ? id : randomUUID();
 
       try {

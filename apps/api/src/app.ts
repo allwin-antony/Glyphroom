@@ -19,6 +19,7 @@ import { attachmentRoutes } from './routes/attachments.js';
 import { spaceRoutes } from './routes/spaces.js';
 import { notificationRoutes } from './routes/notifications.js';
 import { NotificationService } from './services/notifications.js';
+import { CollabService } from './services/collab.js';
 import { adminRoutes } from './routes/admin.js';
 import { bookmarkRoutes } from './routes/bookmarks.js';
 import { BackendPluginRegistry, defaultBackendRegistry, OutboxService } from './plugins/index.js';
@@ -30,6 +31,7 @@ export interface ApiAppOptions {
   logger?: boolean | Record<string, unknown>;
   pluginRegistry?: BackendPluginRegistry;
   outboxService?: OutboxService;
+  collabService?: CollabService;
 }
 
 export async function createApiApp(options: ApiAppOptions = {}): Promise<{
@@ -79,6 +81,8 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   const outboxService = options.outboxService ?? new OutboxService(db, pluginRegistry.getEventBus());
   outboxService.start();
 
+  const collabService = options.collabService ?? new CollabService();
+
   await app.register(authPlugin, { authService, db });
 
   // Health check endpoint
@@ -100,6 +104,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     viewCounter,
     notificationService,
     outboxService,
+    collabService,
   });
 
   await app.register(collaboratorRoutes, {

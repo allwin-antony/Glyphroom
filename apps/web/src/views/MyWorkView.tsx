@@ -72,7 +72,7 @@ export const MyWorkView: React.FC = () => {
   });
 
   const drafts = myPosts.filter((p) => p.status === 'draft');
-  const inReview = myPosts.filter((p) => p.status === 'in_review');
+  const inReview = myPosts.filter((p) => p.status === 'in_review' || p.status === 'approved');
   const published = myPosts.filter((p) => p.status === 'published');
   const sharedWithMe = posts.filter((p: any) => {
     if (!user) return false;
@@ -243,6 +243,10 @@ export const MyWorkView: React.FC = () => {
                     {post.status === 'published' ? (
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-status-success/15 text-status-success border border-status-success/30">
                         Published
+                      </span>
+                    ) : post.status === 'approved' ? (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-status-success/15 text-status-success border border-status-success/30">
+                        Approved
                       </span>
                     ) : post.status === 'in_review' ? (
                       <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-status-warning/15 text-status-warning border border-status-warning/30">
