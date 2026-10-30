@@ -19,6 +19,7 @@ A self-hosted collaborative blogging and knowledge platform for private corporat
 | [FEATURE_IMPROVEMENT_PLAN.md](FEATURE_IMPROVEMENT_PLAN.md) | Product / Engineering | Core feature gaps, improvement workstreams, priorities, and acceptance criteria |
 | [MCP_AND_BLOGGING_RELIABILITY_PLAN.md](MCP_AND_BLOGGING_RELIABILITY_PLAN.md) | Product / Engineering | Current implementation audit, caller-local PAT support, blogging defects, phased fixes, and end-to-end acceptance criteria |
 | [IMPLEMENTATION_HANDOVER.md](IMPLEMENTATION_HANDOVER.md) | Engineering / Next Agent | Implemented first-batch fixes, verification, deployment notes, and prioritized remaining work |
+| [TRACK1_MCP_VERIFICATION.md](TRACK1_MCP_VERIFICATION.md) | Engineering / Product | Track 1 verification results, live MCP showcase posts, and remaining transport/rendering/workflow defects |
 | [PLUGIN_ARCHITECTURE_IMPLEMENTATION_PLAN.md](PLUGIN_ARCHITECTURE_IMPLEMENTATION_PLAN.md) | Engineering | Implementation-ready plugin contracts, registries, durable events, storage, and phased delivery |
 
 ---
