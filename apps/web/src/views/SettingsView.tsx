@@ -23,6 +23,7 @@ export const SettingsView: React.FC = () => {
   const [selectedScopes, setSelectedScopes] = useState<string[]>([
     'posts:read',
     'posts:write',
+    'comments:write',
     'spaces:read',
     'spaces:write',
   ]);
@@ -35,6 +36,8 @@ export const SettingsView: React.FC = () => {
   const AVAILABLE_SCOPES = [
     { id: 'posts:read', label: 'Read Posts & Documents', desc: 'Allows AI or scripts to read documents & view catalogs.' },
     { id: 'posts:write', label: 'Edit & Create Posts', desc: 'Allows drafting, editing, and appending section cards.' },
+    { id: 'comments:write', label: 'Write Comments', desc: 'Allows adding discussion notes and replies.' },
+    { id: 'posts:publish', label: 'Publish Approved Posts', desc: 'Allows publication when your existing role and the review workflow permit it.' },
     { id: 'spaces:read', label: 'Read Spaces & Directories', desc: 'Allows browsing team spaces and member rosters.' },
     { id: 'spaces:write', label: 'Manage Spaces', desc: 'Allows creating team spaces and requesting permissions.' },
   ];

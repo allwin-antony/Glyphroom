@@ -140,6 +140,9 @@ export const authRoutes: FastifyPluginAsync<{
     return reply.send({
       user: request.user,
       csrfToken,
+      auth: request.isPatAuth
+        ? { type: 'pat', tokenId: request.patId, scopes: request.patScopes || [] }
+        : { type: 'session' },
     });
   });
 

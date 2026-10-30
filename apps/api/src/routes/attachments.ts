@@ -56,7 +56,7 @@ export const attachmentRoutes: FastifyPluginAsync<{
   storageDir?: string;
 }> = async (fastify, options) => {
   const { db, permissionService, auditService } = options;
-  const storageDir = options.storageDir || path.resolve(process.cwd(), 'uploads');
+  const storageDir = options.storageDir || process.env.ATTACHMENT_STORAGE_DIR || path.resolve(process.cwd(), 'uploads');
 
   // Ensure storage directory exists
   if (!fs.existsSync(storageDir)) {

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
   FileText, 
   ArrowLeft, 
@@ -16,6 +16,7 @@ import { TEMPLATES } from '../components/editor/TemplatePickerDialog.js';
 
 export const NewPostView: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { user } = useAuth();
   const [error, setError] = useState<string | null>(null);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string | null>(null);
@@ -43,6 +44,7 @@ export const NewPostView: React.FC = () => {
       const res = await api.post<{ post: { id: string } }>('/posts', {
         title,
         slug,
+        spaceId: searchParams.get('spaceId') || undefined,
         templateId: templateId === 'blank' ? undefined : templateId,
       });
 

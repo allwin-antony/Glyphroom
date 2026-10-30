@@ -37,7 +37,7 @@ async function loadTagsForPosts(db: Database, postIds: string[]): Promise<Map<st
   return result;
 }
 
-async function replacePostTags(db: Database, postId: string, tagNames: string[]): Promise<string[]> {
+async function replacePostTags(db: Pick<Database, 'select' | 'insert' | 'delete'>, postId: string, tagNames: string[]): Promise<string[]> {
   const normalizedNames = normalizeTagNames(tagNames);
   await db.delete(postTags).where(eq(postTags.postId, postId));
 
@@ -60,6 +60,7 @@ const CreatePostSchema = z.object({
   title: z.string().min(1).max(500),
   slug: z.string().min(1).max(255).regex(/^[a-z0-9-]+$/),
   excerpt: z.string().optional(),
+  content: z.string().min(1).max(1_000_000).optional(),
   tags: PostTagsSchema,
   coeId: z.string().uuid().optional(),
   spaceId: z.string().uuid().optional(),
@@ -585,7 +586,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
       return reply.status(400).send({ error: 'Validation failed', details: parseResult.error.format() });
     }
 
-    const { title, slug, excerpt, tags: tagNames, coeId, spaceId, visibility, templateId } = parseResult.data;
+    const { title, slug, excerpt, content, tags: tagNames, coeId, spaceId, visibility, templateId } = parseResult.data;
 
     // Check slug collision
     const [existing] = await db.select({ id: posts.id }).from(posts).where(eq(posts.slug, slug)).limit(1);
@@ -595,41 +596,51 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
 
     // Initialize canonical Yjs binary document state
     const ydoc = new Y.Doc();
-    if (templateId && templateId !== 'blank') {
+    if (content !== undefined) {
+      // Preserve the complete Markdown input in the canonical draft. Full rich-node
+      // Markdown import is a separate follow-up; never discard supplied body text.
+      const fragment = ydoc.getXmlFragment('prosemirror');
+      const paragraph = new Y.XmlElement('paragraph');
+      paragraph.insert(0, [new Y.XmlText(content)]);
+      fragment.insert(0, [paragraph]);
+    } else if (templateId && templateId !== 'blank') {
       populateYjsTemplate(ydoc, templateId, title);
     }
     const yjsState = Buffer.from(Y.encodeStateAsUpdate(ydoc));
+    const workingMarkdown = exportDerivedMarkdown(yDocToProsemirrorJSON(ydoc, 'prosemirror') as any);
+    ydoc.destroy();
 
-    const [newPost] = await db
-      .insert(posts)
-      .values({
-        title,
-        slug,
-        excerpt,
-        coeId,
-        spaceId: spaceId || null,
-        visibility: visibility || 'space',
-        authorId: user.userId,
-        status: 'draft',
-        yjsState,
-      })
-      .returning();
+    const { newPost, savedTags } = await db.transaction(async (tx) => {
+      const [newPost] = await tx
+        .insert(posts)
+        .values({
+          title,
+          slug,
+          excerpt,
+          coeId,
+          spaceId: spaceId || null,
+          visibility: visibility || 'space',
+          authorId: user.userId,
+          status: 'draft',
+          yjsState,
+          workingMarkdown,
+        })
+        .returning();
 
-    const savedTags = await replacePostTags(db, newPost.id, tagNames || []);
+      const savedTags = await replacePostTags(tx, newPost.id, tagNames || []);
 
-    // Initialize post view count
-    await db.insert(postViewCounts).values({
-      postId: newPost.id,
-      totalViews: 0n,
+      await tx.insert(postViewCounts).values({ postId: newPost.id, totalViews: 0n });
+      return { newPost, savedTags };
     });
 
     await auditService.appendLog({
       actorUserId: user.userId,
-      actorType: 'human',
+      actorType: request.isPatAuth ? 'agent' : 'human',
+      patId: request.patId,
       action: 'post_created',
       entityType: 'post',
       entityId: newPost.id,
-      metadata: { title, slug },
+      metadata: { title, slug, ...(request.isPatAuth ? { tokenId: request.patId } : {}) },
       ipAddress: request.ip,
     });
 

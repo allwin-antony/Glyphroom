@@ -702,7 +702,7 @@ describe('Adversarial Suggestion Operations & Lifecycle Stress Suite', () => {
       expect(() => pmDoc.doc.check()).not.toThrow();
     });
 
-    it('evaluates suggestEditSection behavior on a section containing complex block elements', () => {
+    it('rejects a mixed section containing a blockquote without changing its content', () => {
       // Build a document where section has a heading, a paragraph, and a blockquote
       const doc = new Y.Doc();
       const fragment = doc.getXmlFragment('default');
@@ -735,27 +735,21 @@ describe('Adversarial Suggestion Operations & Lifecycle Stress Suite', () => {
       // Body elements contain paragraph and blockquote
       expect(boundary!.bodyElements.length).toBe(2);
 
-      // Verify that calling suggestEditSection on this section succeeds or handles it
-      const result = suggestEditSection(
+      const before = Y.encodeStateAsUpdate(doc);
+      expect(() => suggestEditSection(
         doc,
         'Advanced Section',
         'Updated intro paragraph.\n\nUpdated quote block replacement.',
         agentMeta
-      );
-      expect(result.success).toBe(true);
-
-      console.log('ADVANCED SECTION - Fragment length:', fragment.length);
-      for (let i = 0; i < fragment.length; i++) {
-        console.log(`Adv item ${i}:`, fragment.get(i).constructor.name, (fragment.get(i) as any).nodeName);
-      }
+      )).toThrow('unsupported structured block');
+      expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
 
       // Verify ProseMirror schema validity of resulting document
       const pmDoc = initProseMirrorDoc(fragment, blogSchema);
-      console.log('Adv PM Doc JSON:', JSON.stringify(pmDoc.doc.toJSON(), null, 2));
       expect(() => pmDoc.doc.check()).not.toThrow();
     });
 
-    it('empirically reveals structural limitations of suggestEditSection on lists and tables', () => {
+    it('rejects list section replacements before inserting invalid XmlText children', () => {
       // Build a document where a section contains a bullet_list with list_items
       const doc = new Y.Doc();
       const fragment = doc.getXmlFragment('default');
@@ -793,52 +787,11 @@ describe('Adversarial Suggestion Operations & Lifecycle Stress Suite', () => {
       expect(() => pmInitial.doc.check()).not.toThrow();
       expect(exportDerivedMarkdown(pmInitial.doc)).toContain('- Feature Alpha\n- Feature Beta');
 
-      console.log('BEFORE suggestEditSection - Fragment length:', fragment.length);
-      for (let i = 0; i < fragment.length; i++) {
-        console.log(`Before item ${i}:`, fragment.get(i).constructor.name, (fragment.get(i) as any).nodeName);
-      }
-
-      // Now propose editing the section:
+      const before = Y.encodeStateAsUpdate(doc);
       const proposed = '- Feature Alpha\n- Feature Beta Enhanced';
-      const result = suggestEditSection(doc, 'Features', proposed, agentMeta);
-
-      console.log('IMMEDIATELY AFTER suggestEditSection - Fragment length:', fragment.length);
-      for (let i = 0; i < fragment.length; i++) {
-        console.log(`Immediately after item ${i}:`, fragment.get(i).constructor.name, (fragment.get(i) as any).nodeName);
-      }
-
-      // Check what suggestEditSection did to the list:
-      const listEl = fragment.get(1) as Y.XmlElement;
-      // In operations.ts, existingParas looks for direct XmlText child on el (which is bullet_list).
-      // Since bullet_list has list_items (XmlElements), it didn't find any direct XmlText,
-      // so it pushes an XmlText directly into bullet_list!
-      const directXmlTexts = [];
-      for (let i = 0; i < listEl.length; i++) {
-        if (listEl.get(i) instanceof Y.XmlText) {
-          directXmlTexts.push(listEl.get(i));
-        }
-      }
-
-      // Check if raw XmlText was pushed into bullet_list
-      expect(directXmlTexts.length).toBeGreaterThan(0);
-
-      // Now attempt to initialize ProseMirror document from the modified fragment
-      // ProseMirror bullet_list schema requires content: "list_item+"
-      // A raw XmlText directly inside bullet_list is not a valid list_item!
-      let pmDocError: Error | null = null;
-      let exported: string = '';
-      let pmDoc: any = null;
-      try {
-        pmDoc = initProseMirrorDoc(fragment, blogSchema);
-        pmDoc.doc.check();
-        exported = exportDerivedMarkdown(pmDoc.doc);
-      } catch (err: any) {
-        pmDocError = err;
-      }
-
-      // Assert behavior: y-prosemirror drops unexpected direct text children from bullet_list
-      // so the bullet list still retains its original list items, but the proposed suggestion
-      // attached to the direct XmlText inside bullet_list cannot be rendered in ProseMirror!
+      expect(() => suggestEditSection(doc, 'Features', proposed, agentMeta)).toThrow('unsupported structured block');
+      expect(Y.encodeStateAsUpdate(doc)).toEqual(before);
+      expect(exportDerivedMarkdown(initProseMirrorDoc(fragment, blogSchema).doc)).toContain('- Feature Alpha\n- Feature Beta');
     });
 
     it('evaluates whether rejectSuggestion on newly appended section leaves phantom empty elements', () => {
@@ -890,4 +843,3 @@ describe('Adversarial Suggestion Operations & Lifecycle Stress Suite', () => {
     });
   });
 });
-

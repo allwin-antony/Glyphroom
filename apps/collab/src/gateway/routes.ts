@@ -85,13 +85,13 @@ export function registerAgentGatewayRoutes(
       });
       return reply.status(200).send(response);
     } catch (err: any) {
-      if (err instanceof GatewayError) {
+      if (err instanceof GatewayError || err.code === 'VALIDATION_FAILED') {
         const errResponse: AgentGatewayErrorResponse = {
           success: false,
           code: err.code,
           message: err.message,
         };
-        return reply.status(err.statusCode).send(errResponse);
+        return reply.status(err.statusCode || 400).send(errResponse);
       }
 
       const errResponse: AgentGatewayErrorResponse = {

@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type pino from 'pino';
 import type { CollabGatewayClient } from './gateway/client.js';
-import { ApiClient } from './api/client.js';
+import { ApiClient, type AuthenticatedActor } from './api/client.js';
 import { registerAppendSectionTool } from './tools/append-section.js';
 import { registerInsertAfterSectionTool } from './tools/insert-after.js';
 import { registerSuggestEditSectionTool } from './tools/suggest-edit.js';
@@ -23,6 +23,7 @@ export interface CreateMcpServerOptions {
   agentScopes?: string[];
   logger: pino.Logger;
   pluginRegistry?: McpPluginRegistry;
+  actor?: AuthenticatedActor | null;
 }
 
 export function createMcpServer(options: CreateMcpServerOptions): McpServer {
@@ -73,7 +74,7 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
     gatewayClient: options.gatewayClient,
     logger: options.logger,
     agentScopes,
-    userId: process.env.MCP_USER_ID || process.env.DEFAULT_USER_ID,
+    userId: options.actor?.userId ?? (options.actor === undefined ? process.env.MCP_USER_ID || process.env.DEFAULT_USER_ID : undefined),
   });
 
   // MCP Resources & Prompts for automated agent formatting context

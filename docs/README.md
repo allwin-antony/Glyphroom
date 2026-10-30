@@ -17,6 +17,8 @@ A self-hosted collaborative blogging and knowledge platform for private corporat
 | [TECH_STACK.md](TECH_STACK.md) | Engineering / DevOps | All technology choices with justifications and locked version targets |
 | [ROADMAP.md](ROADMAP.md) | Engineering / PM | Phased delivery plan, estimates, Phase 0 spike go/no-go criteria, risks |
 | [FEATURE_IMPROVEMENT_PLAN.md](FEATURE_IMPROVEMENT_PLAN.md) | Product / Engineering | Core feature gaps, improvement workstreams, priorities, and acceptance criteria |
+| [MCP_AND_BLOGGING_RELIABILITY_PLAN.md](MCP_AND_BLOGGING_RELIABILITY_PLAN.md) | Product / Engineering | Current implementation audit, caller-local PAT support, blogging defects, phased fixes, and end-to-end acceptance criteria |
+| [IMPLEMENTATION_HANDOVER.md](IMPLEMENTATION_HANDOVER.md) | Engineering / Next Agent | Implemented first-batch fixes, verification, deployment notes, and prioritized remaining work |
 | [PLUGIN_ARCHITECTURE_IMPLEMENTATION_PLAN.md](PLUGIN_ARCHITECTURE_IMPLEMENTATION_PLAN.md) | Engineering | Implementation-ready plugin contracts, registries, durable events, storage, and phased delivery |
 
 ---

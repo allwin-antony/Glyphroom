@@ -336,6 +336,16 @@ export function suggestEditSection(
 
   const origin = options?.origin || createAgentOrigin(agentMeta, 'suggest_edit');
 
+  // This diff engine operates on inline text blocks. Never manufacture XmlText
+  // children inside tables, lists, or atom nodes while preparing a suggestion.
+  const unsupported = boundary.bodyElements.find((element) =>
+    !['paragraph', 'heading', 'code_block', 'codeBlock', 'mermaid_block'].includes(element.nodeName) ||
+    element.toArray().some((child) => !(child instanceof Y.XmlText))
+  );
+  if (unsupported) {
+    throw Object.assign(new Error(`Section contains unsupported structured block "${unsupported.nodeName}". Target a text-only section until structured diffs are supported.`), { code: 'VALIDATION_FAILED' });
+  }
+
   const normalized = normalizeTextForDiff(newContent).trim();
 
   // Check if proposed content starts with a heading line

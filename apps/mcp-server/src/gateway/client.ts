@@ -19,8 +19,9 @@ export class CollabGatewayClient {
   private readonly defaultAgentId: string;
   private readonly defaultTokenId?: string;
   private readonly timeoutMs: number;
+  private readonly resolveDocument?: (postId: string) => Promise<string>;
 
-  constructor(options: CollabGatewayClientOptions) {
+  constructor(options: CollabGatewayClientOptions & { resolveDocument?: (postId: string) => Promise<string> }) {
     let url = options.gatewayUrl;
     if (!url.includes('/internal/agent-gateway/edit')) {
       url = url.replace(/\/+$/, '') + '/internal/agent-gateway/edit';
@@ -31,6 +32,7 @@ export class CollabGatewayClient {
     this.defaultAgentId = options.defaultAgentId;
     this.defaultTokenId = options.defaultTokenId;
     this.timeoutMs = options.timeoutMs ?? 10000;
+    this.resolveDocument = options.resolveDocument;
   }
 
   async sendEdit(
@@ -46,6 +48,10 @@ export class CollabGatewayClient {
         400,
         parseResult.error.format()
       );
+    }
+
+    if (this.resolveDocument) {
+      parseResult.data.documentId = await this.resolveDocument(parseResult.data.documentId);
     }
 
     // 2. Build headers and validate

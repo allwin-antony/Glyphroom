@@ -95,11 +95,17 @@ function serializeNodeToMarkdown(node: ProseMirrorNode): string {
 
     case 'code_block': {
       const lang = node.attrs.language || '';
-      return `\`\`\`${lang}\n${node.textContent}\n\`\`\``;
+      let text = '';
+      node.forEach((child) => { text += serializeInlineNode(child); });
+      if (node.childCount && !text) return '';
+      return `\`\`\`${lang}\n${text}\n\`\`\``;
     }
 
     case 'mermaid_block': {
-      return `\`\`\`mermaid\n${node.textContent}\n\`\`\``;
+      let text = '';
+      node.forEach((child) => { text += serializeInlineNode(child); });
+      if (node.childCount && !text) return '';
+      return `\`\`\`mermaid\n${text}\n\`\`\``;
     }
 
     case 'math_display': {
@@ -286,12 +292,52 @@ function serializeJsonToMarkdown(json: ProseMirrorNodeJSON): string {
     const type = typeof rawType === 'string' ? rawType.toUpperCase() : 'NOTE';
     return `> [!${type}]\n` + inner.split('\n').map((line) => `> ${line}`).join('\n');
   }
-  if (json.type === 'code_block') {
+  if (json.marks?.some((mark) =>
+    (mark.type === MARK_SUGGESTION_INSERT && ['pending', 'rejected'].includes(mark.attrs?.status || 'pending')) ||
+    (mark.type === MARK_SUGGESTION_DELETE && mark.attrs?.status === 'accepted')
+  )) return '';
+  if (json.type === 'code_block' || json.type === 'codeBlock' || json.type === 'mermaid_block' || json.type === 'mermaidBlock') {
     const lang = json.attrs?.language || '';
-    const text = json.content?.map((c) => c.text || '').join('') || '';
-    return `\`\`\`${lang}\n${text}\n\`\`\``;
+    const text = json.content?.map(serializeJsonInline).join('') ?? json.attrs?.code ?? '';
+    if (json.content?.length && !text) return '';
+    const language = json.type.startsWith('mermaid') ? 'mermaid' : lang;
+    const fence = '`'.repeat(Math.max(3, ...((text.match(/`+/g) || []).map((run: string) => run.length + 1))));
+    return `${fence}${language}\n${text}\n${fence}`;
   }
-  return json.text || '';
+  if (json.type === 'math_display' || json.type === 'mathBlock') {
+    return `$$\n${json.attrs?.tex ?? json.attrs?.formula ?? ''}\n$$`;
+  }
+  if (['bullet_list', 'bulletList', 'ordered_list', 'orderedList', 'taskList'].includes(json.type)) {
+    const ordered = json.type === 'ordered_list' || json.type === 'orderedList';
+    const start = Number(json.attrs?.order ?? json.attrs?.start ?? 1);
+    return (json.content || []).map((item, index) => {
+      const body = (item.content || []).map(serializeJsonToMarkdown).filter(Boolean).join('\n');
+      if (!body.trim()) return '';
+      const prefix = json.type === 'taskList' ? `- [${item.attrs?.checked === true || item.attrs?.checked === 'true' ? 'x' : ' '}] ` : ordered ? `${start + index}. ` : '- ';
+      return prefix + body.replace(/\n/g, '\n' + ' '.repeat(prefix.length));
+    }).filter(Boolean).join('\n');
+  }
+  if (json.type === 'table') {
+    const rows = (json.content || []).map((row) => (row.content || []).map((cell) =>
+      (cell.content || []).map(serializeJsonToMarkdown).join(' ').replace(/\|/g, '\\|').replace(/\n/g, ' ')
+    ));
+    if (!rows.length) return '';
+    const width = Math.max(...rows.map((row) => row.length));
+    const line = (cells: string[]) => `| ${Array.from({ length: width }, (_, index) => cells[index] || '').join(' | ')} |`;
+    return [line(rows[0]), line(Array(width).fill('---')), ...rows.slice(1).map(line)].join('\n');
+  }
+  if (json.type === 'projectStatusBlock') {
+    const attrs = json.attrs || {};
+    const attributes = Object.entries({
+      ragStatus: attrs.ragStatus ?? 'green', milestoneTitle: attrs.milestoneTitle ?? '',
+      completionPercent: attrs.completionPercent ?? 0, targetDate: attrs.targetDate ?? '', blockers: attrs.blockers ?? '',
+    }).map(([key, value]) => `${key}="${String(value).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}"`).join(' ');
+    return `<!-- status-block ${attributes} -->`;
+  }
+  if (json.type === 'image') return `![${json.attrs?.alt || ''}](${json.attrs?.src || ''})`;
+  if (json.type === 'fileAttachmentBlock') return `[${json.attrs?.fileName || 'Attachment'}](${json.attrs?.url || ''})`;
+  if (json.type === 'horizontal_rule' || json.type === 'horizontalRule') return '---';
+  return json.content?.map(serializeJsonToMarkdown).filter(Boolean).join('\n\n') || serializeJsonInline(json);
 }
 
 function serializeJsonInline(child: ProseMirrorNodeJSON): string {
@@ -315,9 +361,11 @@ function serializeJsonInline(child: ProseMirrorNodeJSON): string {
     }
   }
 
+  if (child.type === 'hardBreak' || child.type === 'hard_break') return '  \n';
   if (child.type === 'math_inline') {
     return `$${child.attrs?.tex || ''}$`;
   }
+  if (child.type === 'image') return `![${child.attrs?.alt || ''}](${child.attrs?.src || ''})`;
 
   let text = child.text || '';
   if (!text) {
@@ -325,8 +373,9 @@ function serializeJsonInline(child: ProseMirrorNodeJSON): string {
   }
 
   for (const mark of marks) {
-    if (mark.type === 'strong') text = `**${text}**`;
-    else if (mark.type === 'em') text = `*${text}*`;
+    if (mark.type === 'strong' || mark.type === 'bold') text = `**${text}**`;
+    else if (mark.type === 'em' || mark.type === 'italic') text = `*${text}*`;
+    else if (mark.type === 'strike') text = `~~${text}~~`;
     else if (mark.type === 'code') text = `\`${text}\``;
     else if (mark.type === 'link') text = `[${text}](${mark.attrs?.href || ''})`;
   }

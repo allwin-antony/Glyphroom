@@ -72,6 +72,7 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
 
   describe('Feature 14: Post Auto-Provisioning (NewPostView)', () => {
     it('creates draft post via POST /api/v1/posts and redirects to /posts/:id/edit', async () => {
+      window.history.replaceState({}, '', '/posts/new?spaceId=11111111-1111-4111-8111-111111111111');
       (api.post as any).mockResolvedValueOnce({
         post: { id: 'post-uuid-123', title: 'Untitled Draft', slug: 'draft-123' },
       });
@@ -94,11 +95,13 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
           '/posts',
           expect.objectContaining({
             title: 'Untitled Draft',
+            spaceId: '11111111-1111-4111-8111-111111111111',
             slug: expect.stringMatching(/^draft-\d+-[a-z0-9]+$/),
           })
         );
         expect(mockNavigate).toHaveBeenCalledWith('/posts/post-uuid-123/edit', { replace: true });
       });
+      window.history.replaceState({}, '', '/');
     });
 
     it('displays error if post provisioning fails', async () => {

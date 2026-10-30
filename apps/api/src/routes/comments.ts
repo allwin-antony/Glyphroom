@@ -9,9 +9,9 @@ import type { AuditService } from '../services/audit.js';
 
 const CreateCommentSchema = z.object({
   content: z.string().min(1),
-  parentId: z.string().uuid().optional(),
-  yjsAnchorStart: z.record(z.unknown()).optional(),
-  yjsAnchorEnd: z.record(z.unknown()).optional(),
+  parentId: z.string().uuid().nullish(),
+  yjsAnchorStart: z.record(z.unknown()).nullish(),
+  yjsAnchorEnd: z.record(z.unknown()).nullish(),
   isReviewComment: z.boolean().optional(),
 });
 
@@ -95,7 +95,7 @@ export const commentRoutes: FastifyPluginAsync<{
 
     // 1-level reply nesting check
     if (data.parentId) {
-      const [parent] = await db.select().from(comments).where(eq(comments.id, data.parentId)).limit(1);
+      const [parent] = await db.select().from(comments).where(and(eq(comments.id, data.parentId), eq(comments.postId, id))).limit(1);
       if (!parent || parent.parentId !== null) {
         return reply.status(400).send({ error: 'Bad Request', message: 'Cannot reply to a nested comment (max 1-level nesting)' });
       }

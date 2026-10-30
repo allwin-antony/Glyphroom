@@ -88,7 +88,8 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
     let workingMarkdown: string | null = null;
     if (doc) {
       try {
-        const fragmentName = doc.share.has('default') ? 'default' : 'prosemirror';
+        const fragmentName = doc.share.has('default') && (!doc.share.has('prosemirror') || doc.getXmlFragment('prosemirror').length === 0)
+          ? 'default' : 'prosemirror';
         const pmJson = yDocToProsemirrorJSON(doc, fragmentName);
         workingMarkdown = exportDerivedMarkdown(pmJson as any);
       } catch {

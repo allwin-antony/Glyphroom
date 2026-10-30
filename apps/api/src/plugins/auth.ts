@@ -12,6 +12,7 @@ declare module 'fastify' {
     user?: SessionPayload;
     isPatAuth?: boolean;
     patId?: string;
+    patScopes?: string[];
   }
 }
 
@@ -75,6 +76,7 @@ export const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (fastify,
             };
             request.isPatAuth = true;
             request.patId = pat.id;
+            request.patScopes = pat.scopes;
 
             // Touch lastUsedAt asynchronously
             db.update(personalAccessTokens)
@@ -127,4 +129,3 @@ export const authPlugin: FastifyPluginAsync<AuthPluginOptions> = async (fastify,
 };
 
 (authPlugin as any)[Symbol.for('skip-override')] = true;
-

@@ -102,7 +102,7 @@ export const EditorView: React.FC = () => {
   useEffect(() => {
     if (!id || !user) return;
 
-    const wsUrl = (import.meta as any).env?.VITE_COLLAB_WS_URL || 'ws://localhost:4000';
+    const wsUrl = (import.meta as any).env?.VITE_COLLAB_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
     const roomName = `post-${id}`;
     const token = `token-${user.role}-${user.userId}`;
 
