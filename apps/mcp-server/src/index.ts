@@ -42,12 +42,6 @@ export async function startMcpServer() {
     return { mcpServer, httpServer: null };
   } else {
     // HTTP Mode: hosts /healthz and /mcp streamable transport
-    const streamableTransport = new StreamableHTTPServerTransport({
-      sessionIdGenerator: undefined, // stateless session mode
-    });
-
-    await mcpServer.connect(streamableTransport);
-
     const httpServer = http.createServer(async (req, res) => {
       // 1. Health check endpoint for Docker & scripts/deploy.sh
       if (req.url === '/healthz' || req.url === '/health') {
@@ -65,7 +59,32 @@ export async function startMcpServer() {
 
       // 2. Streamable HTTP MCP endpoint
       if (req.url?.startsWith('/mcp') || req.url === '/') {
+        // Stateless mode has no persistent SSE stream or session to delete.
+        if (req.method !== 'POST') {
+          res.writeHead(405, { 'Content-Type': 'application/json', Allow: 'POST' });
+          res.end(JSON.stringify({
+            jsonrpc: '2.0',
+            error: { code: -32000, message: 'Method not allowed' },
+            id: null,
+          }));
+          return;
+        }
+
         try {
+          // The SDK requires a fresh server/transport pair for every stateless
+          // request, including initialization and subsequent tool calls.
+          const requestServer = createMcpServer({ gatewayClient, logger });
+          const streamableTransport = new StreamableHTTPServerTransport({
+            sessionIdGenerator: undefined,
+          });
+
+          res.once('close', () => {
+            void requestServer.close().catch((err) => {
+              logger.error({ err }, 'Error closing MCP request');
+            });
+          });
+
+          await requestServer.connect(streamableTransport);
           await streamableTransport.handleRequest(req, res);
         } catch (err: any) {
           logger.error({ err }, 'Error handling MCP request');

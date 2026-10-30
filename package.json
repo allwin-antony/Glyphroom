@@ -32,6 +32,7 @@
   "packageManager": "pnpm@12.15.0",
   "type": "module",
   "scripts": {
+    "dev": "pnpm --parallel --filter @enterprise-blogger/shared --filter @enterprise-blogger/api --filter @enterprise-blogger/collab --filter @enterprise-blogger/web run dev",
     "build": "pnpm -r run build",
     "test": "pnpm --filter @enterprise-blogger/shared test",
     "test:shared": "pnpm --filter @enterprise-blogger/shared test",
