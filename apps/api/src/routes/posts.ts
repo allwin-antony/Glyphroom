@@ -1285,12 +1285,29 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
   });
 
   // 7. Get Post Versions (Milestone M2 Feature 19)
-  fastify.get('/:id/versions', async (request, reply) => {
+  fastify.get('/:id/versions', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const user = request.user!;
 
     const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
     if (!post) {
       return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const permission = await permissionService.resolvePostPermission(
+      { id: user.userId, role: user.role },
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
+    );
+
+    if (!permissionService.canEdit(permission)) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Insufficient permission to view version history' });
     }
 
     const versions = await db
@@ -1312,8 +1329,30 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
   });
 
   // 7.5 Get Single Version Details with snapshot
-  fastify.get('/:id/versions/:versionId', async (request, reply) => {
+  fastify.get('/:id/versions/:versionId', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
     const { id, versionId } = request.params as { id: string; versionId: string };
+    const user = request.user!;
+
+    const [post] = await db.select().from(posts).where(eq(posts.id, id)).limit(1);
+    if (!post) {
+      return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
+    }
+
+    const permission = await permissionService.resolvePostPermission(
+      { id: user.userId, role: user.role },
+      {
+        postId: post.id,
+        authorId: post.authorId,
+        status: post.status,
+        spaceId: post.spaceId,
+        visibility: post.visibility,
+        isPromoted: post.isPromoted,
+      }
+    );
+
+    if (!permissionService.canEdit(permission)) {
+      return reply.status(403).send({ error: 'Forbidden', message: 'Insufficient permission to view version history' });
+    }
 
     const [version] = await db
       .select({
