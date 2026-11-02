@@ -7,8 +7,8 @@ import { sql } from 'drizzle-orm';
  * without requiring the developer or deployment operator to run manual scripts.
  */
 export async function ensureDatabaseSchema(db: Database): Promise<void> {
-  try {
-    await db.execute(sql`
+  await db.transaction(async (tx) => {
+    await tx.execute(sql`
       CREATE TABLE IF NOT EXISTS spaces (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         slug VARCHAR(255) UNIQUE NOT NULL,
@@ -26,6 +26,7 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         PRIMARY KEY (space_id, user_id)
       );
+      CREATE INDEX IF NOT EXISTS idx_space_members_user ON space_members(user_id);
 
       CREATE TABLE IF NOT EXISTS space_requests (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -38,6 +39,7 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
         updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       );
+      CREATE INDEX IF NOT EXISTS idx_space_requests_status ON space_requests(status);
 
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS space_id UUID REFERENCES spaces(id) ON DELETE SET NULL;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS visibility VARCHAR(20) NOT NULL DEFAULT 'space';
@@ -45,8 +47,11 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_at TIMESTAMPTZ;
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS promoted_by UUID REFERENCES users(id);
       ALTER TABLE posts ADD COLUMN IF NOT EXISTS submitted_version_id UUID REFERENCES post_versions(id) ON DELETE SET NULL;
+      CREATE INDEX IF NOT EXISTS idx_posts_space_id ON posts(space_id);
+      CREATE INDEX IF NOT EXISTS idx_posts_promoted ON posts(is_promoted);
       CREATE UNIQUE INDEX IF NOT EXISTS idx_post_versions_post_version ON post_versions(post_id, version_number);
       ALTER TABLE post_reviews ADD COLUMN IF NOT EXISTS submitted_version_id UUID REFERENCES post_versions(id) ON DELETE RESTRICT;
+      CREATE INDEX IF NOT EXISTS idx_post_reviews_submitted_version_id ON post_reviews(submitted_version_id);
 
       CREATE TABLE IF NOT EXISTS bookmarks (
         user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -72,6 +77,22 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
       );
       CREATE INDEX IF NOT EXISTS idx_notifications_user_created ON notifications(user_id, created_at);
       CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, read_at);
+
+      CREATE TABLE IF NOT EXISTS post_attachments (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        post_id UUID NOT NULL REFERENCES posts(id) ON DELETE CASCADE,
+        file_name VARCHAR(255) NOT NULL,
+        file_size INTEGER NOT NULL,
+        mime_type VARCHAR(100) NOT NULL,
+        sha256 VARCHAR(64) NOT NULL,
+        storage_path TEXT NOT NULL,
+        scan_status VARCHAR(20) NOT NULL DEFAULT 'clean'
+          CHECK (scan_status IN ('scanning', 'clean', 'blocked')),
+        uploaded_by UUID NOT NULL REFERENCES users(id) ON DELETE RESTRICT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+      CREATE INDEX IF NOT EXISTS idx_post_attachments_post_id ON post_attachments(post_id);
+      CREATE INDEX IF NOT EXISTS idx_post_attachments_sha256 ON post_attachments(sha256);
 
       CREATE TABLE IF NOT EXISTS plugin_storage (
         id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -100,17 +121,6 @@ export async function ensureDatabaseSchema(db: Database): Promise<void> {
       INSERT INTO spaces (id, slug, name, description)
       VALUES ('00000000-0000-0000-0000-000000000101', 'general-engineering', 'General Engineering', 'Default shared engineering workspace for core project documentation.')
       ON CONFLICT (slug) DO NOTHING;
-
-      -- Bind any unassigned posts to General Engineering
-      UPDATE posts
-      SET space_id = '00000000-0000-0000-0000-000000000101',
-          is_promoted = (status = 'published')
-      WHERE space_id IS NULL;
     `);
-  } catch (err: any) {
-    // If running in in-memory test databases without raw postgres extensions, silently skip
-    if (!err?.message?.includes('does not exist')) {
-      console.warn('Schema auto-migration check notice:', err?.message || err);
-    }
-  }
+  });
 }

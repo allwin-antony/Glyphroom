@@ -50,7 +50,7 @@ export const collaboratorRoutes: FastifyPluginAsync<{
 
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      { ...post, postId: post.id }
     );
 
     if (!permissionService.canView(permission)) {

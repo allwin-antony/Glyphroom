@@ -137,6 +137,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
     db,
     permissionService,
     auditService,
+    notificationService,
     outboxService,
   });
 

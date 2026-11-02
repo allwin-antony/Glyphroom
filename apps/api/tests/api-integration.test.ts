@@ -1,10 +1,12 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import bcrypt from 'bcryptjs';
 import { createInMemoryDatabase } from './helpers/test-db.js';
 import { createApiApp } from '../src/app.js';
 import { users, posts, postReviews, postVersions } from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../src/db/index.js';
+import * as Y from 'yjs';
+import type { CollabService } from '../src/services/collab.js';
 
 describe('Fastify REST API End-to-End Integration Suite', () => {
   let db: Database;
@@ -74,6 +76,10 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     const instance = await createApiApp({
       db,
       sessionSecret: 'test-secret-32-chars-long-minimum-length',
+      collabService: {
+        flushDocument: vi.fn(async (id: string) => ({ inMemory: false, documentName: `post-${id}` })),
+        tombstoneDocument: vi.fn(async (id: string) => ({ tombstoned: true, documentName: `post-${id}` })),
+      } as unknown as CollabService,
     });
     app = instance.app;
     close = instance.close;
@@ -85,6 +91,16 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       await close();
     }
   });
+
+  async function persistWorking(postId: string, markdown: string) {
+    const doc = new Y.Doc();
+    const paragraph = new Y.XmlElement('paragraph');
+    paragraph.insert(0, [new Y.XmlText(markdown)]);
+    doc.getXmlFragment('prosemirror').insert(0, [paragraph]);
+    await db.update(posts).set({ yjsState: Buffer.from(Y.encodeStateAsUpdate(doc)), workingMarkdown: markdown })
+      .where(eq(posts.id, postId));
+    doc.destroy();
+  }
 
   it('GET /health returns 200 OK', async () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
@@ -196,7 +212,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     expect(post.status).toBe('draft');
 
     // 3. Flush working content, then submit post for review
-    await db.update(posts).set({ workingMarkdown: '# Pinned review content' }).where(eq(posts.id, post.id));
+    await persistWorking(post.id, '# Pinned review content');
     const submitRes = await app.inject({
       method: 'POST',
       url: `/api/v1/posts/${post.id}/submit-review`,
@@ -211,7 +227,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     expect(submitRes.json().submittedVersion.triggerReason).toBe('review_submission');
 
     // Working content may continue to change, but the review remains pinned.
-    await db.update(posts).set({ workingMarkdown: '# Mutable post-review edit' }).where(eq(posts.id, post.id));
+    await persistWorking(post.id, '# Mutable post-review edit');
 
     // 4. Author tries to approve their own post -> must be strictly rejected (403)
     const selfApproveRes = await app.inject({
@@ -224,6 +240,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       payload: {
         decision: 'approved',
         notes: 'I approve my own post!',
+        submittedVersionId,
       },
     });
     expect(selfApproveRes.statusCode).toBe(403);
@@ -252,7 +269,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
         cookie: `blogger_session=${modSession}`,
         'x-csrf-token': modCsrf,
       },
-      payload: { decision: 'changes_requested', notes: 'Please revise.' },
+      payload: { decision: 'changes_requested', notes: 'Please revise.', submittedVersionId },
     });
     expect(changesRes.statusCode).toBe(201);
     expect(changesRes.json().review.submittedVersionId).toBe(submittedVersionId);
@@ -260,7 +277,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     expect(draftAfterChanges[0].status).toBe('draft');
 
     // 7. Resubmit the revised draft and approve that new checkpoint.
-    await db.update(posts).set({ workingMarkdown: '# Pinned approved content' }).where(eq(posts.id, post.id));
+    await persistWorking(post.id, '# Pinned approved content');
     const resubmitRes = await app.inject({
       method: 'POST',
       url: `/api/v1/posts/${post.id}/submit-review`,
@@ -280,6 +297,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       payload: {
         decision: 'approved',
         notes: 'Thorough architecture, approved for enterprise publication.',
+        submittedVersionId: approvedSubmittedVersionId,
       },
     });
     expect(reviewRes.statusCode).toBe(201);
@@ -293,12 +311,18 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
         cookie: `blogger_session=${modSession}`,
         'x-csrf-token': modCsrf,
       },
+      payload: { submittedVersionId: approvedSubmittedVersionId },
     });
     expect(publishRes.statusCode).toBe(200);
-    expect(publishRes.json().post.status).toBe('published');
-    expect(publishRes.json().post.publishedVersionId).toBe(approvedSubmittedVersionId);
-    expect(publishRes.json().post.publishedMarkdown).toBe('# Pinned approved content');
-    expect(publishRes.json().post.publishedMarkdown).not.toContain('Mutable post-review edit');
+    expect(Object.keys(publishRes.json().post).sort()).toEqual(['id', 'status', 'publishedVersionId', 'publishedAt'].sort());
+    expect(publishRes.json().post).toMatchObject({
+      id: post.id,
+      status: 'published',
+      publishedVersionId: approvedSubmittedVersionId,
+    });
+    const [published] = await db.select().from(posts).where(eq(posts.id, post.id));
+    expect(published.publishedMarkdown).toBe('# Pinned approved content');
+    expect(published.publishedMarkdown).not.toContain('Mutable post-review edit');
 
     const reviews = await db.select().from(postReviews).where(eq(postReviews.postId, post.id));
     expect(reviews).toHaveLength(2);

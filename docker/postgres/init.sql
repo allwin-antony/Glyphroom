@@ -102,7 +102,7 @@ CREATE TABLE IF NOT EXISTS posts (
     title VARCHAR(500) NOT NULL,
     excerpt TEXT,
     status VARCHAR(20) NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'in_review', 'approved', 'published', 'archived')),
-    author_id UUID REFERENCES users(id) ON DELETE RESTRICT,
+    author_id UUID REFERENCES users(id) ON DELETE RESTRICT NOT NULL,
     space_id UUID REFERENCES spaces(id) ON DELETE SET NULL,
     visibility VARCHAR(20) NOT NULL DEFAULT 'space' CHECK (visibility IN ('space', 'invited_only')),
     is_promoted BOOLEAN NOT NULL DEFAULT false,
@@ -111,6 +111,7 @@ CREATE TABLE IF NOT EXISTS posts (
     coe_id UUID REFERENCES centers_of_excellence(id),
     yjs_state BYTEA NOT NULL,
     working_markdown TEXT,
+    submitted_version_id UUID,
     published_version_id UUID,
     published_markdown TEXT,
     search_vector TSVECTOR,
@@ -127,6 +128,8 @@ CREATE INDEX IF NOT EXISTS idx_posts_published_at ON posts(published_at DESC) WH
 CREATE INDEX IF NOT EXISTS idx_posts_search_vector ON posts USING GIN(search_vector);
 CREATE INDEX IF NOT EXISTS idx_posts_working_search_vector ON posts USING GIN(working_search_vector);
 CREATE INDEX IF NOT EXISTS idx_posts_title_trgm ON posts USING GIN(title gin_trgm_ops);
+CREATE INDEX IF NOT EXISTS idx_posts_space_id ON posts(space_id);
+CREATE INDEX IF NOT EXISTS idx_posts_promoted ON posts(is_promoted);
 
 -- ==========================================================================
 -- 5.5 Personal Reader Bookmarks
@@ -159,16 +162,29 @@ CREATE TABLE IF NOT EXISTS post_versions (
 
 CREATE INDEX IF NOT EXISTS idx_post_versions_post_id ON post_versions(post_id);
 
--- Alter posts to bind foreign key for published_version_id
+-- Alter posts to bind circular version foreign keys after post_versions exists
 DO $$
 BEGIN
     IF NOT EXISTS (
         SELECT 1 FROM information_schema.table_constraints
-        WHERE constraint_name = 'fk_posts_published_version'
+        WHERE constraint_schema = current_schema()
+          AND table_name = 'posts'
+          AND constraint_name = 'fk_posts_published_version'
     ) THEN
         ALTER TABLE posts
             ADD CONSTRAINT fk_posts_published_version
             FOREIGN KEY (published_version_id) REFERENCES post_versions(id) ON DELETE SET NULL;
+    END IF;
+
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_schema = current_schema()
+          AND table_name = 'posts'
+          AND constraint_name = 'fk_posts_submitted_version'
+    ) THEN
+        ALTER TABLE posts
+            ADD CONSTRAINT fk_posts_submitted_version
+            FOREIGN KEY (submitted_version_id) REFERENCES post_versions(id) ON DELETE SET NULL;
     END IF;
 END $$;
 
@@ -284,6 +300,24 @@ CREATE TABLE IF NOT EXISTS attachments (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Runtime attachment metadata used by the API. The legacy attachments table
+-- above is retained so existing deployments and records are never dropped.
+CREATE TABLE IF NOT EXISTS post_attachments (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    post_id UUID REFERENCES posts(id) ON DELETE CASCADE NOT NULL,
+    file_name VARCHAR(255) NOT NULL,
+    file_size INTEGER NOT NULL,
+    mime_type VARCHAR(100) NOT NULL,
+    sha256 VARCHAR(64) NOT NULL,
+    storage_path TEXT NOT NULL,
+    scan_status VARCHAR(20) NOT NULL DEFAULT 'clean' CHECK (scan_status IN ('scanning', 'clean', 'blocked')),
+    uploaded_by UUID REFERENCES users(id) ON DELETE RESTRICT NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_post_attachments_post_id ON post_attachments(post_id);
+CREATE INDEX IF NOT EXISTS idx_post_attachments_sha256 ON post_attachments(sha256);
+
 -- ===========================================================================
 -- 13. Audit Logs (Tamper-Evident SHA-256 Chained Hash Log)
 -- ===========================================================================
@@ -347,41 +381,11 @@ CREATE TABLE IF NOT EXISTS plugin_event_outbox (
 CREATE INDEX IF NOT EXISTS idx_plugin_event_outbox_poll ON plugin_event_outbox(status, available_at);
 
 -- ===========================================================================
--- 15. Initial Seed: Genesis Audit Hash & Default System Admin
+-- 15. Initial Seed: Migration Metadata & Genesis Audit Hash
 -- ===========================================================================
 INSERT INTO _schema_migrations (version, name)
 VALUES ('001', 'initial_schema_and_extensions')
 ON CONFLICT (version) DO NOTHING;
-
--- Default System Admin (Preserved for turnkey deployment & integration suites)
-INSERT INTO users (id, email, full_name, password_hash, role, is_active)
-VALUES (
-    '00000000-0000-0000-0000-000000000001',
-    'admin@blogger.corp.internal',
-    'System Administrator',
-    '$2a$10$wYNBVWEHmj6BkDKsMjwwEuAfvPY2WS7ausLRXg613Nnls10A3/8Re',
-    'admin',
-    true
-)
-ON CONFLICT (email) DO UPDATE
-SET password_hash = EXCLUDED.password_hash,
-    role = EXCLUDED.role,
-    is_active = EXCLUDED.is_active;
-
--- Break-Glass Local Admin (Mandated by ORIGINAL_REQUEST.md & E2E Acceptance Criteria)
-INSERT INTO users (id, email, full_name, password_hash, role, is_active)
-VALUES (
-    '00000000-0000-0000-0000-000000000002',
-    'admin@enterprise-blogger.local',
-    'Break-Glass System Administrator',
-    '$2a$10$wYNBVWEHmj6BkDKsMjwwEuAfvPY2WS7ausLRXg613Nnls10A3/8Re',
-    'admin',
-    true
-)
-ON CONFLICT (email) DO UPDATE
-SET password_hash = EXCLUDED.password_hash,
-    role = EXCLUDED.role,
-    is_active = EXCLUDED.is_active;
 
 INSERT INTO audit_logs (id, actor_type, action, prev_hash, row_hash, metadata)
 VALUES (

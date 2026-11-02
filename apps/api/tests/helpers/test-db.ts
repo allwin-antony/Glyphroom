@@ -1,4 +1,4 @@
-import { newDb } from 'pg-mem';
+import { DataType, newDb } from 'pg-mem';
 import { drizzle } from 'drizzle-orm/node-postgres';
 import * as schema from '../../src/db/schema.js';
 import type { Database } from '../../src/db/index.js';
@@ -6,6 +6,11 @@ import crypto from 'node:crypto';
 
 export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any } {
   const pgMem = newDb();
+
+  pgMem.public.registerFunction({
+    name: 'decode', args: [DataType.text, DataType.text], returns: DataType.bytea,
+    implementation: (value: string, encoding: BufferEncoding) => Buffer.from(value, encoding),
+  });
 
   pgMem.public.registerFunction({
     name: 'gen_random_uuid',
@@ -263,6 +268,22 @@ export function createInMemoryDatabase(): { db: Database; pgMem: any; pool: any 
       let isRowModeArray = false;
       const last = args[args.length - 1];
       const callback = typeof last === 'function' ? last : null;
+
+      // pg-mem's pg adapter converts Buffer parameters through UTF-8. Preserve
+      // native PostgreSQL bytea semantics so real Yjs states survive fixtures.
+      const config = typeof args[0] === 'object' ? { ...args[0] } : null;
+      let text = config?.text ?? args[0];
+      const values = config?.values ?? args[1];
+      if (typeof text === 'string' && Array.isArray(values)) {
+        const encoded = values.map((value, index) => {
+          if (!Buffer.isBuffer(value)) return value;
+          text = text.replace(new RegExp(`\\$${index + 1}(?!\\d)`, 'g'), `decode($${index + 1}, 'hex')`);
+          return value.toString('hex');
+        });
+        if (config) { config.text = text; config.values = encoded; }
+        else { args[0] = text; args[1] = encoded; }
+      }
+      if (config) args[0] = config;
 
       if (args[0] && typeof args[0] === 'object') {
         delete args[0].types;

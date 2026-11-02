@@ -8,6 +8,7 @@ import { OutboxService } from '../src/plugins/outbox.js';
 import { pluginEventOutbox, users } from '../src/db/schema.js';
 import type { GlyphroomBackendPlugin } from '../src/plugins/types.js';
 import type { PluginEventEnvelope } from '@enterprise-blogger/shared';
+import type { CollabService } from '../src/services/collab.js';
 
 const TEST_SECRET = 'test-secret-at-least-32-chars-long-for-hmac';
 
@@ -340,6 +341,7 @@ describe('Phase 2: Durable Domain Events & Outbox Suite', () => {
       db,
       sessionSecret: TEST_SECRET,
       pluginRegistry: registry,
+      collabService: { flushDocument: async (id: string) => ({ inMemory: false, documentName: `post-${id}` }) } as CollabService,
     });
 
     // 1. Create post
@@ -378,7 +380,7 @@ describe('Phase 2: Durable Domain Events & Outbox Suite', () => {
       method: 'POST',
       url: `/api/v1/posts/${postId}/reviews`,
       headers: { cookie: reviewerAuth.cookie, 'x-csrf-token': reviewerAuth.csrf },
-      payload: { decision: 'approved', notes: 'Looks ready for production' },
+      payload: { decision: 'approved', notes: 'Looks ready for production', submittedVersionId: submitRes.json().submittedVersion.id },
     });
     expect(reviewRes.statusCode).toBe(201);
 
@@ -387,8 +389,21 @@ describe('Phase 2: Durable Domain Events & Outbox Suite', () => {
       method: 'POST',
       url: `/api/v1/posts/${postId}/publish`,
       headers: { cookie: reviewerAuth.cookie, 'x-csrf-token': reviewerAuth.csrf },
+      payload: { submittedVersionId: submitRes.json().submittedVersion.id },
     });
     expect(publishRes.statusCode).toBe(200);
+    expect(publishRes.json().post).toMatchObject({
+      id: postId,
+      status: 'published',
+      publishedVersionId: submitRes.json().submittedVersion.id,
+    });
+    expect(Object.keys(publishRes.json().post).sort()).toEqual(['id', 'status', 'publishedVersionId', 'publishedAt'].sort());
+    const publishedEvents = await db.select().from(pluginEventOutbox).where(eq(pluginEventOutbox.eventType, 'post:published'));
+    expect(publishedEvents).toHaveLength(1);
+    expect(publishedEvents[0].payload).toMatchObject({
+      postId,
+      publishedVersionId: submitRes.json().submittedVersion.id,
+    });
 
     // 6. Process outbox batch
     const batchResult = await outboxService.processPending();

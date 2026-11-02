@@ -5,7 +5,9 @@ import { createApiApp } from '../src/app.js';
 import { users, posts, postVersions, postReviews } from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import type { Database } from '../src/db/index.js';
-import type { CollabService } from '../src/services/collab.js';
+import { deriveDocumentSnapshot, type CollabService } from '../src/services/collab.js';
+import * as Y from 'yjs';
+import { createHash } from 'node:crypto';
 
 describe('Track 1: Live Checkpoints, Reversion, and Publication Workflow (B03-B07, B11)', () => {
   let db: Database;
@@ -54,14 +56,27 @@ describe('Track 1: Live Checkpoints, Reversion, and Publication Workflow (B03-B0
       .returning();
     modId = mod.id;
 
+    const workingMarkdown = '# Live Millisecond Flushed Content\n\nCaptured directly from memory.';
+    const doc = new Y.Doc();
+    const paragraph = new Y.XmlElement('paragraph');
+    paragraph.insert(0, [new Y.XmlText(workingMarkdown)]);
+    doc.getXmlFragment('prosemirror').insert(0, [paragraph]);
+    const yjsState = Y.encodeStateAsUpdate(doc);
+    doc.destroy();
     mockCollabService = {
-      flushDocument: vi.fn().mockResolvedValue({
+      flushDocument: vi.fn(async (postId: string) => ({
+        inMemory: true, documentName: `post-${postId}`, yjsState, workingMarkdown,
+        fingerprint: createHash('sha256').update(yjsState).digest('hex'),
+      })),
+      restoreDocument: vi.fn(async (postId: string, state: Uint8Array) => ({
+        documentName: `post-${postId}`,
         inMemory: true,
-        yjsState: new Uint8Array([1, 2, 3, 4]),
-        workingMarkdown: '# Live Millisecond Flushed Content\n\nCaptured directly from memory.',
-      }),
-      restoreDocument: vi.fn().mockResolvedValue(true),
-      tombstoneDocument: vi.fn().mockResolvedValue(true),
+        ...deriveDocumentSnapshot(state),
+      })),
+      tombstoneDocument: vi.fn(async (postId: string) => ({
+        tombstoned: true as const,
+        documentName: `post-${postId}`,
+      })),
     } as unknown as CollabService;
 
     const instance = await createApiApp({
@@ -154,7 +169,7 @@ describe('Track 1: Live Checkpoints, Reversion, and Publication Workflow (B03-B0
     });
     const postId = createRes.json().post.id;
 
-    await app.inject({
+    const submitRes = await app.inject({
       method: 'POST',
       url: `/api/v1/posts/${postId}/submit-review`,
       headers: { cookie: authorCookie, 'x-csrf-token': authorCsrf },
@@ -170,7 +185,7 @@ describe('Track 1: Live Checkpoints, Reversion, and Publication Workflow (B03-B0
       method: 'POST',
       url: `/api/v1/posts/${postId}/reviews`,
       headers: { cookie: modCookie, 'x-csrf-token': modCsrf },
-      payload: { decision: 'approved', notes: 'Approved checkpoint.' },
+      payload: { decision: 'approved', notes: 'Approved checkpoint.', submittedVersionId: submitRes.json().submittedVersion.id },
     });
     expect(reviewRes.statusCode).toBe(201);
 
@@ -179,16 +194,23 @@ describe('Track 1: Live Checkpoints, Reversion, and Publication Workflow (B03-B0
       method: 'POST',
       url: `/api/v1/posts/${postId}/publish`,
       headers: { cookie: modCookie, 'x-csrf-token': modCsrf },
+      payload: { submittedVersionId: submitRes.json().submittedVersion.id },
     });
     expect(pubRes.statusCode).toBe(200);
     const publishedPost = pubRes.json().post;
 
     // Published content MUST be the approved submitted version, NOT the later working changes!
-    expect(publishedPost.status).toBe('published');
-    expect(publishedPost.publishedMarkdown).toBe(
+    expect(Object.keys(publishedPost).sort()).toEqual(['id', 'status', 'publishedVersionId', 'publishedAt'].sort());
+    expect(publishedPost).toMatchObject({
+      id: postId,
+      status: 'published',
+      publishedVersionId: submitRes.json().submittedVersion.id,
+    });
+    const [savedPost] = await db.select().from(posts).where(eq(posts.id, postId));
+    expect(savedPost.publishedMarkdown).toBe(
       '# Live Millisecond Flushed Content\n\nCaptured directly from memory.'
     );
-    expect(publishedPost.publishedMarkdown).not.toContain('Malicious Unreviewed');
+    expect(savedPost.publishedMarkdown).not.toContain('Malicious Unreviewed');
   });
 
   it('B05: PATCH /:id reverts in_review and approved posts to draft and resets submittedVersionId', async () => {
@@ -276,18 +298,42 @@ describe('Track 1: Live Checkpoints, Reversion, and Publication Workflow (B03-B0
       payload: { status: 'draft' },
     });
 
-    // 3. Restore v1
+    // 3. Capture, commit safety, then restore v1 outside the transaction.
+    const order: string[] = [];
+    const flush = vi.mocked(mockCollabService.flushDocument).getMockImplementation()!;
+    vi.spyOn(mockCollabService, 'flushDocument').mockImplementation(async (id) => {
+      order.push('capture');
+      return flush(id);
+    });
+    const transaction = db.transaction.bind(db);
+    const transactionSpy = vi.spyOn(db, 'transaction').mockImplementation((async (callback, config) => {
+      const result = await transaction(callback, config);
+      order.push('safety committed');
+      return result;
+    }) as typeof db.transaction);
+    const restore = vi.mocked(mockCollabService.restoreDocument).getMockImplementation()!;
+    vi.spyOn(mockCollabService, 'restoreDocument').mockImplementation(async (id, state, fingerprint) => {
+      expect(order).toEqual(['capture', 'safety committed']);
+      const checkpoints = await db.select().from(postVersions).where(eq(postVersions.postId, id));
+      expect(checkpoints).toHaveLength(2);
+      expect(checkpoints.some((v) => v.versionNumber === 2 && v.triggerReason === 'hourly_checkpoint')).toBe(true);
+      order.push('restore');
+      return restore(id, state, fingerprint);
+    });
     const restoreRes = await app.inject({
       method: 'POST',
       url: `/api/v1/posts/${postId}/versions/${v1Id}/restore`,
       headers: { cookie: authorCookie, 'x-csrf-token': authorCsrf },
     });
+    transactionSpy.mockRestore();
     expect(restoreRes.statusCode).toBe(200);
+    expect(order).toEqual(['capture', 'safety committed', 'restore']);
 
     // Verify collab restore was invoked with snapshot
     expect(mockCollabService.restoreDocument).toHaveBeenCalledWith(
       postId,
-      expect.any(Uint8Array)
+      expect.any(Uint8Array),
+      expect.stringMatching(/^[0-9a-f]{64}$/),
     );
 
     // Verify safety checkpoint v2 was created

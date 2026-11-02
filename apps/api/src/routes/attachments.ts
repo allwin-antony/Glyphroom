@@ -75,7 +75,7 @@ export const attachmentRoutes: FastifyPluginAsync<{
 
     const permission = await permissionService.resolvePostPermission(
       { id: user.userId, role: user.role },
-      { postId: post.id, authorId: post.authorId, status: post.status }
+      { ...post, postId: post.id }
     );
 
     if (!permissionService.canEdit(permission)) {
@@ -169,7 +169,7 @@ export const attachmentRoutes: FastifyPluginAsync<{
     const permission = request.user
       ? await permissionService.resolvePostPermission(
           { id: request.user.userId, role: request.user.role },
-          { postId: post.id, authorId: post.authorId, status: post.status }
+          { ...post, postId: post.id }
         )
       : post.status === 'published'
       ? 'view'
@@ -228,7 +228,7 @@ export const attachmentRoutes: FastifyPluginAsync<{
     const permission = request.user
       ? await permissionService.resolvePostPermission(
           { id: request.user.userId, role: request.user.role },
-          { postId: post.id, authorId: post.authorId, status: post.status }
+          { ...post, postId: post.id }
         )
       : post.status === 'published'
       ? 'view'

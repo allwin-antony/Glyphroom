@@ -548,7 +548,7 @@ describe('post version-history read privacy', () => {
       method: 'POST',
       url: `/api/v1/posts/${postIds.inReview}/reviews`,
       headers: { cookie: moderator.cookie, 'x-csrf-token': moderator.csrfToken },
-      payload: { decision: 'approved', notes: 'Reviewed the pinned checkpoint.' },
+      payload: { decision: 'approved', notes: 'Reviewed the pinned checkpoint.', submittedVersionId: versionIds.inReviewPinned },
     });
     expect(reviewResponse.statusCode).toBe(201);
     expect(reviewResponse.json().review.submittedVersionId).toBe(versionIds.inReviewPinned);
