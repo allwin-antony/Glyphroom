@@ -196,7 +196,7 @@ describe('Milestone M1 Adversarial Web Shell & Auth Suite', () => {
         user: {
           id: 'u-reader',
           userId: 'u-reader',
-          email: 'reader@enterprise-blogger.local',
+          email: 'reader@glyphroom.local',
           fullName: 'Reader Bob',
           role: 'reader',
         },
@@ -226,7 +226,7 @@ describe('Milestone M1 Adversarial Web Shell & Auth Suite', () => {
         user: {
           id: 'u-author',
           userId: 'u-author',
-          email: 'author@enterprise-blogger.local',
+          email: 'author@glyphroom.local',
           fullName: 'Author Alice',
           role: 'author',
         },
@@ -253,7 +253,7 @@ describe('Milestone M1 Adversarial Web Shell & Auth Suite', () => {
         user: {
           id: 'u-mod',
           userId: 'u-mod',
-          email: 'mod@enterprise-blogger.local',
+          email: 'mod@glyphroom.local',
           fullName: 'Mod Charlie',
           role: 'moderator',
         },
@@ -342,7 +342,7 @@ describe('Milestone M1 Adversarial Web Shell & Auth Suite', () => {
       expect(submitBtn).toHaveProperty('disabled', true);
 
       // Resolve login
-      resolveLogin({ id: 'u1', email: 'admin@enterprise-blogger.local', role: 'admin' });
+      resolveLogin({ id: 'u1', email: 'admin@glyphroom.local', role: 'admin' });
       await waitFor(() => {
         expect(mockLogin).toHaveBeenCalled();
       });

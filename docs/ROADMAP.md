@@ -1,4 +1,4 @@
-# Enterprise Blogger 2.0 — Roadmap & Implementation Plan
+# Glyphroom — Roadmap & Implementation Plan
 
 > **Rev 3** | See [README.md](README.md) for the full document index.  
 > Estimates assume **3–4 engineers**. Re-baseline at the Phase 0 gate.
@@ -11,7 +11,7 @@
 |---|---|---|
 | **Docmost** | AGPL-3.0 | Uses TipTap + Yjs + NestJS, modern UI. **AGPL-3.0 copyleft**: many enterprise legal teams reject this outright. No native MCP support, no agent suggestion-mode. |
 | **Outline** | BSL 1.1 (source-available) | Polished, strong permissions. BSL restricts **offering the software as a hosted service to third parties**. Internal employee use is typically permitted, but **legal must read the exact grant** before any fork. Forking its collaboration layer for agent co-editing means carrying and maintaining the fork indefinitely. |
-| **Enterprise Blogger 2.0 (custom)** | Internal / MIT | Exact workflow fit, native agent co-editing, no license friction. Higher initial build cost. |
+| **Glyphroom (custom)** | Internal / MIT | Exact workflow fit, native agent co-editing, no license friction. Higher initial build cost. |
 
 **Decision: Build custom** on TipTap + Hocuspocus + Fastify + PostgreSQL.
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ==============================================================================
-# Enterprise Blogger 2.0 — Turnkey Production Deployment Script
+# Glyphroom — Turnkey Production Deployment Script
 # Single-command zero-dependency deployment for internal Linux servers.
 # Requires ONLY Docker Engine 24+ and Docker Compose v2.
 #
@@ -254,7 +254,7 @@ verify_health() {
 show_summary() {
     echo ""
     echo -e "${BOLD}${GREEN}==============================================================================${NC}"
-    echo -e "${BOLD}${GREEN}    Enterprise Blogger 2.0 — Production Deployment Successful!               ${NC}"
+    echo -e "${BOLD}${GREEN}    Glyphroom — Production Deployment Successful!               ${NC}"
     echo -e "${BOLD}${GREEN}==============================================================================${NC}"
     echo ""
     echo -e "  ${BOLD}Collaboration WebSocket:${NC}  ws://127.0.0.1:4000"

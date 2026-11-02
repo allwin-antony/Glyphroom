@@ -3,7 +3,7 @@ import pg from 'pg';
 const { Pool } = pg;
 
 const pool = new Pool({
-  connectionString: process.env.DATABASE_URL || 'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/enterprise_blogger',
+  connectionString: process.env.DATABASE_URL || 'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/glyphroom',
 });
 
 async function seedTestUsers() {
@@ -14,7 +14,7 @@ async function seedTestUsers() {
   // 1. Users to seed
   const testUsers = [
     {
-      email: 'admin@enterprise-blogger.local',
+      email: 'admin@glyphroom.local',
       fullName: 'Break-Glass System Administrator',
       role: 'admin',
     },

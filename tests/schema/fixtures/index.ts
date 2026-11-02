@@ -6,7 +6,7 @@ import {
   codeFixture,
   canonicalFixtures,
   ProseMirrorDocJSON,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 export { tableFixture, alertFixture, mathFixture, mermaidFixture, codeFixture, canonicalFixtures };
 

@@ -17,7 +17,7 @@ describe('AuthContext Session Management', () => {
           JSON.stringify({
             user: {
               userId: 'user-123',
-              email: 'admin@enterprise-blogger.local',
+              email: 'admin@glyphroom.local',
               fullName: 'Enterprise Admin',
               role: 'admin',
             },
@@ -42,7 +42,7 @@ describe('AuthContext Session Management', () => {
     expect(result.current.isAuthenticated).toBe(true);
     expect(result.current.user?.id).toBe('user-123');
     expect(result.current.user?.userId).toBe('user-123');
-    expect(result.current.user?.email).toBe('admin@enterprise-blogger.local');
+    expect(result.current.user?.email).toBe('admin@glyphroom.local');
     expect(result.current.user?.role).toBe('admin');
     expect(result.current.csrfToken).toBe('csrf-bootstrap-456');
   });
@@ -86,7 +86,7 @@ describe('AuthContext Session Management', () => {
           JSON.stringify({
             user: {
               id: 'user-789',
-              email: 'admin@enterprise-blogger.local',
+              email: 'admin@glyphroom.local',
               fullName: 'Enterprise Admin',
               role: 'admin',
             },
@@ -115,7 +115,7 @@ describe('AuthContext Session Management', () => {
     });
 
     await act(async () => {
-      await result.current.login('admin@enterprise-blogger.local', 'admin2026!');
+      await result.current.login('admin@glyphroom.local', 'admin2026!');
     });
 
     expect(result.current.isAuthenticated).toBe(true);

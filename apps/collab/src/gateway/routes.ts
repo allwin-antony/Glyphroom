@@ -5,7 +5,7 @@ import {
   AgentGatewayHeadersSchema,
   AgentGatewayEditRequestSchema,
   type AgentGatewayErrorResponse,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import { executeAgentEdit, GatewayError } from './direct-connection.js';
 import { DocumentLifecycle, DocumentLifecycleError } from '../document-lifecycle.js';
 

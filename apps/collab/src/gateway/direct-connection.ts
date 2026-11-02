@@ -7,7 +7,7 @@ import {
   type AgentGatewayEditRequest,
   type AgentGatewayEditResponse,
   type AgentGatewayErrorCode,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import { injectAgentAwareness } from './awareness.js';
 
 export class GatewayError extends Error {
@@ -83,8 +83,8 @@ export async function executeAgentEdit(
       const fragmentName = doc.share.has('prosemirror')
         ? 'prosemirror'
         : doc.share.has('default')
-        ? 'default'
-        : 'prosemirror';
+          ? 'default'
+          : 'prosemirror';
 
       switch (request.operation) {
         case 'append_section': {

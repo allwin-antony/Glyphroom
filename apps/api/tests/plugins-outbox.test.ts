@@ -7,7 +7,7 @@ import { BackendPluginRegistry } from '../src/plugins/registry.js';
 import { OutboxService } from '../src/plugins/outbox.js';
 import { pluginEventOutbox, users } from '../src/db/schema.js';
 import type { GlyphroomBackendPlugin } from '../src/plugins/types.js';
-import type { PluginEventEnvelope } from '@enterprise-blogger/shared';
+import type { PluginEventEnvelope } from '@glyphroom/shared';
 import type { CollabService } from '../src/services/collab.js';
 
 const TEST_SECRET = 'test-secret-at-least-32-chars-long-for-hmac';

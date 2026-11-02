@@ -7,7 +7,7 @@ import {
   createHumanUndoManager,
   getDocumentFragment,
   type AgentGatewayEditResponse,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import { createCollabServer, type CollabServerInstance } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
 import { createHeadlessAgentClient } from '../src/gateway/awareness.js';
@@ -590,20 +590,20 @@ describe('Milestone M4 Adversarial Stress & Empirical Challenge Suite (challenge
         expect(results[i].body.success).toBe(true);
       }
 
-  function getElementPlainText(item: Y.XmlElement): string {
-    let result = '';
-    for (let i = 0; i < item.length; i++) {
-      const child = item.get(i);
-      if (child instanceof Y.XmlText) {
-        for (const op of child.toDelta()) {
-          if (typeof op.insert === 'string') result += op.insert;
+      function getElementPlainText(item: Y.XmlElement): string {
+        let result = '';
+        for (let i = 0; i < item.length; i++) {
+          const child = item.get(i);
+          if (child instanceof Y.XmlText) {
+            for (const op of child.toDelta()) {
+              if (typeof op.insert === 'string') result += op.insert;
+            }
+          } else if (child instanceof Y.XmlElement) {
+            result += getElementPlainText(child);
+          }
         }
-      } else if (child instanceof Y.XmlElement) {
-        result += getElementPlainText(child);
+        return result;
       }
-    }
-    return result;
-  }
 
       // Allow sync to complete to human client (wait up to 3000ms for all 20 sections = 40 elements)
       const fragment = getDocumentFragment(humanDoc);

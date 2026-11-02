@@ -1,12 +1,12 @@
 /**
- * Enterprise Blogger 2.0 — Concurrent Typing Keystroke Loss & Collision Test Suite
+ * Glyphroom — Concurrent Typing Keystroke Loss & Collision Test Suite
  * Validates that simulated human typing concurrently in a block where an agent suggests edits
  * loses zero keystrokes, and that suggestions and human inputs co-exist losslessly.
  */
 
 import { describe, it, expect } from 'vitest';
 import { ClientPool, NetworkSimulator } from '../harness/index.js';
-import { AgentMetadata } from '@enterprise-blogger/shared';
+import { AgentMetadata } from '@glyphroom/shared';
 
 describe('Tier 2 & Tier 3: Concurrent Typing Keystroke Loss Suite', () => {
   const agentMeta: AgentMetadata = {

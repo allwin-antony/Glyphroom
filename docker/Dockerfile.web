@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-# Enterprise Blogger 2.0 — Web Editor & UI Dockerfile
+# Glyphroom — Web Editor & UI Dockerfile
 # Multi-stage build: compiles React + Vite application, serves with Nginx
 
 # ===========================================================================
@@ -34,8 +34,8 @@ COPY packages/shared ./packages/shared
 COPY apps/web ./apps/web
 
 # Build shared package then web app
-RUN pnpm --filter @enterprise-blogger/shared run build
-RUN pnpm --filter @enterprise-blogger/web run build
+RUN pnpm --filter @glyphroom/shared run build
+RUN pnpm --filter @glyphroom/web run build
 
 # ===========================================================================
 # Stage 2: Minimal Nginx Runtime

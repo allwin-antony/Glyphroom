@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-# Enterprise Blogger 2.0 — Model Context Protocol (MCP) Server Dockerfile
+# Glyphroom — Model Context Protocol (MCP) Server Dockerfile
 # Multi-stage build for pnpm monorepo (minimal Debian-slim, non-root user, dumb-init)
 
 FROM node:22-bookworm-slim AS base
@@ -31,9 +31,9 @@ FROM dependencies AS builder
 COPY packages/shared ./packages/shared
 COPY apps/mcp-server ./apps/mcp-server
 
-RUN pnpm --filter @enterprise-blogger/shared run build
-RUN pnpm --filter @enterprise-blogger/mcp-server run build
-RUN pnpm --filter @enterprise-blogger/mcp-server --prod deploy /app/deployed
+RUN pnpm --filter @glyphroom/shared run build
+RUN pnpm --filter @glyphroom/mcp-server run build
+RUN pnpm --filter @glyphroom/mcp-server --prod deploy /app/deployed
 
 FROM base AS runner
 
@@ -49,7 +49,7 @@ RUN groupadd -g 10001 blogger && \
     chown -R blogger:blogger /app
 
 COPY --from=builder --chown=blogger:blogger /app/deployed /app
-COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@enterprise-blogger/shared/dist
+COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@glyphroom/shared/dist
 
 EXPOSE 5000
 

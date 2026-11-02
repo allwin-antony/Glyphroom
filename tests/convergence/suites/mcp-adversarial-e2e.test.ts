@@ -7,12 +7,12 @@ import {
   createHumanUndoManager,
   getDocumentFragment,
   extractTextFromElement,
-} from '@enterprise-blogger/shared';
-import { createCollabServer, type CollabServerInstance } from '@enterprise-blogger/collab';
+} from '@glyphroom/shared';
+import { createCollabServer, type CollabServerInstance } from '@glyphroom/collab';
 import {
   createMcpServer,
   CollabGatewayClient,
-} from '@enterprise-blogger/mcp-server';
+} from '@glyphroom/mcp-server';
 
 describe('Milestone M4 Adversarial End-to-End Suite: MCP -> Gateway -> DirectConnection -> Yjs Suggestion -> WebSocket Broadcast', () => {
   let collabInstance: CollabServerInstance | null = null;

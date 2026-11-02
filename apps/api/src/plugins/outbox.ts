@@ -5,7 +5,7 @@ import {
   PluginEventTypeSchema,
   type PluginEventMap,
   type PluginEventEnvelope,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import type { PluginEventBus } from './events.js';
 
 export interface OutboxProcessResult {

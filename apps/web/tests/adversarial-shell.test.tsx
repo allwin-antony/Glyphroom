@@ -18,7 +18,7 @@ const createMockAuth = (
   user: {
     id: `user-${role}-1`,
     userId: `user-${role}-1`,
-    email: `${role}@enterprise-blogger.local`,
+    email: `${role}@glyphroom.local`,
     fullName: `${role.toUpperCase()} Test User`,
     role,
   },

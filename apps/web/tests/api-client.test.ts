@@ -61,7 +61,7 @@ describe('Web API Client & CSRF Injection', () => {
       );
     });
 
-    await api.post('/auth/login', { email: 'admin@enterprise-blogger.local', password: 'p' });
+    await api.post('/auth/login', { email: 'admin@glyphroom.local', password: 'p' });
     expect(getCsrfToken()).toBe('new-csrf-token-abc');
   });
 

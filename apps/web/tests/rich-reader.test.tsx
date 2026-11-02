@@ -3,7 +3,7 @@ import { render, screen, waitFor, within, cleanup } from '@testing-library/react
 import React from 'react';
 import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import mermaid from 'mermaid';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 import { MarkdownRenderer } from '../src/components/reader/MarkdownRenderer.js';
 import { MermaidBlock } from '../src/components/reader/presenters/MermaidBlock.js';
 import { ReaderView } from '../src/views/ReaderView.js';

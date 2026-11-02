@@ -9,7 +9,7 @@ export * from './auth/index.js';
 export * from './gateway/index.js';
 export * from './document-lifecycle.js';
 
-export const COLLAB_APP_NAME = 'enterprise-blogger-collab';
+export const COLLAB_APP_NAME = 'glyphroom-collab';
 
 /**
  * Main application bootstrap for Collab service.
@@ -18,7 +18,7 @@ async function main() {
   const port = parseInt(process.env.PORT || '4000', 10);
   const dbUrl =
     process.env.DATABASE_URL ||
-    'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/enterprise_blogger';
+    'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/glyphroom';
   const persistenceType = process.env.PERSISTENCE_ADAPTER || (dbUrl ? 'postgres' : 'in-memory');
 
   const adapter =

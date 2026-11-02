@@ -3,7 +3,7 @@ import * as Y from 'yjs';
 import WebSocket from 'ws';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 import { createCollabServer, type CollabServerInstance } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
 import type { DocumentPersistenceAdapter } from '../src/persistence/adapter.js';
@@ -81,10 +81,12 @@ describe('Single-instance document lifecycle barriers', () => {
   async function start(adapter: DocumentPersistenceAdapter = new InMemoryPersistenceAdapter(), debounceMs = 5000) {
     instance = await createCollabServer({
       port: 0, adapter, gatewaySecret: secret, debounceMs, maxDebounceMs: 15000, quiet: true,
-      authOptions: { authenticate: async ({ token }) => {
-        if (token !== 'test-editor-credential') throw new Error('Invalid test identity');
-        return { ...editor, role: 'author', permissions: ['edit'] };
-      } },
+      authOptions: {
+        authenticate: async ({ token }) => {
+          if (token !== 'test-editor-credential') throw new Error('Invalid test identity');
+          return { ...editor, role: 'author', permissions: ['edit'] };
+        }
+      },
     });
     const address = await instance.listen();
     url = address.url;
@@ -362,7 +364,7 @@ describe('Single-instance document lifecycle barriers', () => {
     expect(instance!.server.hocuspocus.documents.get(room)).toBe(connection.document);
     expect(markdown(connection.document)).toBe('Target');
     expect(await adapter.fetch(room)).toEqual(safety);
-    await expect(connection.transact(() => {})).rejects.toMatchObject({ code: 'DOCUMENT_QUARANTINED' });
+    await expect(connection.transact(() => { })).rejects.toMatchObject({ code: 'DOCUMENT_QUARANTINED' });
     expect((await request('flush')).status).toBe(503);
     await denied(ws().provider);
   });
@@ -439,7 +441,7 @@ describe('Single-instance document lifecycle barriers', () => {
     expect(await failed.json()).toMatchObject({ success: false, code: 'PERSISTENCE_FAILED' });
     expect(instance!.server.hocuspocus.documents.get(room)).toBe(connection.document);
     expect(await adapter.fetch(room)).toEqual(durable);
-    await expect(connection.transact(() => {})).rejects.toMatchObject({ code: 'DOCUMENT_QUARANTINED' });
+    await expect(connection.transact(() => { })).rejects.toMatchObject({ code: 'DOCUMENT_QUARANTINED' });
     await denied(ws().provider);
     const edit = await fetch(`http://127.0.0.1:${instance!.port}/internal/agent-gateway/edit`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'x-gateway-secret': secret, 'x-user-id': 'editor', 'x-agent-id': 'agent' },

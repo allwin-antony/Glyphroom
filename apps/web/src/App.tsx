@@ -17,7 +17,7 @@ export const App: React.FC = () => {
     // Seed initial content if empty
     if (fragment.length === 0) {
       const p1 = new Y.XmlElement('paragraph');
-      const text1 = new Y.XmlText('Welcome to Enterprise Blogger 2.0 collaborative workspace.');
+      const text1 = new Y.XmlText('Welcome to Glyphroom collaborative workspace.');
       p1.insert(0, [text1]);
       fragment.insert(0, [p1]);
     }

@@ -28,7 +28,7 @@ export interface CreateMcpServerOptions {
 
 export function createMcpServer(options: CreateMcpServerOptions): McpServer {
   const server = new McpServer({
-    name: options.name || 'enterprise-blogger-mcp-server',
+    name: options.name || 'glyphroom-mcp-server',
     version: options.version || '0.1.0',
   });
 
@@ -50,8 +50,8 @@ export function createMcpServer(options: CreateMcpServerOptions): McpServer {
     (process.env.GLYPHROOM_SCOPES
       ? process.env.GLYPHROOM_SCOPES.split(',').map((s) => s.trim())
       : process.env.MCP_SCOPES
-      ? process.env.MCP_SCOPES.split(',').map((s) => s.trim())
-      : undefined);
+        ? process.env.MCP_SCOPES.split(',').map((s) => s.trim())
+        : undefined);
 
   // Collaborative Yjs editing tools (single-write authority via Collab Gateway)
   registerAppendSectionTool(server, options.gatewayClient, options.logger);

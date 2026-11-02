@@ -1,4 +1,4 @@
--- Enterprise Blogger 2.0 — Relational & Yjs CRDT PostgreSQL Schema
+-- Glyphroom — Relational & Yjs CRDT PostgreSQL Schema
 -- Executed automatically on container initialization via /docker-entrypoint-initdb.d/
 -- Conforms strictly to docs/DATA_MODEL.md & docs/ARCHITECTURE.md
 

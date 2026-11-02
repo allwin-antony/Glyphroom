@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Boundary & Corner Cases Test Suite (Tier 2)
+ * Glyphroom — Boundary & Corner Cases Test Suite (Tier 2)
  * Tests boundary conditions: empty documents, maximum section sizes, rapid concurrent
  * edits at identical offsets, and network disconnects during active agent transactions.
  */
@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import * as Y from 'yjs';
 import { ClientPool, NetworkSimulator } from '../harness/index.js';
 import { emptyDocFixture, largeSectionFixture } from '../../schema/fixtures/index.js';
-import { AgentMetadata } from '@enterprise-blogger/shared';
+import { AgentMetadata } from '@glyphroom/shared';
 
 describe('Tier 2: Boundary & Corner Cases Suite', () => {
   const agentMeta: AgentMetadata = {

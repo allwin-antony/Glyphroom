@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-# Enterprise Blogger 2.0 — REST API & Authentication Dockerfile
+# Glyphroom — REST API & Authentication Dockerfile
 # Multi-stage build for pnpm monorepo (minimal Debian-slim, non-root user, dumb-init signal forwarding)
 
 # ===========================================================================
@@ -46,13 +46,13 @@ COPY packages/shared ./packages/shared
 COPY apps/api ./apps/api
 
 # Build shared package first
-RUN pnpm --filter @enterprise-blogger/shared run build
+RUN pnpm --filter @glyphroom/shared run build
 
 # Build API server
-RUN pnpm --filter @enterprise-blogger/api run build
+RUN pnpm --filter @glyphroom/api run build
 
 # Prune devDependencies for minimal runtime image
-RUN pnpm --filter @enterprise-blogger/api --prod deploy /app/pruned-api
+RUN pnpm --filter @glyphroom/api --prod deploy /app/pruned-api
 
 # ===========================================================================
 # Stage 4: Production Distroless-like Minimal Image
@@ -73,7 +73,7 @@ WORKDIR /app
 
 # Copy deployed pruned workspace with compiled dist and prod node_modules
 COPY --from=builder --chown=blogger:blogger /app/pruned-api /app
-COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@enterprise-blogger/shared/dist
+COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@glyphroom/shared/dist
 
 # Switch to non-root user
 USER blogger

@@ -2,7 +2,7 @@ import type {
   PluginEventMap,
   PluginEventEnvelope,
   PluginEventHandler,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 export class PluginEventBus {
   private handlers = new Map<keyof PluginEventMap, Set<PluginEventHandler<any>>>();

@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 import { ReaderPreview } from '../src/components/ReaderPreview.js';
 
 vi.mock('mermaid', () => {

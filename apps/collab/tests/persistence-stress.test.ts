@@ -6,7 +6,7 @@ import { newDb } from 'pg-mem';
 import { createCollabServer as createServer, type CollabServerInstance, type CollabServerOptions } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
 import { PostgresPersistenceAdapter } from '../src/persistence/postgres.js';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 
 const createCollabServer = (options: CollabServerOptions) => createServer({
   ...options,

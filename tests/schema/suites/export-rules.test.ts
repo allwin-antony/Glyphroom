@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Suggestion Export Rules Test Suite (Tier 1: Feature Coverage)
+ * Glyphroom — Suggestion Export Rules Test Suite (Tier 1: Feature Coverage)
  * Validates the derived Markdown exporter:
  * - Pending suggestion-insert marks are stripped from reader/derived Markdown exports.
  * - Pending suggestion-delete marks retain original text.
@@ -16,7 +16,7 @@ import {
   ProseMirrorDocJSON,
   MARK_SUGGESTION_INSERT,
   MARK_SUGGESTION_DELETE,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 describe('Tier 1: Suggestion Export Rules Suite', () => {
   describe('Pending Suggestion Rules (>= 5 cases)', () => {

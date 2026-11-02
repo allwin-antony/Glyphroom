@@ -1,7 +1,7 @@
 // Unified read-only Markdown renderer powering both ReaderView and ReaderPreview.
 //
 // Consumes the shared export grammar (produced by exportDerivedMarkdown in
-// @enterprise-blogger/shared) and renders it as safe React nodes:
+// @glyphroom/shared) and renders it as safe React nodes:
 //  - Ordinary content is escaped React text (no dangerouslySetInnerHTML on user content).
 //  - Raw HTML and unsafe URLs never execute.
 //  - Mermaid and KaTeX are rendered through their own security controls.

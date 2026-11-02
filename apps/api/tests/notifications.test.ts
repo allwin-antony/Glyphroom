@@ -23,7 +23,7 @@ describe('notifications API', () => {
   afterAll(async () => close());
 
   function auth() {
-    const secret = process.env.SESSION_SECRET || 'enterprise-blogger-session-secret-key-32b-min';
+    const secret = process.env.SESSION_SECRET || 'glyphroom-session-secret-key-32b-min';
     const payload = Buffer.from(JSON.stringify({ userId: user.id, email: user.email, role: user.role, fullName: user.fullName, issuedAt: 1, expiresAt: 9999999999 })).toString('base64url');
     const token = `${payload}.${crypto.createHmac('sha256', secret).update(payload).digest('base64url')}`;
     return `blogger_session=${token}`;
@@ -41,7 +41,7 @@ describe('notifications API', () => {
     const id = JSON.parse(list.body).notifications[0].id;
     const one = await api.inject({ method: 'POST', url: `/api/v1/notifications/${id}/read`, headers: { cookie: auth(), 'x-csrf-token': '' } });
     expect(one.statusCode).toBe(403);
-    const secret = process.env.SESSION_SECRET || 'enterprise-blogger-session-secret-key-32b-min';
+    const secret = process.env.SESSION_SECRET || 'glyphroom-session-secret-key-32b-min';
     const token = auth().slice('blogger_session='.length);
     const csrf = crypto.createHmac('sha256', secret).update(`csrf:${token}`).digest('hex');
     const marked = await api.inject({ method: 'POST', url: `/api/v1/notifications/${id}/read`, headers: { cookie: auth(), 'x-csrf-token': csrf } });

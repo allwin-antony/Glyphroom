@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import Fastify, { type FastifyInstance } from 'fastify';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 import { CollabService, CollabServiceError, fingerprintDocumentState } from '../src/services/collab.js';
 import { createCollabServer, type CollabServerInstance } from '../../collab/src/server.js';
 import { InMemoryPersistenceAdapter } from '../../collab/src/persistence/in-memory.js';

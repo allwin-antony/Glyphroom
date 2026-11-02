@@ -5,7 +5,7 @@ import {
   AgentGatewayHeadersSchema,
   type AgentGatewayEditRequest,
   type AgentGatewayEditResponse,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import {
   CollabGatewayError,
   type CollabGatewayClientOptions,

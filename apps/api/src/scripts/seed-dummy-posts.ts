@@ -4,20 +4,20 @@ import fs from 'fs';
 import path from 'path';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
-import { 
-  createDatabaseClient, 
-  users, 
-  posts, 
-  postVersions, 
-  postAttachments, 
-  postViewCounts, 
-  centersOfExcellence, 
-  auditLogs 
+import { exportDerivedMarkdown } from '@glyphroom/shared';
+import {
+  createDatabaseClient,
+  users,
+  posts,
+  postVersions,
+  postAttachments,
+  postViewCounts,
+  centersOfExcellence,
+  auditLogs
 } from '../db/index.js';
 import { eq } from 'drizzle-orm';
 
-const DATABASE_URL = process.env.DATABASE_URL || 'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/enterprise_blogger';
+const DATABASE_URL = process.env.DATABASE_URL || 'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/glyphroom';
 
 // Helper: Build structured ProseMirror Yjs document
 function buildRichYDoc(builder: (fragment: Y.XmlFragment) => void): { ydoc: Y.Doc; yjsState: Buffer; markdown: string } {
@@ -183,7 +183,7 @@ async function seed() {
   const userList = [
     {
       id: '00000000-0000-0000-0000-000000000002',
-      email: 'admin@enterprise-blogger.local',
+      email: 'admin@glyphroom.local',
       fullName: 'Break-Glass System Administrator',
       role: 'admin' as const,
       passwordHash: defaultPasswordHash,
@@ -245,7 +245,7 @@ async function seed() {
   // POST 1: Authored by ADMIN USER (Break-Glass Admin)
   // Status: published
   // =========================================================================
-  const adminId = userMap.get('admin@enterprise-blogger.local')!;
+  const adminId = userMap.get('admin@glyphroom.local')!;
   const archCoeId = coeMap.get('ARCH')!;
 
   const sampleFile1 = await createSampleAttachmentFile(
@@ -282,7 +282,7 @@ async function seed() {
     frag.insert(frag.length, [createH(2, 'Collaborative CRDT Transaction Sequence')]);
     frag.insert(frag.length, [
       createMermaid(
-`sequenceDiagram
+        `sequenceDiagram
     autonumber
     actor Author as Staff Engineer (Web)
     participant UI as TipTap ProseMirror Canvas
@@ -334,7 +334,7 @@ async function seed() {
     frag.insert(frag.length, [createH(2, 'Verification CLI Command')]);
     frag.insert(frag.length, [
       createCode(
-`# Query platform health and audit hash chain integrity
+        `# Query platform health and audit hash chain integrity
 curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
   https://glyphroom.corp.internal/api/v1/audit/verify | jq .`,
         'bash'
@@ -441,7 +441,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
     frag.insert(frag.length, [createH(2, 'Ingestion Pipeline & Backpressure Flow')]);
     frag.insert(frag.length, [
       createMermaid(
-`flowchart TD
+        `flowchart TD
     A[Incoming Edits 10k/sec] --> B[Backpressure Ring Buffer]
     B --> C{CRC32 Valid?}
     C -->|Valid| D[In-Process Yjs Document Worker]
@@ -484,7 +484,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
     frag.insert(frag.length, [createH(2, 'TypeScript Convergence Validator')]);
     frag.insert(frag.length, [
       createCode(
-`export async function assertConvergence(pool: ClientPool): Promise<void> {
+        `export async function assertConvergence(pool: ClientPool): Promise<void> {
   const states = await pool.collectEncodedStates();
   const baseline = states[0];
   const allIdentical = states.every(s => Buffer.compare(s, baseline) === 0);
@@ -590,7 +590,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
     frag.insert(frag.length, [createH(2, 'Cryptographic Audit Verification Flow')]);
     frag.insert(frag.length, [
       createMermaid(
-`sequenceDiagram
+        `sequenceDiagram
     autonumber
     participant Auditor as SecOps Auditor
     participant API as Fastify API (/api/v1/audit/verify)
@@ -641,7 +641,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
     frag.insert(frag.length, [createH(2, 'Audit Integrity Check Snippet')]);
     frag.insert(frag.length, [
       createCode(
-`const isChainIntact = auditRows.every((row, idx) => {
+        `const isChainIntact = auditRows.every((row, idx) => {
   if (idx === 0) return row.prevHash === GENESIS_HASH;
   const expected = computeSha256(auditRows[idx - 1].rowHash + JSON.stringify(row.payload));
   return row.rowHash === expected;
@@ -742,7 +742,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
     frag.insert(frag.length, [createH(2, 'Design System Component Hierarchy')]);
     frag.insert(frag.length, [
       createMermaid(
-`graph LR
+        `graph LR
     Canvas[Warm Paper Canvas #F6F5F2] --> Surface[Surface Card #FCFBF9]
     Surface --> Header[Card Type Header Tag]
     Surface --> Content[TipTap Rich Text Content]
@@ -785,7 +785,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
     frag.insert(frag.length, [createH(2, 'Tailwind Theme Token Integration')]);
     frag.insert(frag.length, [
       createCode(
-`:root {
+        `:root {
   --canvas: #F6F5F2;
   --surface: #FCFBF9;
   --border: 42 15.6% 87.5%;
@@ -828,7 +828,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
   await auditServiceSafe(db, adminId, 'posts_seed_completed', {
     totalPostsCreated: 4,
     authors: [
-      'admin@enterprise-blogger.local',
+      'admin@glyphroom.local',
       'elena.rostova@enterprise.internal',
       'marcus.chen@enterprise.internal',
       'priya.sharma@enterprise.internal',

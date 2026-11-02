@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import * as Y from 'yjs';
 import { Bot, CheckCheck, XCircle, Sparkles } from 'lucide-react';
-import { acceptSuggestion, rejectSuggestion } from '@enterprise-blogger/shared';
+import { acceptSuggestion, rejectSuggestion } from '@glyphroom/shared';
 import { SuggestionItem, type SuggestionItemData } from '../SuggestionItem.js';
 
 export interface SuggestionsTabProps {

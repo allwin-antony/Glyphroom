@@ -10,7 +10,7 @@ describe('AppLayout Shell & Navigation', () => {
     user: {
       id: 'u1',
       userId: 'u1',
-      email: 'user@enterprise-blogger.local',
+      email: 'user@glyphroom.local',
       fullName: 'Test User',
       role,
     },

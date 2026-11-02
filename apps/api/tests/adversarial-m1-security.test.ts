@@ -11,7 +11,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
   let app: any;
   let close: () => Promise<void>;
 
-  const BREAK_GLASS_EMAIL = 'admin@enterprise-blogger.local';
+  const BREAK_GLASS_EMAIL = 'admin@glyphroom.local';
   const BREAK_GLASS_PASSWORD = 'admin2026!';
   const SESSION_SECRET = 'adversarial-security-session-secret-32b-min';
 
@@ -41,7 +41,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
 
     // Seed moderator
     const [mod] = await db.insert(users).values({
-      email: 'moderator@enterprise-blogger.local',
+      email: 'moderator@glyphroom.local',
       fullName: 'Editorial Moderator',
       role: 'moderator',
       ssoProvider: 'oidc',
@@ -50,7 +50,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
 
     // Seed author
     const [author] = await db.insert(users).values({
-      email: 'author@enterprise-blogger.local',
+      email: 'author@glyphroom.local',
       fullName: 'Content Author',
       role: 'author',
       ssoProvider: 'oidc',
@@ -59,7 +59,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
 
     // Seed reader
     const [reader] = await db.insert(users).values({
-      email: 'reader@enterprise-blogger.local',
+      email: 'reader@glyphroom.local',
       fullName: 'General Reader',
       role: 'reader',
       ssoProvider: 'oidc',
@@ -245,14 +245,14 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
         method: 'POST',
         url: '/api/v1/auth/login',
         payload: {
-          email: 'admin@enterprise-blogger.local',
+          email: 'admin@glyphroom.local',
           password: 'admin2026!',
         },
       });
 
       expect(res.statusCode).toBe(200);
       const data = res.json();
-      expect(data.user.email).toBe('admin@enterprise-blogger.local');
+      expect(data.user.email).toBe('admin@glyphroom.local');
       expect(data.user.role).toBe('admin');
       expect(data.csrfToken).toBeDefined();
       expect(typeof data.csrfToken).toBe('string');
@@ -280,7 +280,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
           method: 'POST',
           url: '/api/v1/auth/login',
           payload: {
-            email: 'admin@enterprise-blogger.local',
+            email: 'admin@glyphroom.local',
             password: badPass,
           },
         });
@@ -291,9 +291,9 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
 
     it('normalizes email casing and handles case-insensitive break-glass login', async () => {
       const caseVariations = [
-        'ADMIN@ENTERPRISE-BLOGGER.LOCAL',
-        'Admin@Enterprise-Blogger.Local',
-        'admin@ENTERPRISE-BLOGGER.local',
+        'ADMIN@glyphroom.LOCAL',
+        'Admin@glyphroom.Local',
+        'admin@glyphroom.local',
       ];
 
       for (const emailVar of caseVariations) {
@@ -306,7 +306,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
           },
         });
         expect(res.statusCode).toBe(200);
-        expect(res.json().user.email).toBe('admin@enterprise-blogger.local');
+        expect(res.json().user.email).toBe('admin@glyphroom.local');
       }
     });
 
@@ -315,7 +315,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
         method: 'POST',
         url: '/api/v1/auth/login',
         payload: {
-          email: '  admin@enterprise-blogger.local  ',
+          email: '  admin@glyphroom.local  ',
           password: 'admin2026!',
         },
       });
@@ -327,10 +327,10 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
     it('rejects SQL injection and malicious payloads in email field with 400 or 401', async () => {
       const maliciousEmails = [
         "' OR '1'='1",
-        "admin@enterprise-blogger.local'--",
-        "admin@enterprise-blogger.local'; DROP TABLE users; --",
+        "admin@glyphroom.local'--",
+        "admin@glyphroom.local'; DROP TABLE users; --",
         "\" or 1=1--@evil.com",
-        "admin@enterprise-blogger.local<script>alert(1)</script>",
+        "admin@glyphroom.local<script>alert(1)</script>",
         "",
         null,
       ];
@@ -353,13 +353,13 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
       // Deactivate break-glass admin
       await db.update(users)
         .set({ isActive: false })
-        .where(eq(users.email, 'admin@enterprise-blogger.local'));
+        .where(eq(users.email, 'admin@glyphroom.local'));
 
       const res = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/login',
         payload: {
-          email: 'admin@enterprise-blogger.local',
+          email: 'admin@glyphroom.local',
           password: 'admin2026!',
         },
       });
@@ -369,7 +369,7 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
       // Re-activate for downstream tests
       await db.update(users)
         .set({ isActive: true })
-        .where(eq(users.email, 'admin@enterprise-blogger.local'));
+        .where(eq(users.email, 'admin@glyphroom.local'));
     });
 
     it('records audit log entries on failed and successful break-glass logins', async () => {
@@ -377,14 +377,14 @@ describe('Milestone M1 Adversarial Security Suite (Backend API)', () => {
       await app.inject({
         method: 'POST',
         url: '/api/v1/auth/login',
-        payload: { email: 'admin@enterprise-blogger.local', password: 'bad' },
+        payload: { email: 'admin@glyphroom.local', password: 'bad' },
       });
 
       // Trigger success
       await app.inject({
         method: 'POST',
         url: '/api/v1/auth/login',
-        payload: { email: 'admin@enterprise-blogger.local', password: 'admin2026!' },
+        payload: { email: 'admin@glyphroom.local', password: 'admin2026!' },
       });
 
       const logs = await db.select().from(auditLogs);

@@ -1,5 +1,5 @@
 {
-  "name": "@enterprise-blogger/api",
+  "name": "@glyphroom/api",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true });\""
   },
   "dependencies": {
-    "@enterprise-blogger/shared": "workspace:*",
+    "@glyphroom/shared": "workspace:*",
     "@fastify/cookie": "11.0.2",
     "@fastify/cors": "10.0.2",
     "@fastify/csrf-protection": "7.0.2",

@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — 10,000-Operation CRDT Convergence Test Suite
+ * Glyphroom — 10,000-Operation CRDT Convergence Test Suite
  * Validates zero document divergence across 5 headless human clients + 1 headless agent client.
  * Includes network latency, packet reordering, packet drops, and disconnect/reconnect cycles.
  */

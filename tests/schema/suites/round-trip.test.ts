@@ -18,7 +18,7 @@ import {
   mermaidFixture,
   codeFixture,
   ProseMirrorDocJSON,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 function verifyCRDTRoundTrip(fixture: ProseMirrorDocJSON): void {
   const originalDoc = nodeFromJSON(blogSchema, fixture);
@@ -277,7 +277,7 @@ describe('Tier 1: Schema Round-Trip Suite', () => {
               {
                 type: 'code_block',
                 attrs: { language: 'bash' },
-                content: [{ type: 'text', text: 'pnpm --filter @enterprise-blogger/tests test' }],
+                content: [{ type: 'text', text: 'pnpm --filter @glyphroom/tests test' }],
               },
             ],
           },

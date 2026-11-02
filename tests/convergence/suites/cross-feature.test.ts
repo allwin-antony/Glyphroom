@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Cross-Feature Combinations Test Suite (Tier 3)
+ * Glyphroom — Cross-Feature Combinations Test Suite (Tier 3)
  * Tests multi-feature interactions: agent suggestions inside tables, KaTeX, Mermaid;
  * typing collision during concurrent agent diffs; undo isolation during interleaved typing.
  */
@@ -10,7 +10,7 @@ import {
   tableFixture,
   exportDerivedMarkdown,
   AgentMetadata,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import { complexTableFixture } from '../../schema/fixtures/index.js';
 
 describe('Tier 3: Cross-Feature Combinations Suite', () => {

@@ -54,7 +54,7 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
   const mockAuthValue: AuthContextValue = {
     user: {
       userId: 'user-author-1',
-      email: 'author@enterprise-blogger.local',
+      email: 'author@glyphroom.local',
       role: 'author',
       fullName: 'Author One',
     },
@@ -351,7 +351,7 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
           postId="post-1"
           status="draft"
           onStatusChange={onStatusChange}
-          prepareSubmission={async () => {}}
+          prepareSubmission={async () => { }}
         />
       );
 

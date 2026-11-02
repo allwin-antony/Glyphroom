@@ -8,7 +8,7 @@ import bcrypt from 'bcryptjs';
 import pg from 'pg';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 import { createPostgresTestDatabase } from './helpers/postgres-db.js';
 import { createCollabServer, type CollabServerInstance } from '../../collab/src/server.js';
 import { PostgresPersistenceAdapter } from '../../collab/src/persistence/postgres.js';

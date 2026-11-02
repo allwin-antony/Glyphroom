@@ -1,8 +1,8 @@
-# Enterprise Blogger 2.0 — Test Infrastructure & Philosophy (TEST_INFRA.md)
+# Glyphroom — Test Infrastructure & Philosophy (TEST_INFRA.md)
 
 ## 1. Test Philosophy & Guiding Principles
 
-Enterprise Blogger 2.0 is built on the premise that real-time collaborative editing between humans and AI agents requires mathematical guarantees of consistency, lossless serialization, and non-destructive human authority. The test infrastructure adheres to five core testing principles:
+Glyphroom is built on the premise that real-time collaborative editing between humans and AI agents requires mathematical guarantees of consistency, lossless serialization, and non-destructive human authority. The test infrastructure adheres to five core testing principles:
 
 1. **Deterministic CRDT Convergence (Zero Divergence)**:
    - In distributed systems, peer clients must eventually reach identical states under arbitrary interleaving, reordering, and temporary network partitions.
@@ -102,19 +102,19 @@ From the monorepo root:
 
 ```bash
 # Run all E2E test suites
-pnpm --filter @enterprise-blogger/tests test
+pnpm --filter @glyphroom/tests test
 
 # Run only the 10,000-op convergence suite
-pnpm --filter @enterprise-blogger/tests test:convergence
+pnpm --filter @glyphroom/tests test:convergence
 
 # Run schema round-trip and export rules
-pnpm --filter @enterprise-blogger/tests test:fixtures
+pnpm --filter @glyphroom/tests test:fixtures
 
 # Run with verbose output
-pnpm --filter @enterprise-blogger/tests test:all
+pnpm --filter @glyphroom/tests test:all
 
 # Type-check test code
-pnpm --filter @enterprise-blogger/tests typecheck
+pnpm --filter @glyphroom/tests typecheck
 ```
 
 ---

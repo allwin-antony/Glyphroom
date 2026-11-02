@@ -11,7 +11,7 @@ import {
 } from 'y-prosemirror';
 import * as Y from 'yjs';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
-import { createHumanUndoManager, createHumanUndoPlugin } from '@enterprise-blogger/shared';
+import { createHumanUndoManager, createHumanUndoPlugin } from '@glyphroom/shared';
 
 export interface CollaborationOptions {
   fragment?: Y.XmlFragment;
@@ -88,16 +88,16 @@ export const Collaboration = Extension.create<CollaborationOptions>({
     return {
       undo:
         () =>
-        ({ tr, state, dispatch }) => {
-          tr.setMeta('preventDispatch', true);
-          return undoCommand(state, dispatch);
-        },
+          ({ tr, state, dispatch }) => {
+            tr.setMeta('preventDispatch', true);
+            return undoCommand(state, dispatch);
+          },
       redo:
         () =>
-        ({ tr, state, dispatch }) => {
-          tr.setMeta('preventDispatch', true);
-          return redoCommand(state, dispatch);
-        },
+          ({ tr, state, dispatch }) => {
+            tr.setMeta('preventDispatch', true);
+            return redoCommand(state, dispatch);
+          },
     };
   },
 });

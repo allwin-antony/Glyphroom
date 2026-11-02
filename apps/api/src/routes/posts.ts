@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { eq, and, desc, asc, or, ne, inArray, ilike, isNull, isNotNull, sql } from 'drizzle-orm';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown, TagSchema } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown, TagSchema } from '@glyphroom/shared';
 import type { Database } from '../db/index.js';
 import { posts, postViewCounts, postVersions, postReviews, users, centersOfExcellence, postAttachments, spaces, spaceMembers, postCollaborators, tags, postTags } from '../db/schema.js';
 import { PermissionService, type PostPermission } from '../services/permissions.js';
@@ -25,7 +25,7 @@ function normalizeTagNames(tagNames: string[]): string[] {
     const lower = trimmed.toLowerCase();
     if (!seen.has(lower)) {
       seen.add(lower);
-      res.push(trimmed);
+      res.push(lower);
     }
   }
   return res;
@@ -251,10 +251,12 @@ async function resolveCurrentPostAccess(database: Database, userId: string, post
 export async function projectPostContent(db: Database, permissionService: PermissionService, post: Pick<typeof posts.$inferSelect,
   'id' | 'authorId' | 'status' | 'spaceId' | 'visibility' | 'isPromoted' |
   'yjsState' | 'workingMarkdown' | 'publishedMarkdown' | 'submittedVersionId'> & {
-  publishedVersionId?: string | null;
-}, user: FastifyRequest['user']) {
-  const context = { postId: post.id, authorId: post.authorId, status: post.status,
-    spaceId: post.spaceId, visibility: post.visibility, isPromoted: post.isPromoted };
+    publishedVersionId?: string | null;
+  }, user: FastifyRequest['user']) {
+  const context = {
+    postId: post.id, authorId: post.authorId, status: post.status,
+    spaceId: post.spaceId, visibility: post.visibility, isPromoted: post.isPromoted
+  };
   let permission: PostPermission = user
     ? await permissionService.resolvePostPermission({ id: user.userId, role: user.role }, context)
     : (post.status === 'published' && (post.isPromoted || !post.spaceId)) ? 'view' : 'none';
@@ -270,15 +272,17 @@ export async function projectPostContent(db: Database, permissionService: Permis
       if (permissionService.canView(publishedPermission)) permission = 'view';
     }
   }
-  const forbidden = { ok: false as const, statusCode: 403 as const,
-    error: { error: 'Forbidden', message: 'You do not have access to view this post' } };
+  const forbidden = {
+    ok: false as const, statusCode: 403 as const,
+    error: { error: 'Forbidden', message: 'You do not have access to view this post' }
+  };
   if (!permissionService.canView(permission)) return forbidden;
 
   const canEdit = permissionService.canEdit(permission);
   const activeReview = post.status === 'in_review' || post.status === 'approved';
   const canReadSubmission = canEdit || permissionService.canReview(permission, user?.userId === post.authorId);
   let canReadWorking = canEdit;
-  if (user && !canEdit && typeof post.publishedMarkdown !== 'string') {
+  if (user && !canEdit) {
     // Effective `view` conflates publication with private invitations. Keep the
     // provenance, even when a stronger independent review grant also applies.
     const [invitation] = await db.select({ permission: postCollaborators.permission })
@@ -318,8 +322,10 @@ export async function projectPostContent(db: Database, permissionService: Permis
   const derivedMarkdown = canReadWorking ? workingMarkdown : submittedVersion ? submittedVersion.markdownSnapshot : publishedMarkdown;
   if (derivedMarkdown === null) {
     if (!canReadWorking && canReadSubmission && !activeReview) return forbidden;
-    return { ok: false as const, statusCode: 409 as const,
-      error: { error: 'Conflict', message: 'Post content unavailable' } };
+    return {
+      ok: false as const, statusCode: 409 as const,
+      error: { error: 'Conflict', message: 'Post content unavailable' }
+    };
   }
 
   let selectedState: Uint8Array | null = null;
@@ -346,15 +352,17 @@ export async function projectPostContent(db: Database, permissionService: Permis
     documentJson = markdownToFallbackDocumentJson(derivedMarkdown);
   }
 
-  return { ok: true as const, permission, content: {
-    ...(canEdit ? { yjsState: post.yjsState } : {}),
-    ...(canReadWorking ? { workingMarkdown } : {}),
-    ...((canEdit || (canReadSubmission && activeReview)) ? {
-      submittedVersionId: submittedVersion?.id ?? null, submittedVersion,
-    } : {}),
-    publishedMarkdown, derivedMarkdown, contentSource,
-    documentJson,
-  } };
+  return {
+    ok: true as const, permission, content: {
+      ...(canEdit ? { yjsState: post.yjsState } : {}),
+      ...(canReadWorking ? { workingMarkdown } : {}),
+      ...((canEdit || (canReadSubmission && activeReview)) ? {
+        submittedVersionId: submittedVersion?.id ?? null, submittedVersion,
+      } : {}),
+      publishedMarkdown, derivedMarkdown, contentSource,
+      documentJson,
+    }
+  };
 }
 
 export const postRoutes: FastifyPluginAsync<{
@@ -379,6 +387,9 @@ export const postRoutes: FastifyPluginAsync<{
       return reply.status(400).send({ error: 'Bad Request', message: 'Invalid post ID' });
     }
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId.trim());
+    if (!isUuid) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Invalid post ID' });
+    }
     const denied = (statusCode: number, error: string, message: string) => ({
       ok: false as const,
       statusCode,
@@ -389,7 +400,7 @@ export const postRoutes: FastifyPluginAsync<{
     try {
       outcome = await db.transaction(async (tx) => {
         const [current] = await tx.select().from(posts)
-          .where(isUuid ? eq(posts.id, rawId.trim().toLowerCase()) : eq(posts.slug, rawId.trim()))
+          .where(eq(posts.id, rawId.trim().toLowerCase()))
           .limit(1)
           .for('update');
         if (!current) return denied(404, 'Not Found', 'Post not found');
@@ -494,8 +505,10 @@ export const postRoutes: FastifyPluginAsync<{
       action: republishing ? 'post_republished' : 'post_published',
       entityType: 'post',
       entityId: current.id,
-      metadata: { versionNumber: checkpoint.versionNumber, versionId: checkpoint.id,
-        ...(notes !== undefined ? { notes } : {}) },
+      metadata: {
+        versionNumber: checkpoint.versionNumber, versionId: checkpoint.id,
+        ...(notes !== undefined ? { notes } : {})
+      },
       ipAddress: request.ip,
     }).catch(() => request.log.warn({ postId: current.id }, 'Publication committed; audit delivery failed'));
 
@@ -693,9 +706,9 @@ export const postRoutes: FastifyPluginAsync<{
 
     const permission = request.user
       ? await permissionService.resolvePostPermission(
-          { id: request.user.userId, role: request.user.role },
-          { postId: post.id, authorId: post.authorId, status: post.status, spaceId: post.spaceId, visibility: post.visibility, isPromoted: post.isPromoted }
-        )
+        { id: request.user.userId, role: request.user.role },
+        { postId: post.id, authorId: post.authorId, status: post.status, spaceId: post.spaceId, visibility: post.visibility, isPromoted: post.isPromoted }
+      )
       : (post.status === 'published' && (post.isPromoted || !post.spaceId)) ? 'view' : 'none';
 
     if (!permissionService.canView(permission)) {
@@ -720,21 +733,27 @@ export const postRoutes: FastifyPluginAsync<{
 
     // Signed sessions can outlive a role change or account deactivation. The
     // capability is based on the current account, not cached session claims.
-    const [account] = await db.select({ id: users.id, role: users.role, name: users.fullName,
-      email: users.email, isActive: users.isActive }).from(users)
+    const [account] = await db.select({
+      id: users.id, role: users.role, name: users.fullName,
+      email: users.email, isActive: users.isActive
+    }).from(users)
       .where(eq(users.id, request.user!.userId)).limit(1);
     if (!account?.isActive) return reply.status(401).send({ error: 'Unauthorized', message: 'Authentication required' });
-    const [post] = await db.select({ id: posts.id, authorId: posts.authorId, status: posts.status,
-      spaceId: posts.spaceId, visibility: posts.visibility, isPromoted: posts.isPromoted })
+    const [post] = await db.select({
+      id: posts.id, authorId: posts.authorId, status: posts.status,
+      spaceId: posts.spaceId, visibility: posts.visibility, isPromoted: posts.isPromoted
+    })
       .from(posts).where(eq(posts.id, parsedId.data.toLowerCase())).limit(1);
     if (!post) return reply.status(404).send({ error: 'Not Found', message: 'Post not found' });
     const permission = await permissionService.resolvePostPermission(account, { ...post, postId: post.id });
     if (!permissionService.canEdit(permission)) {
       return reply.status(403).send({ error: 'Forbidden', message: 'Document edit access required' });
     }
-    return reply.send({ success: true, postId: post.id,
+    return reply.send({
+      success: true, postId: post.id,
       user: { id: account.id, role: account.role, name: account.name.trim() || account.email },
-      capabilities: { edit: true } });
+      capabilities: { edit: true }
+    });
   });
 
   // Publish-authorized callers can discover only the exact active approved pin.
@@ -746,6 +765,9 @@ export const postRoutes: FastifyPluginAsync<{
       return reply.status(400).send({ error: 'Bad Request', message: 'Invalid post ID' });
     }
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawId.trim());
+    if (!isUuid) {
+      return reply.status(400).send({ error: 'Bad Request', message: 'Invalid post ID' });
+    }
     const denied = (statusCode: number, error: string, message: string) => ({
       ok: false as const,
       statusCode,
@@ -764,7 +786,7 @@ export const postRoutes: FastifyPluginAsync<{
           isPromoted: posts.isPromoted,
           submittedVersionId: posts.submittedVersionId,
         }).from(posts)
-          .where(isUuid ? eq(posts.id, rawId.trim().toLowerCase()) : eq(posts.slug, rawId.trim()))
+          .where(eq(posts.id, rawId.trim().toLowerCase()))
           .limit(1)
           .for('update');
         if (!current) return denied(404, 'Not Found', 'Post not found');
@@ -808,11 +830,13 @@ export const postRoutes: FastifyPluginAsync<{
           return denied(409, 'Conflict', 'Approved review checkpoint changed or unavailable');
         }
 
-        return { ok: true as const, post: {
-          id: current.id,
-          status: current.status,
-          submittedVersionId: checkpoint.id,
-        } };
+        return {
+          ok: true as const, post: {
+            id: current.id,
+            status: current.status,
+            submittedVersionId: checkpoint.id,
+          }
+        };
       });
     } catch {
       request.log.warn({ postId: rawId }, 'Publication checkpoint read failed');
@@ -920,211 +944,211 @@ export const postRoutes: FastifyPluginAsync<{
     return reply.send(projection.content.derivedMarkdown);
   });
 
-// Helper: Server-side pure Yjs markdown parser
-function populateYjsFromMarkdown(ydoc: Y.Doc, markdown: string) {
-  const fragment = ydoc.getXmlFragment('prosemirror');
-  const lines = markdown.replace(/\r\n/g, '\n').split('\n');
-  let i = 0;
+  // Helper: Server-side pure Yjs markdown parser
+  function populateYjsFromMarkdown(ydoc: Y.Doc, markdown: string) {
+    const fragment = ydoc.getXmlFragment('prosemirror');
+    const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+    let i = 0;
 
-  while (i < lines.length) {
-    const line = lines[i];
+    while (i < lines.length) {
+      const line = lines[i];
 
-    // Heading: #{1,6} Title
-    const hMatch = line.match(/^(#{1,6})\s+(.+)$/);
-    if (hMatch) {
-      const level = hMatch[1].length;
-      const text = hMatch[2].trim();
+      // Heading: #{1,6} Title
+      const hMatch = line.match(/^(#{1,6})\s+(.+)$/);
+      if (hMatch) {
+        const level = hMatch[1].length;
+        const text = hMatch[2].trim();
+        const h = new Y.XmlElement('heading');
+        h.setAttribute('level', String(level));
+        const ht = new Y.XmlText(text);
+        h.insert(0, [ht]);
+        fragment.push([h]);
+        i++;
+        continue;
+      }
+
+      // Mermaid code block: ```mermaid
+      if (line.trim().startsWith('```mermaid')) {
+        const codeLines: string[] = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // skip closing ```
+        const m = new Y.XmlElement('mermaidBlock');
+        m.setAttribute('code', codeLines.join('\n').trim());
+        fragment.push([m]);
+        continue;
+      }
+
+      // Math display block: $$
+      if (line.trim() === '$$') {
+        const mathLines: string[] = [];
+        i++;
+        while (i < lines.length && lines[i].trim() !== '$$') {
+          mathLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // skip closing $$
+        const mb = new Y.XmlElement('mathBlock');
+        mb.setAttribute('formula', mathLines.join('\n').trim());
+        fragment.push([mb]);
+        continue;
+      }
+
+      // Generic code block: ```[lang]
+      if (line.trim().startsWith('```')) {
+        const lang = line.trim().slice(3).trim();
+        const codeLines: string[] = [];
+        i++;
+        while (i < lines.length && !lines[i].trim().startsWith('```')) {
+          codeLines.push(lines[i]);
+          i++;
+        }
+        if (i < lines.length) i++; // skip closing ```
+        const cb = new Y.XmlElement('codeBlock');
+        if (lang) cb.setAttribute('language', lang);
+        const cbt = new Y.XmlText(codeLines.join('\n'));
+        cb.insert(0, [cbt]);
+        fragment.push([cb]);
+        continue;
+      }
+
+      // Blank line
+      if (!line.trim()) {
+        i++;
+        continue;
+      }
+
+      // Regular paragraph: collect consecutive non-blank lines that aren't special blocks
+      const paraLines: string[] = [line];
+      i++;
+      while (
+        i < lines.length &&
+        lines[i].trim() &&
+        !lines[i].match(/^#{1,6}\s+/) &&
+        !lines[i].trim().startsWith('```') &&
+        lines[i].trim() !== '$$'
+      ) {
+        paraLines.push(lines[i]);
+        i++;
+      }
+      const p = new Y.XmlElement('paragraph');
+      const pt = new Y.XmlText(paraLines.join('\n'));
+      p.insert(0, [pt]);
+      fragment.push([p]);
+    }
+  }
+
+  // Helper: Server-side pure Yjs template generator
+  function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
+    const fragment = ydoc.getXmlFragment('prosemirror');
+
+    const createH = (level: number, text: string) => {
       const h = new Y.XmlElement('heading');
       h.setAttribute('level', String(level));
-      const ht = new Y.XmlText(text);
-      h.insert(0, [ht]);
-      fragment.push([h]);
-      i++;
-      continue;
-    }
+      const pText = new Y.XmlText(text);
+      h.insert(0, [pText]);
+      return h;
+    };
 
-    // Mermaid code block: ```mermaid
-    if (line.trim().startsWith('```mermaid')) {
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith('```')) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      if (i < lines.length) i++; // skip closing ```
-      const m = new Y.XmlElement('mermaidBlock');
-      m.setAttribute('code', codeLines.join('\n').trim());
-      fragment.push([m]);
-      continue;
-    }
+    const createP = (text: string) => {
+      const p = new Y.XmlElement('paragraph');
+      const pText = new Y.XmlText(text);
+      p.insert(0, [pText]);
+      return p;
+    };
 
-    // Math display block: $$
-    if (line.trim() === '$$') {
-      const mathLines: string[] = [];
-      i++;
-      while (i < lines.length && lines[i].trim() !== '$$') {
-        mathLines.push(lines[i]);
-        i++;
-      }
-      if (i < lines.length) i++; // skip closing $$
-      const mb = new Y.XmlElement('mathBlock');
-      mb.setAttribute('formula', mathLines.join('\n').trim());
-      fragment.push([mb]);
-      continue;
-    }
+    if (templateId === 'weekly_status') {
+      fragment.insert(fragment.length, [createH(1, title || 'Weekly Project Status Pulse')]);
 
-    // Generic code block: ```[lang]
-    if (line.trim().startsWith('```')) {
-      const lang = line.trim().slice(3).trim();
-      const codeLines: string[] = [];
-      i++;
-      while (i < lines.length && !lines[i].trim().startsWith('```')) {
-        codeLines.push(lines[i]);
-        i++;
-      }
-      if (i < lines.length) i++; // skip closing ```
-      const cb = new Y.XmlElement('codeBlock');
-      if (lang) cb.setAttribute('language', lang);
-      const cbt = new Y.XmlText(codeLines.join('\n'));
-      cb.insert(0, [cbt]);
-      fragment.push([cb]);
-      continue;
-    }
+      const statusBlock = new Y.XmlElement('projectStatusBlock');
+      statusBlock.setAttribute('ragStatus', 'green');
+      statusBlock.setAttribute('milestoneTitle', 'Sprint Milestone Deliverables');
+      statusBlock.setAttribute('completionPercent', '65');
+      statusBlock.setAttribute('targetDate', '2026-11-30');
+      statusBlock.setAttribute('blockers', 'None currently');
+      fragment.insert(fragment.length, [statusBlock]);
 
-    // Blank line
-    if (!line.trim()) {
-      i++;
-      continue;
-    }
+      fragment.insert(fragment.length, [createH(2, 'Key Milestones Completed This Week')]);
+      fragment.insert(fragment.length, [createP('• Completed Sprint 1 database migration and table schemas')]);
+      fragment.insert(fragment.length, [createP('• Deployed staging API services with 99.9% uptime')]);
 
-    // Regular paragraph: collect consecutive non-blank lines that aren't special blocks
-    const paraLines: string[] = [line];
-    i++;
-    while (
-      i < lines.length &&
-      lines[i].trim() &&
-      !lines[i].match(/^#{1,6}\s+/) &&
-      !lines[i].trim().startsWith('```') &&
-      lines[i].trim() !== '$$'
-    ) {
-      paraLines.push(lines[i]);
-      i++;
+      fragment.insert(fragment.length, [createH(2, 'Deliverables for Next Sprint')]);
+      fragment.insert(fragment.length, [createP('• Runbook security verification and peer reviews')]);
+      fragment.insert(fragment.length, [createP('• Performance benchmarking under 500 concurrent connections')]);
+
+      fragment.insert(fragment.length, [createH(2, 'Active Blockers & Dependencies')]);
+      const alert = new Y.XmlElement('alert');
+      alert.setAttribute('type', 'tip');
+      alert.insert(0, [createP('Dependency: SecOps review scheduled for Wednesday.')]);
+      fragment.insert(fragment.length, [alert]);
+    } else if (templateId === 'architecture_rfc') {
+      fragment.insert(fragment.length, [createH(1, title || 'Architecture RFC & System Design')]);
+
+      const alert = new Y.XmlElement('alert');
+      alert.setAttribute('type', 'note');
+      alert.insert(0, [createP('Status: Proposed | Authors: Engineering Architecture Group')]);
+      fragment.insert(fragment.length, [alert]);
+
+      fragment.insert(fragment.length, [createH(2, 'Context & Problem Statement')]);
+      fragment.insert(fragment.length, [createP('Describe the architectural background, business motivation, and technical constraints.')]);
+
+      fragment.insert(fragment.length, [createH(2, 'Architecture Diagram')]);
+      const mermaid = new Y.XmlElement('mermaidBlock');
+      mermaid.setAttribute('code', 'graph TD\n  Client[Web Browser] -->|WebSocket| Gateway[Collab Gateway]\n  Gateway --> YjsEngine[Yjs CRDT Engine]\n  YjsEngine --> DB[(PostgreSQL)]');
+      fragment.insert(fragment.length, [mermaid]);
+
+      fragment.insert(fragment.length, [createH(2, 'Decision & Technical Rationale')]);
+      fragment.insert(fragment.length, [createP('Outline the chosen solution and explain why alternatives were rejected.')]);
+
+      fragment.insert(fragment.length, [createH(2, 'Consequences & Trade-offs')]);
+      fragment.insert(fragment.length, [createP('Detail operational impact, security considerations, and latency characteristics.')]);
+    } else if (templateId === 'incident_postmortem') {
+      fragment.insert(fragment.length, [createH(1, title || 'Incident Retrospective (SEV-1)')]);
+
+      const alert = new Y.XmlElement('alert');
+      alert.setAttribute('type', 'caution');
+      alert.insert(0, [createP('Incident Date: 2026-10-24 | Duration: 23 mins | Severity: SEV-1')]);
+      fragment.insert(fragment.length, [alert]);
+
+      fragment.insert(fragment.length, [createH(2, 'Incident Summary & Customer Impact')]);
+      fragment.insert(fragment.length, [createP('Brief overview of the outage and percentage of requests affected.')]);
+
+      fragment.insert(fragment.length, [createH(2, 'Root Cause Analysis (5 Whys)')]);
+      fragment.insert(fragment.length, [createP('1. Why did the service fail? Connection pool exhaustion under spike.')]);
+      fragment.insert(fragment.length, [createP('2. Why was the pool exhausted? Slow queries blocked background worker threads.')]);
+
+      fragment.insert(fragment.length, [createH(2, 'Preventive Action Items')]);
+      fragment.insert(fragment.length, [createP('• Add query timeout threshold (3000ms)')]);
+      fragment.insert(fragment.length, [createP('• Scale connection pool limits dynamically')]);
+    } else if (templateId === 'runbook') {
+      fragment.insert(fragment.length, [createH(1, title || 'Operational Runbook')]);
+
+      const alert = new Y.XmlElement('alert');
+      alert.setAttribute('type', 'tip');
+      alert.insert(0, [createP('SLA: < 15 minutes | Service: Core API Production')]);
+      fragment.insert(fragment.length, [alert]);
+
+      fragment.insert(fragment.length, [createH(2, 'Preconditions & Access Requirements')]);
+      fragment.insert(fragment.length, [createP('Ensure you have production read-only or break-glass admin credentials.')]);
+
+      fragment.insert(fragment.length, [createH(2, 'Verification & Health Checks')]);
+      fragment.insert(fragment.length, [createP('curl -f http://localhost:4001/health')]);
+
+      fragment.insert(fragment.length, [createH(2, 'Step-by-Step Recovery Procedure')]);
+      fragment.insert(fragment.length, [createP('1. Verify active worker pods.')]);
+      fragment.insert(fragment.length, [createP('2. Restart stale replica instances.')]);
+    } else if (templateId === 'test_plan') {
+      fragment.insert(fragment.length, [createH(1, title || 'Test Plan & Acceptance Matrix')]);
+      fragment.insert(fragment.length, [createH(2, 'Scope & Environment')]);
+      fragment.insert(fragment.length, [createP('Staging environment configuration and test coverage targets.')]);
+      fragment.insert(fragment.length, [createH(2, 'Acceptance Test Scenarios')]);
+      fragment.insert(fragment.length, [createP('• TC-01: Multi-user concurrent edit convergence')]);
+      fragment.insert(fragment.length, [createP('• TC-02: Attachment upload security and magic-byte validation')]);
     }
-    const p = new Y.XmlElement('paragraph');
-    const pt = new Y.XmlText(paraLines.join('\n'));
-    p.insert(0, [pt]);
-    fragment.push([p]);
   }
-}
-
-// Helper: Server-side pure Yjs template generator
-function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
-  const fragment = ydoc.getXmlFragment('prosemirror');
-
-  const createH = (level: number, text: string) => {
-    const h = new Y.XmlElement('heading');
-    h.setAttribute('level', String(level));
-    const pText = new Y.XmlText(text);
-    h.insert(0, [pText]);
-    return h;
-  };
-
-  const createP = (text: string) => {
-    const p = new Y.XmlElement('paragraph');
-    const pText = new Y.XmlText(text);
-    p.insert(0, [pText]);
-    return p;
-  };
-
-  if (templateId === 'weekly_status') {
-    fragment.insert(fragment.length, [createH(1, title || 'Weekly Project Status Pulse')]);
-
-    const statusBlock = new Y.XmlElement('projectStatusBlock');
-    statusBlock.setAttribute('ragStatus', 'green');
-    statusBlock.setAttribute('milestoneTitle', 'Sprint Milestone Deliverables');
-    statusBlock.setAttribute('completionPercent', '65');
-    statusBlock.setAttribute('targetDate', '2026-11-30');
-    statusBlock.setAttribute('blockers', 'None currently');
-    fragment.insert(fragment.length, [statusBlock]);
-
-    fragment.insert(fragment.length, [createH(2, 'Key Milestones Completed This Week')]);
-    fragment.insert(fragment.length, [createP('• Completed Sprint 1 database migration and table schemas')]);
-    fragment.insert(fragment.length, [createP('• Deployed staging API services with 99.9% uptime')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Deliverables for Next Sprint')]);
-    fragment.insert(fragment.length, [createP('• Runbook security verification and peer reviews')]);
-    fragment.insert(fragment.length, [createP('• Performance benchmarking under 500 concurrent connections')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Active Blockers & Dependencies')]);
-    const alert = new Y.XmlElement('alert');
-    alert.setAttribute('type', 'tip');
-    alert.insert(0, [createP('Dependency: SecOps review scheduled for Wednesday.')]);
-    fragment.insert(fragment.length, [alert]);
-  } else if (templateId === 'architecture_rfc') {
-    fragment.insert(fragment.length, [createH(1, title || 'Architecture RFC & System Design')]);
-
-    const alert = new Y.XmlElement('alert');
-    alert.setAttribute('type', 'note');
-    alert.insert(0, [createP('Status: Proposed | Authors: Engineering Architecture Group')]);
-    fragment.insert(fragment.length, [alert]);
-
-    fragment.insert(fragment.length, [createH(2, 'Context & Problem Statement')]);
-    fragment.insert(fragment.length, [createP('Describe the architectural background, business motivation, and technical constraints.')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Architecture Diagram')]);
-    const mermaid = new Y.XmlElement('mermaidBlock');
-    mermaid.setAttribute('code', 'graph TD\n  Client[Web Browser] -->|WebSocket| Gateway[Collab Gateway]\n  Gateway --> YjsEngine[Yjs CRDT Engine]\n  YjsEngine --> DB[(PostgreSQL)]');
-    fragment.insert(fragment.length, [mermaid]);
-
-    fragment.insert(fragment.length, [createH(2, 'Decision & Technical Rationale')]);
-    fragment.insert(fragment.length, [createP('Outline the chosen solution and explain why alternatives were rejected.')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Consequences & Trade-offs')]);
-    fragment.insert(fragment.length, [createP('Detail operational impact, security considerations, and latency characteristics.')]);
-  } else if (templateId === 'incident_postmortem') {
-    fragment.insert(fragment.length, [createH(1, title || 'Incident Retrospective (SEV-1)')]);
-
-    const alert = new Y.XmlElement('alert');
-    alert.setAttribute('type', 'caution');
-    alert.insert(0, [createP('Incident Date: 2026-10-24 | Duration: 23 mins | Severity: SEV-1')]);
-    fragment.insert(fragment.length, [alert]);
-
-    fragment.insert(fragment.length, [createH(2, 'Incident Summary & Customer Impact')]);
-    fragment.insert(fragment.length, [createP('Brief overview of the outage and percentage of requests affected.')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Root Cause Analysis (5 Whys)')]);
-    fragment.insert(fragment.length, [createP('1. Why did the service fail? Connection pool exhaustion under spike.')]);
-    fragment.insert(fragment.length, [createP('2. Why was the pool exhausted? Slow queries blocked background worker threads.')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Preventive Action Items')]);
-    fragment.insert(fragment.length, [createP('• Add query timeout threshold (3000ms)')]);
-    fragment.insert(fragment.length, [createP('• Scale connection pool limits dynamically')]);
-  } else if (templateId === 'runbook') {
-    fragment.insert(fragment.length, [createH(1, title || 'Operational Runbook')]);
-
-    const alert = new Y.XmlElement('alert');
-    alert.setAttribute('type', 'tip');
-    alert.insert(0, [createP('SLA: < 15 minutes | Service: Core API Production')]);
-    fragment.insert(fragment.length, [alert]);
-
-    fragment.insert(fragment.length, [createH(2, 'Preconditions & Access Requirements')]);
-    fragment.insert(fragment.length, [createP('Ensure you have production read-only or break-glass admin credentials.')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Verification & Health Checks')]);
-    fragment.insert(fragment.length, [createP('curl -f http://localhost:4001/health')]);
-
-    fragment.insert(fragment.length, [createH(2, 'Step-by-Step Recovery Procedure')]);
-    fragment.insert(fragment.length, [createP('1. Verify active worker pods.')]);
-    fragment.insert(fragment.length, [createP('2. Restart stale replica instances.')]);
-  } else if (templateId === 'test_plan') {
-    fragment.insert(fragment.length, [createH(1, title || 'Test Plan & Acceptance Matrix')]);
-    fragment.insert(fragment.length, [createH(2, 'Scope & Environment')]);
-    fragment.insert(fragment.length, [createP('Staging environment configuration and test coverage targets.')]);
-    fragment.insert(fragment.length, [createH(2, 'Acceptance Test Scenarios')]);
-    fragment.insert(fragment.length, [createP('• TC-01: Multi-user concurrent edit convergence')]);
-    fragment.insert(fragment.length, [createP('• TC-02: Attachment upload security and magic-byte validation')]);
-  }
-}
 
   // 3. Create Post (Requires Author, Moderator, or Admin)
   fastify.post('/', { preHandler: (fastify as any).requireAuth }, async (request, reply) => {
@@ -1265,17 +1289,23 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
         return { ok: false as const, statusCode: 401, body: { error: 'Unauthorized', message: 'Authentication required' } };
       }
       if (!permissionService.canEdit(access.permission)) {
-        return { ok: false as const, statusCode: 403,
-          body: { error: 'Forbidden', message: 'You do not have permission to edit this post' } };
+        return {
+          ok: false as const, statusCode: 403,
+          body: { error: 'Forbidden', message: 'You do not have permission to edit this post' }
+        };
       }
       if (updates.status === 'draft') {
         if (current.status !== post.status || current.submittedVersionId !== post.submittedVersionId) {
-          return { ok: false as const, statusCode: 409,
-            body: { error: 'Conflict', message: 'Post workflow changed. Reload before reverting to draft.' } };
+          return {
+            ok: false as const, statusCode: 409,
+            body: { error: 'Conflict', message: 'Post workflow changed. Reload before reverting to draft.' }
+          };
         }
         if (current.status === 'published' || current.status === 'archived') {
-          return { ok: false as const, statusCode: 400,
-            body: { error: 'Bad Request', message: `Cannot revert a ${current.status} post directly to draft` } };
+          return {
+            ok: false as const, statusCode: 400,
+            body: { error: 'Bad Request', message: `Cannot revert a ${current.status} post directly to draft` }
+          };
         }
       }
       const [updated] = await tx
@@ -1390,7 +1420,7 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
             .from(postAttachments)
             .where(and(eq(postAttachments.sha256, att.sha256), ne(postAttachments.postId, post.id)))
             .limit(1);
-          if (!otherRef) await fs.promises.unlink(att.storagePath).catch(() => {});
+          if (!otherRef) await fs.promises.unlink(att.storagePath).catch(() => { });
         }
       }
     } catch (cleanupErr) {
@@ -1488,11 +1518,15 @@ function populateYjsTemplate(ydoc: Y.Doc, templateId: string, title: string) {
     } catch (error) {
       const statusCode = error instanceof CollabServiceError ? error.statusCode : (error as { code?: string })?.code === '23505' ? 409 : 503;
       request.log.warn({ postId: post.id, statusCode }, 'Review capture or checkpoint transaction failed');
-      return reply.status(statusCode).send({ error: statusCode === 409 ? 'Conflict' : 'Service Unavailable',
-        message: statusCode === 409 ? 'Post changed during submission. Reload before submitting.' : 'Unable to capture the working document for review' });
+      return reply.status(statusCode).send({
+        error: statusCode === 409 ? 'Conflict' : 'Service Unavailable',
+        message: statusCode === 409 ? 'Post changed during submission. Reload before submitting.' : 'Unable to capture the working document for review'
+      });
     }
-    if (!submission.ok) return reply.status(submission.statusCode).send({ error: submission.statusCode === 403 ? 'Forbidden'
-      : submission.statusCode === 404 ? 'Not Found' : 'Conflict', message: submission.message });
+    if (!submission.ok) return reply.status(submission.statusCode).send({
+      error: submission.statusCode === 403 ? 'Forbidden'
+        : submission.statusCode === 404 ? 'Not Found' : 'Conflict', message: submission.message
+    });
     const { submittedVersion, updatedPost } = submission;
 
     await auditService.appendLog({

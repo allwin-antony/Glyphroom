@@ -1,7 +1,7 @@
 import type {
   PluginManifest,
   PluginEventEnvelope,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 export interface SlackNotifierSettings {
   enabled: boolean;

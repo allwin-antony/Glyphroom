@@ -1,11 +1,11 @@
 /**
- * Enterprise Blogger 2.0 — Deterministic PRNG Operation Generator Harness
+ * Glyphroom — Deterministic PRNG Operation Generator Harness
  * Generates reproducible concurrent human and agent operations for 10k-op convergence tests.
  */
 
 import { ClientPool, HeadlessClient } from './client-pool.js';
 import { NetworkSimulator } from './network-simulator.js';
-import { AgentMetadata } from '@enterprise-blogger/shared';
+import { AgentMetadata } from '@glyphroom/shared';
 
 /**
  * Deterministic 32-bit Mulberry32 PRNG.
@@ -336,7 +336,7 @@ export class OperationGenerator {
     });
 
     // Seed initial document with one paragraph so clients have a baseline target
-    pool.getHumans()[0].insertParagraph('Enterprise Blogger 2.0 Collaborative Canvas Baseline.');
+    pool.getHumans()[0].insertParagraph('Glyphroom Collaborative Canvas Baseline.');
     if (network) {
       network.flush();
     }

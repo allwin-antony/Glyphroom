@@ -1,5 +1,5 @@
 import React from 'react';
-import type { UiSlotIdentifier } from '@enterprise-blogger/shared';
+import type { UiSlotIdentifier } from '@glyphroom/shared';
 import { usePluginSlots } from '../../plugins/PluginProvider.js';
 import type { UiSlotContext } from '../../plugins/types.js';
 import { PluginErrorBoundary } from './PluginErrorBoundary.js';

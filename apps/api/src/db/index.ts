@@ -19,7 +19,7 @@ export function createDatabaseClient(options: DatabaseOptions = {}): { db: Datab
     pool = options.pool;
   } else {
     pool = new pg.Pool({
-      connectionString: options.connectionString || process.env.DATABASE_URL || 'postgresql://blogger:blogger_secret@localhost:5432/enterprise_blogger',
+      connectionString: options.connectionString || process.env.DATABASE_URL || 'postgresql://blogger:blogger_secret@localhost:5432/glyphroom',
       max: 20,
       idleTimeoutMillis: 10000,
       connectionTimeoutMillis: 5000,

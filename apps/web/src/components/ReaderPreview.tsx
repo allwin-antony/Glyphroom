@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 import { BookOpen, FileText, Layers } from 'lucide-react';
 import { MarkdownRenderer, type ReaderMode } from '../components/reader/MarkdownRenderer.js';
 
@@ -67,11 +67,10 @@ export const ReaderPreview: React.FC<ReaderPreviewProps> = ({
         <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas shrink-0">
           <button
             onClick={() => setPreviewMode('flow')}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
-              previewMode === 'flow'
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${previewMode === 'flow'
                 ? 'bg-elevated text-foreground shadow-xs'
                 : 'text-text-muted hover:text-foreground'
-            }`}
+              }`}
             title="Continuous Article Flow"
           >
             <FileText size={11} />
@@ -79,11 +78,10 @@ export const ReaderPreview: React.FC<ReaderPreviewProps> = ({
           </button>
           <button
             onClick={() => setPreviewMode('block')}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
-              previewMode === 'block'
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${previewMode === 'block'
                 ? 'bg-elevated text-accent shadow-xs'
                 : 'text-text-muted hover:text-foreground'
-            }`}
+              }`}
             title="Notebook Block Cards"
           >
             <Layers size={11} />

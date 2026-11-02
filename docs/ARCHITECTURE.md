@@ -1,4 +1,4 @@
-# Enterprise Blogger 2.0 — Architecture
+# Glyphroom — Architecture
 
 > **Rev 3** | See [README.md](README.md) for the full document index.
 
@@ -252,8 +252,8 @@ The target server **only needs Docker and Docker Compose installed**. It does no
 ### 2. Single-Command Launch
 ```bash
 # 1. Clone repository or extract release tarball on the server
-git clone <internal-repo-url> /opt/enterprise-blogger
-cd /opt/enterprise-blogger
+git clone <internal-repo-url> /opt/Glyphroom
+cd /opt/Glyphroom
 
 # 2. Configure environment (copy template with sensible defaults)
 cp .env.production.example .env.production

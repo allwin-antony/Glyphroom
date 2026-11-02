@@ -1,5 +1,5 @@
 {
-  "name": "@enterprise-blogger/plugin-jira-embed",
+  "name": "@glyphroom/plugin-jira-embed",
   "version": "1.0.0",
   "private": true,
   "type": "module",
@@ -18,7 +18,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@enterprise-blogger/shared": "workspace:*",
+    "@glyphroom/shared": "workspace:*",
     "@tiptap/core": "3.32.0",
     "@tiptap/pm": "3.32.0",
     "@tiptap/react": "3.32.0",

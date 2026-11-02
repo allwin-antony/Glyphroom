@@ -4,7 +4,7 @@ import {
   PluginManifestSchema,
   type PluginManifest,
   isValidPluginId,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import type { GlyphroomBackendPlugin, BackendPluginContext } from './types.js';
 import { PluginStorage } from './storage.js';
 import { PluginEventBus } from './events.js';

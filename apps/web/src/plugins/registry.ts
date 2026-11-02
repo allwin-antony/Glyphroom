@@ -3,7 +3,7 @@ import {
   PluginManifestSchema,
   CORE_SLASH_COMMAND_IDS,
   type UiSlotIdentifier,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import type {
   GlyphroomWebPlugin,
   UiSlotContribution,

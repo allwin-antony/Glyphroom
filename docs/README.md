@@ -1,4 +1,4 @@
-# Enterprise Blogger 2.0 — Documentation Index
+# Glyphroom — Documentation Index
 
 > **Status**: Engineering Draft — pending security and legal review  
 > **Revision**: Rev 3 (supersedes all previous artifact versions)  

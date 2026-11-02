@@ -7,7 +7,7 @@ import { CollabGatewayClient } from './gateway/client.js';
 import { createMcpServer } from './server.js';
 import { ApiClient, hasScope, type AuthenticatedActor } from './api/client.js';
 
-export const MCP_SERVER_APP_NAME = 'enterprise-blogger-mcp-server';
+export const MCP_SERVER_APP_NAME = 'glyphroom-mcp-server';
 
 export async function startMcpServer() {
   const config = loadConfig();

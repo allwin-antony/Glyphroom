@@ -1,4 +1,4 @@
-# Enterprise Blogger 2.0 — Data Model
+# Glyphroom — Data Model
 
 > **Rev 3** | See [README.md](README.md) for the full document index.
 

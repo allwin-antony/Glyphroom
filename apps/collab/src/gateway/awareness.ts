@@ -2,7 +2,7 @@ import type { Document } from '@hocuspocus/server';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import WebSocket from 'ws';
 import * as Y from 'yjs';
-import type { AgentMetadata } from '@enterprise-blogger/shared';
+import type { AgentMetadata } from '@glyphroom/shared';
 
 export interface AgentAwarenessState {
   user: {

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { SlackNotifierPlugin } from '../src/plugin.js';
-import type { PluginEventEnvelope } from '@enterprise-blogger/shared';
+import type { PluginEventEnvelope } from '@glyphroom/shared';
 
 describe('Slack Notifier Reference Backend Plugin', () => {
   let plugin: SlackNotifierPlugin;

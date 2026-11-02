@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 
 export interface CollabSnapshotResult {
   documentName: string;

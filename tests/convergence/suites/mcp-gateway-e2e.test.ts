@@ -6,12 +6,12 @@ import { HocuspocusProvider } from '@hocuspocus/provider';
 import {
   createHumanUndoManager,
   getDocumentFragment,
-} from '@enterprise-blogger/shared';
-import { createCollabServer, type CollabServerInstance } from '@enterprise-blogger/collab';
+} from '@glyphroom/shared';
+import { createCollabServer, type CollabServerInstance } from '@glyphroom/collab';
 import {
   createMcpServer,
   CollabGatewayClient,
-} from '@enterprise-blogger/mcp-server';
+} from '@glyphroom/mcp-server';
 
 describe('Milestone M4 End-to-End: MCP Tool -> Agent Gateway -> Collab Server -> Live Human Client', () => {
   let collabInstance: CollabServerInstance | null = null;

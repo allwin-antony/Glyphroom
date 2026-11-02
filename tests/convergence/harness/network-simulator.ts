@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Network Simulator Harness
+ * Glyphroom — Network Simulator Harness
  * Simulates network latency, packet reordering, packet drops, and disconnect/reconnect cycles.
  */
 

@@ -3,7 +3,7 @@ import crypto from 'node:crypto';
 import http from 'node:http';
 import * as Y from 'yjs';
 import { initProseMirrorDoc, relativePositionToAbsolutePosition } from 'y-prosemirror';
-import { blogSchema } from '@enterprise-blogger/shared';
+import { blogSchema } from '@glyphroom/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createInMemoryDatabase } from '../../api/tests/helpers/test-db.js';
@@ -125,9 +125,11 @@ describe('caller-local PATs and actual MCP/API authoring contracts', () => {
       fragment.insert(fragment.length, [heading]);
       await database.pool.query('UPDATE posts SET yjs_state = decode($1, \'hex\') WHERE id = $2',
         [Buffer.from(Y.encodeStateAsUpdate(ydoc)).toString('hex'), drafts[0].id]);
-      const anchored = unpack(await connected[0].callTool({ name: 'add_comment', arguments: {
-        postId: drafts[0].id, content: 'Heading question', anchorHeading: 'Glyphroom Section', parentId,
-      } }));
+      const anchored = unpack(await connected[0].callTool({
+        name: 'add_comment', arguments: {
+          postId: drafts[0].id, content: 'Heading question', anchorHeading: 'Glyphroom Section', parentId,
+        }
+      }));
       const savedComment = (await database.db.select().from(comments)).find((comment) => comment.id === anchored.commentId)!;
       const { doc, meta } = initProseMirrorDoc(fragment, blogSchema);
       const from = relativePositionToAbsolutePosition(ydoc, fragment, Y.createRelativePositionFromJSON(savedComment.yjsAnchorStart), meta.mapping);
@@ -159,17 +161,25 @@ describe('caller-local PATs and actual MCP/API authoring contracts', () => {
   it('validates publication notes at the actual MCP boundary and retains allowed notes with the approved pin', async () => {
     const [publisher] = await database.db.insert(users).values({ email: 'publisher@mcp-arguments.test', fullName: 'Publisher', role: 'admin' }).returning();
     const secret = `eb_pat_${crypto.randomBytes(32).toString('hex')}`;
-    await database.db.insert(personalAccessTokens).values({ userId: publisher.id, name: 'Publish only',
-      tokenHash: crypto.createHash('sha256').update(secret).digest('hex'), scopes: ['posts:publish'] });
+    await database.db.insert(personalAccessTokens).values({
+      userId: publisher.id, name: 'Publish only',
+      tokenHash: crypto.createHash('sha256').update(secret).digest('hex'), scopes: ['posts:publish']
+    });
     const client = await connect(secret);
-    const [post] = await database.db.insert(posts).values({ slug: `notes-${crypto.randomUUID()}`, title: 'Notes contract',
-      authorId: identities[0].userId, status: 'approved', yjsState: Buffer.from('unavailable-working-state') }).returning();
-    const [checkpoint] = await database.db.insert(postVersions).values({ postId: post.id, versionNumber: 1,
+    const [post] = await database.db.insert(posts).values({
+      slug: `notes-${crypto.randomUUID()}`, title: 'Notes contract',
+      authorId: identities[0].userId, status: 'approved', yjsState: Buffer.from('unavailable-working-state')
+    }).returning();
+    const [checkpoint] = await database.db.insert(postVersions).values({
+      postId: post.id, versionNumber: 1,
       triggerReason: 'review_submission', markdownSnapshot: '', yjsStateSnapshot: Buffer.from('historical-state'),
-      createdBy: identities[0].userId }).returning();
+      createdBy: identities[0].userId
+    }).returning();
     await database.pool.query('UPDATE posts SET submitted_version_id = $1 WHERE id = $2', [checkpoint.id, post.id]);
-    await database.db.insert(postReviews).values({ postId: post.id, submittedVersionId: checkpoint.id,
-      reviewerId: identities[1].userId, decision: 'approved', notes: 'Independent review notes' });
+    await database.db.insert(postReviews).values({
+      postId: post.id, submittedVersionId: checkpoint.id,
+      reviewerId: identities[1].userId, decision: 'approved', notes: 'Independent review notes'
+    });
 
     const invalid = await client.callTool({ name: 'publish_post', arguments: { postId: post.id, notes: 'n'.repeat(2001) } });
     expect(invalid.isError).toBe(true);

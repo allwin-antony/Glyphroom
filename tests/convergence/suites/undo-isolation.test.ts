@@ -1,12 +1,12 @@
 /**
- * Enterprise Blogger 2.0 — Undo Isolation Integration Test Suite
+ * Glyphroom — Undo Isolation Integration Test Suite
  * Validates that Ctrl+Z (UndoManager) reverses only human transactions and NEVER reverts agent suggestions.
  */
 
 import { describe, it, expect } from 'vitest';
 import * as Y from 'yjs';
 import { ClientPool, NetworkSimulator } from '../harness/index.js';
-import { AgentMetadata } from '@enterprise-blogger/shared';
+import { AgentMetadata } from '@glyphroom/shared';
 
 describe('Tier 3: Undo Isolation Test Suite', () => {
   const agentMeta: AgentMetadata = {

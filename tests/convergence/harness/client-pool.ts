@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Headless Yjs Client Pool Harness
+ * Glyphroom — Headless Yjs Client Pool Harness
  * Manages 5 human clients + 1 agent client for opaque-box CRDT convergence testing.
  */
 
@@ -13,7 +13,7 @@ import {
   MARK_SUGGESTION_DELETE,
   ProseMirrorDocJSON,
   nodeFromJSON,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import { NetworkSimulator, NetworkPacket } from './network-simulator.js';
 
 export type ClientRole = 'human' | 'agent';

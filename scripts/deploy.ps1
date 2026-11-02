@@ -268,7 +268,7 @@ while ($retries -lt $maxRetries) {
 Write-Host ''
 
 Write-Host '==============================================================================' -ForegroundColor Green
-Write-Host '    Enterprise Blogger 2.0 — Production Deployment Successful!               ' -ForegroundColor Green
+Write-Host '    Glyphroom — Production Deployment Successful!               ' -ForegroundColor Green
 Write-Host '==============================================================================' -ForegroundColor Green
 Write-Host '  Web Application:         http://localhost'
 Write-Host '  REST API Engine:         http://localhost:4001'

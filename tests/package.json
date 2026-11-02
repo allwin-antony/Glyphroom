@@ -1,5 +1,5 @@
 {
-  "name": "@enterprise-blogger/tests",
+  "name": "@glyphroom/tests",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@enterprise-blogger/collab": "workspace:*",
-    "@enterprise-blogger/mcp-server": "workspace:*",
-    "@enterprise-blogger/shared": "workspace:*",
+    "@glyphroom/collab": "workspace:*",
+    "@glyphroom/mcp-server": "workspace:*",
+    "@glyphroom/shared": "workspace:*",
     "@hocuspocus/provider": "4.7.1",
     "@tiptap/core": "3.32.0",
     "@tiptap/pm": "3.32.0",

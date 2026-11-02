@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Tier 5 Adversarial Coverage Hardening Suite
+ * Glyphroom — Tier 5 Adversarial Coverage Hardening Suite
  *
  * Formulated and executed by challenger_m5_1.
  * Exercises extreme multi-agent concurrency, asymmetric merges, lifecycle under chaos,
@@ -30,13 +30,13 @@ import {
   MARK_ATTRIBUTION,
   nodeFromJSON,
   type ProseMirrorDocJSON,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import {
   createCollabServer as createRawCollabServer,
   type CollabServerInstance,
   type CollabServerOptions,
   InMemoryPersistenceAdapter,
-} from '@enterprise-blogger/collab';
+} from '@glyphroom/collab';
 
 const createCollabServer = (options: CollabServerOptions = {}) => createRawCollabServer({
   ...options,
@@ -50,7 +50,7 @@ const createCollabServer = (options: CollabServerOptions = {}) => createRawColla
     ...options.authOptions,
   },
 });
-import { CollabGatewayClient } from '@enterprise-blogger/mcp-server';
+import { CollabGatewayClient } from '@glyphroom/mcp-server';
 import { ClientPool, NetworkSimulator } from '../harness/index.js';
 
 describe('Tier 5: Adversarial Coverage Hardening Suite (challenger_m5_1)', () => {

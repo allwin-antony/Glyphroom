@@ -62,7 +62,7 @@ export function loadConfig(): McpServerConfig {
     defaultAgentId:
       process.env.MCP_AGENT_ID ||
       process.env.DEFAULT_AGENT_ID ||
-      'enterprise_blogger_agent',
+      'glyphroom_agent',
     defaultTokenId:
       process.env.MCP_TOKEN_ID || process.env.DEFAULT_TOKEN_ID || 'tok_agent_default',
     gatewayTimeoutMs: parseInt(process.env.GATEWAY_TIMEOUT_MS || '10000', 10),

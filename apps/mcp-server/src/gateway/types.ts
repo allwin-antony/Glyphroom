@@ -2,7 +2,7 @@ import type {
   AgentGatewayEditRequest,
   AgentGatewayEditResponse,
   AgentGatewayErrorResponse,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 export interface CollabGatewayClientOptions {
   gatewayUrl: string;

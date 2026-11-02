@@ -111,11 +111,11 @@ Acceptance: type → immediate submit → edit again → review/publish produces
 The default `pnpm` on this machine is a Windows executable. Prefix pnpm commands with `npm exec --yes --package=pnpm@12.15.0 --` when working in this WSL checkout.
 
 ```bash
-pnpm --filter @enterprise-blogger/shared --filter @enterprise-blogger/api --filter @enterprise-blogger/collab --filter @enterprise-blogger/mcp-server run build
+pnpm --filter @glyphroom/shared --filter @glyphroom/api --filter @glyphroom/collab --filter @glyphroom/mcp-server run build
 pnpm -r --no-bail run typecheck
-pnpm --filter @enterprise-blogger/mcp-server test
-pnpm --filter @enterprise-blogger/shared test
-pnpm --filter @enterprise-blogger/tests test
+pnpm --filter @glyphroom/mcp-server test
+pnpm --filter @glyphroom/shared test
+pnpm --filter @glyphroom/tests test
 ```
 
 - Build collab/MCP before checking the integration workspace: it imports their `dist` exports.

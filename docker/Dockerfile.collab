@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-# Enterprise Blogger 2.0 — Collaboration Engine Dockerfile
+# Glyphroom — Collaboration Engine Dockerfile
 # Multi-stage build for pnpm monorepo (minimal Debian-slim, non-root user, dumb-init signal forwarding)
 
 # ===========================================================================
@@ -46,13 +46,13 @@ COPY packages/shared ./packages/shared
 COPY apps/collab ./apps/collab
 
 # Build shared package first (required dependency of apps/collab)
-RUN pnpm --filter @enterprise-blogger/shared run build
+RUN pnpm --filter @glyphroom/shared run build
 
 # Build collaboration server
-RUN pnpm --filter @enterprise-blogger/collab run build
+RUN pnpm --filter @glyphroom/collab run build
 
 # Isolate production dependencies and bundle workspace references
-RUN pnpm --filter @enterprise-blogger/collab --prod deploy /app/deployed
+RUN pnpm --filter @glyphroom/collab --prod deploy /app/deployed
 
 # ===========================================================================
 # Stage 4: Production Runner (Minimal & Hardened)
@@ -75,7 +75,7 @@ RUN groupadd -g 10001 blogger && \
 COPY --from=builder --chown=blogger:blogger /app/deployed /app
 
 # Also copy built dist from shared if referenced via module resolution
-COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@enterprise-blogger/shared/dist
+COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@glyphroom/shared/dist
 
 # Expose Collaboration WebSocket and HTTP Agent Gateway port
 EXPOSE 4000

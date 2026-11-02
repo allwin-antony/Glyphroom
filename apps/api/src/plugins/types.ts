@@ -1,6 +1,6 @@
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { Database } from '../db/index.js';
-import type { PluginManifest } from '@enterprise-blogger/shared';
+import type { PluginManifest } from '@glyphroom/shared';
 import type { PluginStorage } from './storage.js';
 import type { PluginEventBus } from './events.js';
 

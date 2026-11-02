@@ -25,8 +25,8 @@ export interface SessionPayload {
 export class AuthService {
   constructor(
     private readonly db: Database,
-    private readonly sessionSecret: string = process.env.SESSION_SECRET || 'enterprise-blogger-session-secret-key-32b-min'
-  ) {}
+    private readonly sessionSecret: string = process.env.SESSION_SECRET || 'glyphroom-session-secret-key-32b-min'
+  ) { }
 
   /**
    * Hash password for break-glass local admin or local testing

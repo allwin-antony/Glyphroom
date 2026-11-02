@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { eq, desc, and, inArray } from 'drizzle-orm';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown, normalizeHeadingText } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown, normalizeHeadingText } from '@glyphroom/shared';
 import type { Database } from '../db/index.js';
 import { posts, postVersions, comments, users } from '../db/schema.js';
 import type { PermissionService } from '../services/permissions.js';
@@ -70,12 +70,12 @@ export const commentRoutes: FastifyPluginAsync<{
 
     const permission = request.user
       ? await permissionService.resolvePostPermission(
-          { id: request.user.userId, role: request.user.role },
-          { ...post, postId: post.id }
-        )
+        { id: request.user.userId, role: request.user.role },
+        { ...post, postId: post.id }
+      )
       : post.status === 'published'
-      ? 'view'
-      : 'none';
+        ? 'view'
+        : 'none';
 
     if (!permissionService.canView(permission)) {
       return reply.status(403).send({ error: 'Forbidden', message: 'Access denied' });
@@ -150,8 +150,10 @@ export const commentRoutes: FastifyPluginAsync<{
         return reply.status(400).send({ error: 'Bad Request', code: 'ANCHOR_HEADING_NOT_FOUND', message: 'A non-empty visible heading label is required' });
       }
 
-      const stateError = { error: 'Conflict', code: 'ANCHOR_STATE_UNAVAILABLE',
-        message: 'Heading anchor state unavailable or inconsistent with visible content' };
+      const stateError = {
+        error: 'Conflict', code: 'ANCHOR_STATE_UNAVAILABLE',
+        message: 'Heading anchor state unavailable or inconsistent with visible content'
+      };
       const projection = await projectPostContent(db, permissionService, post, user);
       if (!projection.ok) {
         return reply.status(projection.statusCode).send(projection.statusCode === 409 ? stateError : projection.error);
@@ -164,8 +166,10 @@ export const commentRoutes: FastifyPluginAsync<{
         const predicates = [eq(postVersions.id, versionId), eq(postVersions.postId, post.id)];
         if (contentSource === 'submitted') predicates.push(eq(postVersions.triggerReason, 'review_submission'));
         else predicates.push(inArray(postVersions.triggerReason, ['review_submission', 'publication']));
-        const [version] = await db.select({ yjsStateSnapshot: postVersions.yjsStateSnapshot,
-          markdownSnapshot: postVersions.markdownSnapshot }).from(postVersions).where(and(...predicates)).limit(1);
+        const [version] = await db.select({
+          yjsStateSnapshot: postVersions.yjsStateSnapshot,
+          markdownSnapshot: postVersions.markdownSnapshot
+        }).from(postVersions).where(and(...predicates)).limit(1);
         if (!version || version.markdownSnapshot !== derivedMarkdown) return reply.status(409).send(stateError);
         selectedState = version.yjsStateSnapshot;
       }
@@ -186,9 +190,11 @@ export const commentRoutes: FastifyPluginAsync<{
 
         const visibleMatches = markdownHeadingLabels(derivedMarkdown).filter((label) => normalizeHeadingText(label) === target);
         if (visibleMatches.length !== 1) {
-          return reply.status(400).send({ error: 'Bad Request',
+          return reply.status(400).send({
+            error: 'Bad Request',
             code: visibleMatches.length > 1 ? 'ANCHOR_HEADING_AMBIGUOUS' : 'ANCHOR_HEADING_NOT_FOUND',
-            message: visibleMatches.length > 1 ? 'Heading label is ambiguous in visible content' : 'Heading label not found in visible content' });
+            message: visibleMatches.length > 1 ? 'Heading label is ambiguous in visible content' : 'Heading label not found in visible content'
+          });
         }
 
         const headingMatches: Array<{ startNode: Y.XmlText; endNode: Y.XmlText }> = [];
@@ -221,9 +227,11 @@ export const commentRoutes: FastifyPluginAsync<{
         }
 
         if (headingMatches.length !== 1) {
-          return reply.status(400).send({ error: 'Bad Request',
+          return reply.status(400).send({
+            error: 'Bad Request',
             code: headingMatches.length > 1 ? 'ANCHOR_HEADING_AMBIGUOUS' : 'ANCHOR_HEADING_NOT_FOUND',
-            message: headingMatches.length > 1 ? 'Heading label is ambiguous in visible content' : 'Heading label not found in visible content' });
+            message: headingMatches.length > 1 ? 'Heading label is ambiguous in visible content' : 'Heading label not found in visible content'
+          });
         }
 
         const match = headingMatches[0];

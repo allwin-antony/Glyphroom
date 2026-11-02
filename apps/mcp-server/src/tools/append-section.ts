@@ -2,7 +2,7 @@ import {
   McpAppendSectionInputSchema,
   type McpAppendSectionInput,
   type McpAppendSectionOutput,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { CollabGatewayClient } from '../gateway/client.js';
 import type pino from 'pino';

@@ -3,8 +3,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { execSync, spawnSync } from 'node:child_process';
-import { createCollabServer, type CollabServerInstance } from '@enterprise-blogger/collab';
-import { InMemoryPersistenceAdapter } from '@enterprise-blogger/collab';
+import { createCollabServer, type CollabServerInstance } from '@glyphroom/collab';
+import { InMemoryPersistenceAdapter } from '@glyphroom/collab';
 import * as Y from 'yjs';
 
 const ROOT_DIR = path.resolve(__dirname, '../../..');
@@ -42,7 +42,7 @@ describe('Milestone M5: Turnkey Production Deployment Hardening Suite', () => {
     it('configures isolated internal bridge network (blogger_network)', () => {
       expect(composeContent).toContain('networks:');
       expect(composeContent).toContain('blogger_network:');
-      expect(composeContent).toContain('name: enterprise_blogger_network');
+      expect(composeContent).toContain('name: glyphroom_network');
       expect(composeContent).toContain('driver: bridge');
     });
 
@@ -107,7 +107,7 @@ describe('Milestone M5: Turnkey Production Deployment Hardening Suite', () => {
     it('both Dockerfiles build packages/shared before dependent applications', () => {
       for (const dockerfilePath of [collabDockerPath, mcpDockerPath]) {
         const content = fs.readFileSync(dockerfilePath, 'utf8');
-        const sharedBuildIndex = content.indexOf('pnpm --filter @enterprise-blogger/shared run build');
+        const sharedBuildIndex = content.indexOf('pnpm --filter @glyphroom/shared run build');
         const appBuildIndex = content.indexOf('deploy /app/deployed');
         expect(sharedBuildIndex).toBeGreaterThan(-1);
         expect(appBuildIndex).toBeGreaterThan(-1);
@@ -198,7 +198,7 @@ describe('Milestone M5: Turnkey Production Deployment Hardening Suite', () => {
       // which is owned by the approved API bootstrap contract (not duplicated here).
       expect(initSql).not.toMatch(/INSERT\s+INTO\s+users/i);
       expect(initSql).not.toContain('admin@blogger.corp.internal');
-      expect(initSql).not.toContain('admin@enterprise-blogger.local');
+      expect(initSql).not.toContain('admin@glyphroom.local');
       expect(initSql).not.toContain('$2a$10$');
     });
   });
@@ -335,7 +335,7 @@ describe('Milestone M5: Turnkey Production Deployment Hardening Suite', () => {
       expect(res.status).toBe(200);
       const data: any = await res.json();
       expect(data.status).toBe('healthy');
-      expect(data.service).toBe('enterprise-blogger-collab');
+      expect(data.service).toBe('glyphroom-collab');
       expect(data.checks).toBeDefined();
     });
 

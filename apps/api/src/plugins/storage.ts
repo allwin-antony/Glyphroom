@@ -5,13 +5,13 @@ import {
   PluginStorageScopeSchema,
   PluginStorageKeySchema,
   MAX_PLUGIN_STORAGE_VALUE_BYTES,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 export class PluginStorage {
   constructor(
     private readonly db: Database,
     private readonly pluginId: string
-  ) {}
+  ) { }
 
   /**
    * Retrieves a typed value stored under (pluginId, scope, key).

@@ -38,7 +38,7 @@ export const SignInView: React.FC = () => {
   }, [isAuthenticated, authLoading, navigate, from]);
 
   const handleQuickFillAdmin = () => {
-    setEmail('admin@enterprise-blogger.local');
+    setEmail('admin@glyphroom.local');
     setPassword('admin2026!');
     setErrorMessage(null);
   };
@@ -100,7 +100,7 @@ export const SignInView: React.FC = () => {
 
         {/* Main Sign-In Card */}
         <div className="bg-slate-900/80 backdrop-blur-xl border border-slate-800 rounded-2xl p-6 sm:p-8 shadow-2xl shadow-black/50">
-          
+
           {/* Quick-Fill Break-Glass Helper */}
           <div className="mb-4 p-3.5 bg-slate-800/60 border border-slate-700/60 rounded-xl flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5 min-w-0">
@@ -109,7 +109,7 @@ export const SignInView: React.FC = () => {
               </div>
               <div className="truncate">
                 <div className="text-xs font-semibold text-slate-200">Break-Glass Admin</div>
-                <div className="text-[11px] text-slate-400 font-mono truncate">admin@enterprise-blogger.local</div>
+                <div className="text-[11px] text-slate-400 font-mono truncate">admin@glyphroom.local</div>
               </div>
             </div>
             <button

@@ -41,7 +41,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     await db
       .insert(users)
       .values({
-        email: 'admin@enterprise-blogger.local',
+        email: 'admin@glyphroom.local',
         fullName: 'Break-Glass System Administrator',
         role: 'admin',
         ssoProvider: 'local',
@@ -105,7 +105,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
   it('GET /health returns 200 OK', async () => {
     const res = await app.inject({ method: 'GET', url: '/health' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()).toEqual({ status: 'ok', service: 'enterprise-blogger-api' });
+    expect(res.json()).toEqual({ status: 'ok', service: 'glyphroom-api' });
   });
 
   it('performs local admin login, receives session cookie and csrfToken', async () => {
@@ -396,19 +396,19 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
     expect(revokeRes.json().success).toBe(true);
   });
 
-  it('authenticates break-glass admin (admin@enterprise-blogger.local) and returns csrfToken', async () => {
+  it('authenticates break-glass admin (admin@glyphroom.local) and returns csrfToken', async () => {
     const res = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/login',
       payload: {
-        email: 'admin@enterprise-blogger.local',
+        email: 'admin@glyphroom.local',
         password: 'admin2026!',
       },
     });
 
     expect(res.statusCode).toBe(200);
     const body = res.json();
-    expect(body.user.email).toBe('admin@enterprise-blogger.local');
+    expect(body.user.email).toBe('admin@glyphroom.local');
     expect(body.user.role).toBe('admin');
     expect(body.csrfToken).toBeDefined();
     expect(typeof body.csrfToken).toBe('string');
@@ -419,7 +419,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       method: 'POST',
       url: '/api/v1/auth/login',
       payload: {
-        email: 'admin@enterprise-blogger.local',
+        email: 'admin@glyphroom.local',
         password: 'admin2026!',
       },
     });
@@ -444,7 +444,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       method: 'POST',
       url: '/api/v1/auth/login',
       payload: {
-        email: 'admin@enterprise-blogger.local',
+        email: 'admin@glyphroom.local',
         password: 'admin2026!',
       },
     });
@@ -492,7 +492,7 @@ describe('Fastify REST API End-to-End Integration Suite', () => {
       method: 'POST',
       url: '/api/v1/auth/login',
       payload: {
-        email: 'admin@enterprise-blogger.local',
+        email: 'admin@glyphroom.local',
         password: 'admin2026!',
       },
     });

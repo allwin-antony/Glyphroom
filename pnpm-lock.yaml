@@ -275,7 +275,7 @@ importers:
 
   apps/api:
     dependencies:
-      '@enterprise-blogger/shared':
+      '@glyphroom/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@fastify/cookie':
@@ -345,7 +345,7 @@ importers:
 
   apps/collab:
     dependencies:
-      '@enterprise-blogger/shared':
+      '@glyphroom/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@hocuspocus/extension-database':
@@ -412,7 +412,7 @@ importers:
 
   apps/mcp-server:
     dependencies:
-      '@enterprise-blogger/shared':
+      '@glyphroom/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@modelcontextprotocol/sdk':
@@ -449,7 +449,7 @@ importers:
 
   apps/web:
     dependencies:
-      '@enterprise-blogger/shared':
+      '@glyphroom/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@hocuspocus/provider':
@@ -646,7 +646,7 @@ importers:
 
   plugins/jira-embed:
     dependencies:
-      '@enterprise-blogger/shared':
+      '@glyphroom/shared':
         specifier: workspace:*
         version: link:../../packages/shared
       '@tiptap/core':
@@ -692,7 +692,7 @@ importers:
 
   plugins/slack-notifier:
     dependencies:
-      '@enterprise-blogger/shared':
+      '@glyphroom/shared':
         specifier: workspace:*
         version: link:../../packages/shared
     devDependencies:
@@ -711,13 +711,13 @@ importers:
 
   tests:
     dependencies:
-      '@enterprise-blogger/collab':
+      '@glyphroom/collab':
         specifier: workspace:*
         version: link:../apps/collab
-      '@enterprise-blogger/mcp-server':
+      '@glyphroom/mcp-server':
         specifier: workspace:*
         version: link:../apps/mcp-server
-      '@enterprise-blogger/shared':
+      '@glyphroom/shared':
         specifier: workspace:*
         version: link:../packages/shared
       '@hocuspocus/provider':

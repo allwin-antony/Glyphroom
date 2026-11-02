@@ -3,7 +3,7 @@ import pino from 'pino';
 import { createMcpServer } from '../src/server.js';
 import type { CollabGatewayClient } from '../src/gateway/client.js';
 import type { ApiClient } from '../src/api/client.js';
-import { McpAddCommentInputSchema, McpPublishPostInputSchema } from '@enterprise-blogger/shared';
+import { McpAddCommentInputSchema, McpPublishPostInputSchema } from '@glyphroom/shared';
 
 describe('MCP Full Tool Catalog & Prompt Injection Guardrails Suite', () => {
   const logger = pino({ level: 'silent' });
@@ -37,8 +37,10 @@ describe('MCP Full Tool Catalog & Prompt Injection Guardrails Suite', () => {
       comment: { id: 'c-1', authorId: 'u1', status: 'open' },
     }),
     publishPost: vi.fn().mockResolvedValue({
-      post: { id: 'post-1', status: 'published', publishedVersionId: 'checkpoint-1',
-        publishedAt: '2026-11-01T12:00:00.000Z' },
+      post: {
+        id: 'post-1', status: 'published', publishedVersionId: 'checkpoint-1',
+        publishedAt: '2026-11-01T12:00:00.000Z'
+      },
     }),
   } as unknown as ApiClient;
 
@@ -154,8 +156,10 @@ describe('MCP Full Tool Catalog & Prompt Injection Guardrails Suite', () => {
   ])('add_comment forwards the %s heading unchanged, including on replies', async (_case, anchorHeading) => {
     vi.mocked(mockApiClient.addComment).mockClear();
     const server = createMcpServer({ gatewayClient: mockGatewayClient, apiClient: mockApiClient, logger });
-    const args = McpAddCommentInputSchema.parse({ postId: 'post-1', content: 'Question', parentId: 'parent-1',
-      ...(anchorHeading !== undefined ? { anchorHeading } : {}) });
+    const args = McpAddCommentInputSchema.parse({
+      postId: 'post-1', content: 'Question', parentId: 'parent-1',
+      ...(anchorHeading !== undefined ? { anchorHeading } : {})
+    });
 
     const result = await (server as any)._registeredTools.add_comment.handler(args);
 
@@ -170,8 +174,10 @@ describe('MCP Full Tool Catalog & Prompt Injection Guardrails Suite', () => {
     ['omitted', undefined], ['empty', ''], ['text', '  Publisher notes\n'], ['limit', 'n'.repeat(2000)],
   ])('publish_post forwards %s notes unchanged without changing its receipt', async (_case, notes) => {
     vi.mocked(mockApiClient.publishPost).mockClear();
-    const server = createMcpServer({ gatewayClient: mockGatewayClient, apiClient: mockApiClient,
-      agentScopes: ['post:publish'], logger });
+    const server = createMcpServer({
+      gatewayClient: mockGatewayClient, apiClient: mockApiClient,
+      agentScopes: ['post:publish'], logger
+    });
     const args = McpPublishPostInputSchema.parse({ postId: 'post-1', ...(notes !== undefined ? { notes } : {}) });
 
     const result = await (server as any)._registeredTools.publish_post.handler(args);

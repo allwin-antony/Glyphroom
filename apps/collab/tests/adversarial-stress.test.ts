@@ -868,7 +868,7 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
         expect(res.status).toBe(200);
         const body: any = await res.json();
         expect(body.status).toBe('healthy');
-        expect(body.service).toBe('enterprise-blogger-collab');
+        expect(body.service).toBe('glyphroom-collab');
         expect(body.checks.database).toContain('in-memory');
         expect(body.checks.hocuspocus).toContain('active');
         return duration;
@@ -893,7 +893,7 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
           }
           return { rows: [] };
         },
-        end: async () => {},
+        end: async () => { },
       };
 
       const failingAdapter = new PostgresPersistenceAdapter({ pool: mockPool });
@@ -990,7 +990,7 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
     it('safely handles unicode, emoji, and path-like characters in document names', async () => {
       const { adapter } = setupPgMem();
       try {
-        const unicodeDocName = 'post-🚀-Enterprise-Blogger-深度测试-2026/04/17';
+        const unicodeDocName = 'post-🚀-glyphroom-深度测试-2026/04/17';
         const doc = new Y.Doc();
         doc.getText('content').insert(0, 'Unicode binary payload');
         const state = Y.encodeStateAsUpdate(doc);

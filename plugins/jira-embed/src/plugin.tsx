@@ -1,5 +1,5 @@
 import React from 'react';
-import type { PluginManifest } from '@enterprise-blogger/shared';
+import type { PluginManifest } from '@glyphroom/shared';
 import { JiraIssueNode } from './jira-node.js';
 
 export const jiraEmbedManifest: PluginManifest = {

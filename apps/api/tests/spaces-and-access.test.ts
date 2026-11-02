@@ -91,7 +91,7 @@ describe('Spaces, Access Model & MCP Bearer PAT Integration Suite', () => {
       issuedAt: Math.floor(Date.now() / 1000),
       expiresAt: Math.floor(Date.now() / 1000) + 86400,
     };
-    const secret = process.env.SESSION_SECRET || 'enterprise-blogger-session-secret-key-32b-min';
+    const secret = process.env.SESSION_SECRET || 'glyphroom-session-secret-key-32b-min';
     const encoded = Buffer.from(JSON.stringify(payload)).toString('base64url');
     const signature = crypto.createHmac('sha256', secret).update(encoded).digest('base64url');
     const token = `${encoded}.${signature}`;

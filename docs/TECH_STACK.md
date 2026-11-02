@@ -1,4 +1,4 @@
-# Enterprise Blogger 2.0 — Technology Stack
+# Glyphroom — Technology Stack
 
 > **Rev 3** | See [README.md](README.md) for the full document index.
 
@@ -16,7 +16,7 @@ Every choice below is justified by one of three criteria:
 ## Project Layout (pnpm Monorepo)
 
 ```
-Enterprise_Blogger/
+Glyphroom/
 ├── apps/
 │   ├── web/          # Vite + React 19 SPA (TipTap editor, catalog UI)
 │   ├── api/          # Fastify REST API (auth, search, reviews, admin)

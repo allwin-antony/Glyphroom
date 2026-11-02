@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import type { Connection, Document, Server } from '@hocuspocus/server';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { DocumentIdSchema, exportDerivedMarkdown, getDocumentFragment } from '@enterprise-blogger/shared';
+import { DocumentIdSchema, exportDerivedMarkdown, getDocumentFragment } from '@glyphroom/shared';
 import type { DocumentPersistenceAdapter } from './persistence/adapter.js';
 
 export class DocumentLifecycleError extends Error {
@@ -94,7 +94,7 @@ export class DocumentLifecycle {
   constructor(
     private readonly getServer: () => Server | null,
     private readonly adapter: DocumentPersistenceAdapter,
-  ) {}
+  ) { }
 
   private gate(name: string): Gate {
     let gate = this.gates.get(name);

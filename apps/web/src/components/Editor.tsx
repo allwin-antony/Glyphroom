@@ -26,7 +26,7 @@ import { SuggestionActionMenu, type ActiveSuggestionInfo } from './SuggestionAct
 import { SuggestionSidebar } from './SuggestionSidebar.js';
 import { SlashMenu } from './editor/SlashMenu.js';
 import { TemplatePickerDialog } from './editor/TemplatePickerDialog.js';
-import { acceptSuggestion, rejectSuggestion } from '@enterprise-blogger/shared';
+import { acceptSuggestion, rejectSuggestion } from '@glyphroom/shared';
 import { api } from '../lib/api.js';
 import { ReaderPreview } from './ReaderPreview.js';
 import {
@@ -413,9 +413,8 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     ],
     editorProps: {
       attributes: {
-        class: `enterprise-editor-content w-full focus:outline-none ${
-          viewMode === 'block' ? 'enterprise-block-mode' : ''
-        }`,
+        class: `enterprise-editor-content w-full focus:outline-none ${viewMode === 'block' ? 'enterprise-block-mode' : ''
+          }`,
       },
       handleKeyDown: (view, event) => {
         // Mod-/ : Keyboard shortcut to open Slash Menu (Bug #18)
@@ -1042,7 +1041,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     }
   };
 
-  // Suggestion Acceptance Lifecycle using genuine @enterprise-blogger/shared lifecycle
+  // Suggestion Acceptance Lifecycle using genuine @glyphroom/shared lifecycle
   const handleAccept = (sug: ActiveSuggestionInfo) => {
     if (!editor) return;
     try {
@@ -1068,7 +1067,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     scanSuggestions(editor);
   };
 
-  // Suggestion Rejection Lifecycle using genuine @enterprise-blogger/shared lifecycle
+  // Suggestion Rejection Lifecycle using genuine @glyphroom/shared lifecycle
   const handleReject = (sug: ActiveSuggestionInfo) => {
     if (!editor) return;
     try {
@@ -1182,11 +1181,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas mr-1">
           <button
             onClick={() => handleToggleViewMode('document')}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
-              viewMode === 'document'
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${viewMode === 'document'
                 ? 'bg-elevated text-foreground shadow-xs'
                 : 'text-text-muted hover:text-foreground'
-            }`}
+              }`}
             title="Document View (Continuous prose)"
           >
             <FileText size={11} />
@@ -1194,11 +1192,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           </button>
           <button
             onClick={() => handleToggleViewMode('block')}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
-              viewMode === 'block'
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${viewMode === 'block'
                 ? 'bg-elevated text-accent shadow-xs'
                 : 'text-text-muted hover:text-foreground'
-            }`}
+              }`}
             title="Block View (Discrete foldable section cards)"
           >
             <Layers size={11} />
@@ -1206,11 +1203,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           </button>
           <button
             onClick={() => handleToggleViewMode('preview')}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
-              viewMode === 'preview'
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${viewMode === 'preview'
                 ? 'bg-accent text-white shadow-xs'
                 : 'text-text-muted hover:text-foreground'
-            }`}
+              }`}
             title="Reader Preview (Live rendered markdown, diagrams & math)"
           >
             <Eye size={11} />
@@ -1236,284 +1232,269 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           <>
             <span className="text-border mx-0.5">|</span>
 
-        {/* Text styling */}
-        {/* Undo & Redo History Triggers */}
-        <button
-          onClick={() => {
-            editor.commands.undo();
-            editor.commands.focus();
-          }}
-          disabled={!editor.can().undo()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            !editor.can().undo()
-              ? 'border-border/40 bg-surface/40 text-text-muted/40 cursor-not-allowed'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Undo (Ctrl+Z)"
-        >
-          <RotateCcw size={13} />
-        </button>
-        <button
-          onClick={() => {
-            editor.commands.redo();
-            editor.commands.focus();
-          }}
-          disabled={!editor.can().redo()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            !editor.can().redo()
-              ? 'border-border/40 bg-surface/40 text-text-muted/40 cursor-not-allowed'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
-        >
-          <RotateCw size={13} />
-        </button>
-
-        <span className="text-border mx-0.5">|</span>
-
-        <button
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('bold')
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Bold (Ctrl+B)"
-        >
-          <Bold size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('italic')
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Italic (Ctrl+I)"
-        >
-          <Italic size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('code')
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Inline Code"
-        >
-          <Code size={13} />
-        </button>
-
-        <span className="text-border mx-0.5">|</span>
-
-        {/* Headings */}
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('heading', { level: 1 })
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Heading 1"
-        >
-          <Heading1 size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('heading', { level: 2 })
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Heading 2"
-        >
-          <Heading2 size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('heading', { level: 3 })
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Heading 3"
-        >
-          <Heading3 size={13} />
-        </button>
-
-        <span className="text-border mx-0.5">|</span>
-
-        {/* Text Alignment */}
-        <button
-          onClick={() => editor.chain().focus().setTextAlign('left').run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive({ textAlign: 'left' })
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Align Left"
-        >
-          <AlignLeft size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().setTextAlign('center').run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive({ textAlign: 'center' })
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Align Center"
-        >
-          <AlignCenter size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().setTextAlign('right').run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive({ textAlign: 'right' })
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Align Right"
-        >
-          <AlignRight size={13} />
-        </button>
-
-        <span className="text-border mx-0.5">|</span>
-
-        {/* Lists & Checklists */}
-        <button
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('bulletList')
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Bullet List"
-        >
-          <List size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('orderedList')
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Numbered List"
-        >
-          <ListOrdered size={13} />
-        </button>
-
-        <button
-          onClick={() => editor.chain().focus().toggleTaskList().run()}
-          className={`p-1.5 rounded-lg border transition-colors ${
-            editor.isActive('taskList')
-              ? 'bg-accent-bg text-accent border-accent/30'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title="Interactive Task Checklist"
-        >
-          <CheckSquare size={13} />
-        </button>
-
-        <span className="text-border mx-0.5">|</span>
-
-        {/* Tables & Structured Blocks */}
-        <button
-          onClick={() =>
-            isTableActive
-              ? editor.chain().focus().deleteTable().run()
-              : editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
-          }
-          className={`p-1.5 rounded-lg border transition-colors ${
-            isTableActive
-              ? 'bg-accent-bg text-accent border-accent/30 font-semibold'
-              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
-          }`}
-          title={isTableActive ? 'Delete Table' : 'Insert 3x3 Table'}
-        >
-          <TableIcon size={13} />
-        </button>
-
-        {isTableActive && (
-          <div className="flex items-center gap-0.5 bg-canvas px-1.5 py-0.5 rounded-lg border border-border">
+            {/* Text styling */}
+            {/* Undo & Redo History Triggers */}
             <button
-              onClick={() => editor.chain().focus().addRowAfter().run()}
-              className="p-1 rounded text-text-secondary hover:text-foreground hover:bg-elevated text-[10px] flex items-center gap-0.5"
-              title="Add Row Below"
+              onClick={() => {
+                editor.commands.undo();
+                editor.commands.focus();
+              }}
+              disabled={!editor.can().undo()}
+              className={`p-1.5 rounded-lg border transition-colors ${!editor.can().undo()
+                  ? 'border-border/40 bg-surface/40 text-text-muted/40 cursor-not-allowed'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Undo (Ctrl+Z)"
             >
-              <Rows size={11} />
-              <span>+Row</span>
+              <RotateCcw size={13} />
             </button>
             <button
-              onClick={() => editor.chain().focus().addColumnAfter().run()}
-              className="p-1 rounded text-text-secondary hover:text-foreground hover:bg-elevated text-[10px] flex items-center gap-0.5"
-              title="Add Column Right"
+              onClick={() => {
+                editor.commands.redo();
+                editor.commands.focus();
+              }}
+              disabled={!editor.can().redo()}
+              className={`p-1.5 rounded-lg border transition-colors ${!editor.can().redo()
+                  ? 'border-border/40 bg-surface/40 text-text-muted/40 cursor-not-allowed'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
             >
-              <Columns size={11} />
-              <span>+Col</span>
+              <RotateCw size={13} />
             </button>
+
+            <span className="text-border mx-0.5">|</span>
+
             <button
-              onClick={() => editor.chain().focus().deleteRow().run()}
-              className="p-1 rounded text-status-danger hover:bg-status-danger/10 text-[10px]"
-              title="Delete Current Row"
+              onClick={() => editor.chain().focus().toggleBold().run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('bold')
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Bold (Ctrl+B)"
             >
-              -Row
+              <Bold size={13} />
             </button>
+
             <button
-              onClick={() => editor.chain().focus().deleteColumn().run()}
-              className="p-1 rounded text-status-danger hover:bg-status-danger/10 text-[10px]"
-              title="Delete Current Column"
+              onClick={() => editor.chain().focus().toggleItalic().run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('italic')
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Italic (Ctrl+I)"
             >
-              -Col
+              <Italic size={13} />
             </button>
-          </div>
-        )}
 
-        {/* Status Pulse */}
-        <button
-          onClick={() => editor.chain().focus().insertContent({ type: 'projectStatusBlock' }).run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
-          title="Insert Project Status & Health Pulse"
-        >
-          <Flag size={13} />
-        </button>
+            <button
+              onClick={() => editor.chain().focus().toggleCode().run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('code')
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Inline Code"
+            >
+              <Code size={13} />
+            </button>
 
-        {/* Mermaid Diagram */}
-        <button
-          onClick={() => editor.chain().focus().insertContent({ type: 'mermaidBlock' }).run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
-          title="Insert Mermaid Architecture Diagram"
-        >
-          <GitGraph size={13} />
-        </button>
+            <span className="text-border mx-0.5">|</span>
 
-        {/* KaTeX Math */}
-        <button
-          onClick={() => editor.chain().focus().insertContent({ type: 'mathBlock' }).run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
-          title="Insert KaTeX Math Formula"
-        >
-          <Sigma size={13} />
-        </button>
+            {/* Headings */}
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 1 }).run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('heading', { level: 1 })
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Heading 1"
+            >
+              <Heading1 size={13} />
+            </button>
 
-        {/* File & Image Attachment */}
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={isUploading}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors disabled:opacity-50"
-          title="Attach Image or File (Max 25MB)"
-        >
-          {isUploading ? <Loader2 size={13} className="animate-spin text-accent" /> : <Paperclip size={13} />}
-        </button>
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 2 }).run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('heading', { level: 2 })
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Heading 2"
+            >
+              <Heading2 size={13} />
+            </button>
+
+            <button
+              onClick={() => editor.chain().focus().toggleHeading({ level: 3 }).run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('heading', { level: 3 })
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Heading 3"
+            >
+              <Heading3 size={13} />
+            </button>
+
+            <span className="text-border mx-0.5">|</span>
+
+            {/* Text Alignment */}
+            <button
+              onClick={() => editor.chain().focus().setTextAlign('left').run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive({ textAlign: 'left' })
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Align Left"
+            >
+              <AlignLeft size={13} />
+            </button>
+
+            <button
+              onClick={() => editor.chain().focus().setTextAlign('center').run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive({ textAlign: 'center' })
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Align Center"
+            >
+              <AlignCenter size={13} />
+            </button>
+
+            <button
+              onClick={() => editor.chain().focus().setTextAlign('right').run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive({ textAlign: 'right' })
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Align Right"
+            >
+              <AlignRight size={13} />
+            </button>
+
+            <span className="text-border mx-0.5">|</span>
+
+            {/* Lists & Checklists */}
+            <button
+              onClick={() => editor.chain().focus().toggleBulletList().run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('bulletList')
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Bullet List"
+            >
+              <List size={13} />
+            </button>
+
+            <button
+              onClick={() => editor.chain().focus().toggleOrderedList().run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('orderedList')
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Numbered List"
+            >
+              <ListOrdered size={13} />
+            </button>
+
+            <button
+              onClick={() => editor.chain().focus().toggleTaskList().run()}
+              className={`p-1.5 rounded-lg border transition-colors ${editor.isActive('taskList')
+                  ? 'bg-accent-bg text-accent border-accent/30'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title="Interactive Task Checklist"
+            >
+              <CheckSquare size={13} />
+            </button>
+
+            <span className="text-border mx-0.5">|</span>
+
+            {/* Tables & Structured Blocks */}
+            <button
+              onClick={() =>
+                isTableActive
+                  ? editor.chain().focus().deleteTable().run()
+                  : editor.chain().focus().insertTable({ rows: 3, cols: 3, withHeaderRow: true }).run()
+              }
+              className={`p-1.5 rounded-lg border transition-colors ${isTableActive
+                  ? 'bg-accent-bg text-accent border-accent/30 font-semibold'
+                  : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+                }`}
+              title={isTableActive ? 'Delete Table' : 'Insert 3x3 Table'}
+            >
+              <TableIcon size={13} />
+            </button>
+
+            {isTableActive && (
+              <div className="flex items-center gap-0.5 bg-canvas px-1.5 py-0.5 rounded-lg border border-border">
+                <button
+                  onClick={() => editor.chain().focus().addRowAfter().run()}
+                  className="p-1 rounded text-text-secondary hover:text-foreground hover:bg-elevated text-[10px] flex items-center gap-0.5"
+                  title="Add Row Below"
+                >
+                  <Rows size={11} />
+                  <span>+Row</span>
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().addColumnAfter().run()}
+                  className="p-1 rounded text-text-secondary hover:text-foreground hover:bg-elevated text-[10px] flex items-center gap-0.5"
+                  title="Add Column Right"
+                >
+                  <Columns size={11} />
+                  <span>+Col</span>
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().deleteRow().run()}
+                  className="p-1 rounded text-status-danger hover:bg-status-danger/10 text-[10px]"
+                  title="Delete Current Row"
+                >
+                  -Row
+                </button>
+                <button
+                  onClick={() => editor.chain().focus().deleteColumn().run()}
+                  className="p-1 rounded text-status-danger hover:bg-status-danger/10 text-[10px]"
+                  title="Delete Current Column"
+                >
+                  -Col
+                </button>
+              </div>
+            )}
+
+            {/* Status Pulse */}
+            <button
+              onClick={() => editor.chain().focus().insertContent({ type: 'projectStatusBlock' }).run()}
+              className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+              title="Insert Project Status & Health Pulse"
+            >
+              <Flag size={13} />
+            </button>
+
+            {/* Mermaid Diagram */}
+            <button
+              onClick={() => editor.chain().focus().insertContent({ type: 'mermaidBlock' }).run()}
+              className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+              title="Insert Mermaid Architecture Diagram"
+            >
+              <GitGraph size={13} />
+            </button>
+
+            {/* KaTeX Math */}
+            <button
+              onClick={() => editor.chain().focus().insertContent({ type: 'mathBlock' }).run()}
+              className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+              title="Insert KaTeX Math Formula"
+            >
+              <Sigma size={13} />
+            </button>
+
+            {/* File & Image Attachment */}
+            <button
+              onClick={() => fileInputRef.current?.click()}
+              disabled={isUploading}
+              className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors disabled:opacity-50"
+              title="Attach Image or File (Max 25MB)"
+            >
+              {isUploading ? <Loader2 size={13} className="animate-spin text-accent" /> : <Paperclip size={13} />}
+            </button>
           </>
         )}
 
@@ -1656,162 +1637,161 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           ) : (
             <div
               ref={editorWrapperRef}
-              className={`w-full max-w-[820px] transition-all my-2 relative ${
-                viewMode === 'block'
+              className={`w-full max-w-[820px] transition-all my-2 relative ${viewMode === 'block'
                   ? 'enterprise-block-mode pb-12'
                   : 'min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40'
-              }`}
+                }`}
             >
               {/* Active Cell Floating Action Pill (Directly on the active cell in Block View) */}
-            {viewMode === 'block' && floatingCellPos && currentBlockInfo && (
-              <div
-                style={{
-                  position: 'absolute',
-                  top: `${floatingCellPos.top}px`,
-                  right: `${floatingCellPos.right}px`,
-                }}
-                className="z-20 flex items-center gap-1 px-2 py-1 rounded-lg bg-surface/95 border border-border shadow-md backdrop-blur-xs select-none transition-all animate-fadeIn"
-              >
-                <span className="text-[10px] font-mono text-text-muted px-1">
-                  {currentBlockInfo.type}
-                </span>
-                <span className="text-border">|</span>
-                <button
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleMoveBlock('up')}
-                  disabled={currentBlockInfo.index <= 1}
-                  className="p-1 rounded hover:bg-canvas text-text-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                  title="Move Cell Up (▲)"
+              {viewMode === 'block' && floatingCellPos && currentBlockInfo && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: `${floatingCellPos.top}px`,
+                    right: `${floatingCellPos.right}px`,
+                  }}
+                  className="z-20 flex items-center gap-1 px-2 py-1 rounded-lg bg-surface/95 border border-border shadow-md backdrop-blur-xs select-none transition-all animate-fadeIn"
                 >
-                  <ChevronUp size={12} />
-                </button>
-                <button
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleMoveBlock('down')}
-                  disabled={currentBlockInfo.index >= currentBlockInfo.total}
-                  className="p-1 rounded hover:bg-canvas text-text-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
-                  title="Move Cell Down (▼)"
-                >
-                  <ChevronDown size={12} />
-                </button>
-                <span className="text-border">|</span>
-                <button
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleInsertCardBelow('paragraph')}
-                  className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-canvas text-accent text-[11px] font-medium transition-colors"
-                  title="Insert New Card Below (Shift+Enter)"
-                >
-                  <Plus size={11} />
-                  <span>+ Below</span>
-                </button>
-                <span className="text-border">|</span>
-                <button
-                  onMouseDown={(e) => e.preventDefault()}
-                  onClick={() => handleDeleteCardAtIndex()}
-                  className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-status-danger/10 text-status-danger text-[11px] font-semibold transition-colors"
-                  title="Delete This Cell"
-                >
-                  <Trash2 size={11} />
-                  <span>Delete</span>
-                </button>
-              </div>
-            )}
-
-            <EditorContent editor={editor} className="w-full max-w-full" />
-
-            {/* In Block View: Notebook-style "+ Add Cell" dock at the bottom of cards */}
-            {viewMode === 'block' && (
-              <div className="mt-8 pt-4 border-t border-border flex flex-col items-center gap-2 select-none">
-                <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
-                  + Add Section Card
-                </div>
-                <div className="flex flex-wrap items-center justify-center gap-1.5 p-2 rounded-xl border border-dashed border-border/80 bg-canvas/40 shadow-2xs">
+                  <span className="text-[10px] font-mono text-text-muted px-1">
+                    {currentBlockInfo.type}
+                  </span>
+                  <span className="text-border">|</span>
                   <button
-                    type="button"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleMoveBlock('up')}
+                    disabled={currentBlockInfo.index <= 1}
+                    className="p-1 rounded hover:bg-canvas text-text-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Move Cell Up (▲)"
+                  >
+                    <ChevronUp size={12} />
+                  </button>
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleMoveBlock('down')}
+                    disabled={currentBlockInfo.index >= currentBlockInfo.total}
+                    className="p-1 rounded hover:bg-canvas text-text-muted hover:text-foreground disabled:opacity-30 disabled:pointer-events-none transition-colors"
+                    title="Move Cell Down (▼)"
+                  >
+                    <ChevronDown size={12} />
+                  </button>
+                  <span className="text-border">|</span>
+                  <button
+                    onMouseDown={(e) => e.preventDefault()}
                     onClick={() => handleInsertCardBelow('paragraph')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Text / Markdown Card"
+                    className="flex items-center gap-0.5 px-1.5 py-0.5 rounded hover:bg-canvas text-accent text-[11px] font-medium transition-colors"
+                    title="Insert New Card Below (Shift+Enter)"
                   >
-                    <FileText size={12} className="text-text-muted" />
-                    <span>+ Text</span>
+                    <Plus size={11} />
+                    <span>+ Below</span>
                   </button>
+                  <span className="text-border">|</span>
                   <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('codeBlock')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Code Cell"
+                    onMouseDown={(e) => e.preventDefault()}
+                    onClick={() => handleDeleteCardAtIndex()}
+                    className="flex items-center gap-1 px-1.5 py-0.5 rounded hover:bg-status-danger/10 text-status-danger text-[11px] font-semibold transition-colors"
+                    title="Delete This Cell"
                   >
-                    <Code size={12} className="text-accent" />
-                    <span>+ Code</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('heading')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Major Block Title (H1)"
-                  >
-                    <Heading1 size={12} className="text-accent" />
-                    <span>+ Block Title (H1)</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('table')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Table Matrix Card"
-                  >
-                    <TableIcon size={12} className="text-accent" />
-                    <span>+ Table</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('mermaidBlock')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Architecture Diagram Card"
-                  >
-                    <GitGraph size={12} className="text-accent" />
-                    <span>+ Diagram</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('projectStatusBlock')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Health & Milestone Pulse Card"
-                  >
-                    <Flag size={12} className="text-success" />
-                    <span>+ Status</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('taskList')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Task Checklist Card"
-                  >
-                    <CheckSquare size={12} className="text-success" />
-                    <span>+ Tasks</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('mathBlock')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Math / KaTeX Formula Card"
-                  >
-                    <Sigma size={12} className="text-accent" />
-                    <span>+ Math</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleInsertCardBelow('alert')}
-                    className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
-                    title="Add Callout Alert Card"
-                  >
-                    <AlertCircle size={12} className="text-status-warning" />
-                    <span>+ Callout</span>
+                    <Trash2 size={11} />
+                    <span>Delete</span>
                   </button>
                 </div>
-              </div>
-            )}
-          </div>
-        )}
+              )}
+
+              <EditorContent editor={editor} className="w-full max-w-full" />
+
+              {/* In Block View: Notebook-style "+ Add Cell" dock at the bottom of cards */}
+              {viewMode === 'block' && (
+                <div className="mt-8 pt-4 border-t border-border flex flex-col items-center gap-2 select-none">
+                  <div className="text-[10px] font-semibold text-text-muted uppercase tracking-wider">
+                    + Add Section Card
+                  </div>
+                  <div className="flex flex-wrap items-center justify-center gap-1.5 p-2 rounded-xl border border-dashed border-border/80 bg-canvas/40 shadow-2xs">
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('paragraph')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Text / Markdown Card"
+                    >
+                      <FileText size={12} className="text-text-muted" />
+                      <span>+ Text</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('codeBlock')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Code Cell"
+                    >
+                      <Code size={12} className="text-accent" />
+                      <span>+ Code</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('heading')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Major Block Title (H1)"
+                    >
+                      <Heading1 size={12} className="text-accent" />
+                      <span>+ Block Title (H1)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('table')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Table Matrix Card"
+                    >
+                      <TableIcon size={12} className="text-accent" />
+                      <span>+ Table</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('mermaidBlock')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Architecture Diagram Card"
+                    >
+                      <GitGraph size={12} className="text-accent" />
+                      <span>+ Diagram</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('projectStatusBlock')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Health & Milestone Pulse Card"
+                    >
+                      <Flag size={12} className="text-success" />
+                      <span>+ Status</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('taskList')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Task Checklist Card"
+                    >
+                      <CheckSquare size={12} className="text-success" />
+                      <span>+ Tasks</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('mathBlock')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Math / KaTeX Formula Card"
+                    >
+                      <Sigma size={12} className="text-accent" />
+                      <span>+ Math</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleInsertCardBelow('alert')}
+                      className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-foreground hover:bg-canvas border border-transparent hover:border-border transition-colors"
+                      title="Add Callout Alert Card"
+                    >
+                      <AlertCircle size={12} className="text-status-warning" />
+                      <span>+ Callout</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {!hideSidebar && (

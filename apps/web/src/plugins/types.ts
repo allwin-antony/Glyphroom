@@ -3,7 +3,7 @@ import type { AnyExtension, Editor } from '@tiptap/core';
 import type {
   PluginManifest,
   UiSlotIdentifier,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 export interface UiSlotContext {
   postId?: string;

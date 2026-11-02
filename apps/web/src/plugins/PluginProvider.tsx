@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useMemo } from 'react';
 import type { AnyExtension } from '@tiptap/core';
-import type { UiSlotIdentifier } from '@enterprise-blogger/shared';
+import type { UiSlotIdentifier } from '@glyphroom/shared';
 import { WebPluginRegistry, defaultWebRegistry } from './registry.js';
 import type { UiSlotContribution, WebPluginSlashCommand } from './types.js';
 

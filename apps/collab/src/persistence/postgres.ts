@@ -1,7 +1,7 @@
 import pg from 'pg';
 import type * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+import { exportDerivedMarkdown } from '@glyphroom/shared';
 import type { DocumentPersistenceAdapter } from './adapter.js';
 import { randomUUID } from 'node:crypto';
 
@@ -42,7 +42,7 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
         connectionString:
           options.connectionString ||
           process.env.DATABASE_URL ||
-          'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/enterprise_blogger',
+          'postgres://blogger:REPLACE_WITH_STRONG_PASSWORD_IN_PROD@localhost:5432/glyphroom',
         max: 20,
         idleTimeoutMillis: 10000,
         connectionTimeoutMillis: 5000,
@@ -102,7 +102,7 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
     const fragmentName = doc?.share.has('prosemirror') ? 'prosemirror' : doc?.share.has('default') ? 'default' : 'prosemirror';
     const workingMarkdown = doc ? exportDerivedMarkdown(yDocToProsemirrorJSON(doc, fragmentName) as any) : null;
     const bytes = new Uint8Array(state);
-    const store = previous.catch(() => {}).then(() => this.storeState(documentName, bytes, workingMarkdown));
+    const store = previous.catch(() => { }).then(() => this.storeState(documentName, bytes, workingMarkdown));
     this.pendingStores.set(id, store);
     try {
       await store;

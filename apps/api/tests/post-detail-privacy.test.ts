@@ -5,7 +5,7 @@ import { eq, sql } from 'drizzle-orm';
 import { DataType } from 'pg-mem';
 import * as Y from 'yjs';
 import { initProseMirrorDoc, prosemirrorJSONToYDoc, relativePositionToAbsolutePosition } from 'y-prosemirror';
-import { blogSchema, exportDerivedMarkdown, type ProseMirrorNodeJSON } from '@enterprise-blogger/shared';
+import { blogSchema, exportDerivedMarkdown, type ProseMirrorNodeJSON } from '@glyphroom/shared';
 import { createInMemoryDatabase } from './helpers/test-db.js';
 import { createApiApp } from '../src/app.js';
 import { AuthService } from '../src/services/auth.js';
@@ -79,8 +79,10 @@ describe('post detail content-grant privacy', () => {
     const memory = createInMemoryDatabase();
     db = memory.db;
     pool = memory.pool;
-    memory.pgMem.public.registerFunction({ name: 'decode', args: [DataType.text, DataType.text],
-      returns: DataType.bytea, implementation: (value: string) => Buffer.from(value, 'hex') });
+    memory.pgMem.public.registerFunction({
+      name: 'decode', args: [DataType.text, DataType.text],
+      returns: DataType.bytea, implementation: (value: string) => Buffer.from(value, 'hex')
+    });
     const passwordHash = await bcrypt.hash(PASSWORD, 10);
     await db.insert(users).values(Object.entries(roles).map(([name, role]) => ({
       id: ids[name as Caller], email: `${name.toLowerCase()}@detail.example.com`, fullName: name,
@@ -105,18 +107,24 @@ describe('post detail content-grant privacy', () => {
 
   async function read(post: { id: string; slug: string }, caller?: Caller, slug = false) {
     if (caller && !cookies.has(caller)) {
-      const login = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: {
-        email: `${caller.toLowerCase()}@detail.example.com`, password: PASSWORD,
-      } });
+      const login = await app.inject({
+        method: 'POST', url: '/api/v1/auth/login', payload: {
+          email: `${caller.toLowerCase()}@detail.example.com`, password: PASSWORD,
+        }
+      });
       expect(login.statusCode).toBe(200);
       cookies.set(caller, login.cookies.map((cookie) => `${cookie.name}=${cookie.value}`).join('; '));
       csrfTokens.set(caller, new AuthService(db, 'detail-privacy-session-secret-32-characters')
         .generateCsrfToken(login.cookies.find((cookie) => cookie.name === 'blogger_session')!.value));
     }
-    const response = await app.inject({ method: 'GET', url: `/api/v1/posts/${slug ? post.slug : post.id}`,
-      headers: caller ? { cookie: cookies.get(caller)! } : undefined });
-    const exported = await app.inject({ method: 'GET', url: `/api/v1/posts/${slug ? post.slug : post.id}/export-markdown`,
-      headers: caller ? { cookie: cookies.get(caller)! } : undefined });
+    const response = await app.inject({
+      method: 'GET', url: `/api/v1/posts/${slug ? post.slug : post.id}`,
+      headers: caller ? { cookie: cookies.get(caller)! } : undefined
+    });
+    const exported = await app.inject({
+      method: 'GET', url: `/api/v1/posts/${slug ? post.slug : post.id}/export-markdown`,
+      headers: caller ? { cookie: cookies.get(caller)! } : undefined
+    });
     expect(exported.statusCode, `export parity for ${caller ?? 'anonymous'}`).toBe(response.statusCode);
     if (response.statusCode === 200) {
       expect(exported.body).toBe(response.json().post.derivedMarkdown);
@@ -160,20 +168,26 @@ describe('post detail content-grant privacy', () => {
     const published = headingState([heading('Published Heading')]);
     const { post, version } = await fixture({ yjsState: working.bytes, publishedMarkdown: published.markdown }, submitted.markdown);
     await db.update(postVersions).set({ yjsStateSnapshot: bytea(submitted.bytes) }).where(eq(postVersions.id, version.id));
-    const [publication] = await db.insert(postVersions).values({ postId: post.id, versionNumber: 2,
+    const [publication] = await db.insert(postVersions).values({
+      postId: post.id, versionNumber: 2,
       triggerReason: 'publication', yjsStateSnapshot: bytea(published.bytes), markdownSnapshot: published.markdown,
-      createdBy: ids.author }).returning();
+      createdBy: ids.author
+    }).returning();
     const latest = headingState([heading('Latest Must Not Win')]);
-    await db.insert(postVersions).values({ postId: post.id, versionNumber: 3, triggerReason: 'manual_save',
-      yjsStateSnapshot: bytea(latest.bytes), markdownSnapshot: latest.markdown, createdBy: ids.author });
+    await db.insert(postVersions).values({
+      postId: post.id, versionNumber: 3, triggerReason: 'manual_save',
+      yjsStateSnapshot: bytea(latest.bytes), markdownSnapshot: latest.markdown, createdBy: ids.author
+    });
     await db.update(posts).set({ publishedVersionId: publication.id }).where(eq(posts.id, post.id));
     return { post, version, publication, working, submitted, published };
   }
 
   async function createComment(post: { id: string; slug: string }, payload: Record<string, unknown>, caller: Caller = 'author') {
     if (!cookies.has(caller)) await read(post, caller);
-    return app.inject({ method: 'POST', url: `/api/v1/posts/${post.id}/comments`,
-      headers: { cookie: cookies.get(caller)!, 'x-csrf-token': csrfTokens.get(caller)! }, payload });
+    return app.inject({
+      method: 'POST', url: `/api/v1/posts/${post.id}/comments`,
+      headers: { cookie: cookies.get(caller)!, 'x-csrf-token': csrfTokens.get(caller)! }, payload
+    });
   }
 
   it('saves UI-decodable heading anchors on roots and valid replies, retaining causal positions after preceding insertions', async () => {
@@ -181,8 +195,10 @@ describe('post detail content-grant privacy', () => {
     const parentResponse = await createComment(target.post, { content: 'Unanchored parent' });
     expect(parentResponse.statusCode).toBe(201);
     const parent = parentResponse.json().comment;
-    const rootResponse = await createComment(target.post, { content: 'Root', anchorHeading: ' **WORKING Heading** ',
-      yjsAnchorStart: null, yjsAnchorEnd: null });
+    const rootResponse = await createComment(target.post, {
+      content: 'Root', anchorHeading: ' **WORKING Heading** ',
+      yjsAnchorStart: null, yjsAnchorEnd: null
+    });
     const replyResponse = await createComment(target.post, { content: 'Reply', parentId: parent.id, anchorHeading: 'Working Heading' });
     expect(rootResponse.statusCode, rootResponse.body).toBe(201);
     expect(replyResponse.statusCode, replyResponse.body).toBe(201);
@@ -240,14 +256,20 @@ describe('post detail content-grant privacy', () => {
   });
 
   it('matches clean labels without hidden suggestions, quoted collisions or fenced-heading existence oracles', async () => {
-    const pending = (text: string): ProseMirrorNodeJSON => ({ type: 'text', text,
-      marks: [{ type: 'suggestion_insert', attrs: { status: 'pending' } }] });
+    const pending = (text: string): ProseMirrorNodeJSON => ({
+      type: 'text', text,
+      marks: [{ type: 'suggestion_insert', attrs: { status: 'pending' } }]
+    });
     const target = await anchorFixture([
       { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Visible' }, pending(' secret suffix')] },
       { type: 'heading', attrs: { level: 2 }, content: [pending('Visible')] },
       { type: 'heading', attrs: { level: 2 }, content: [pending('Hidden Pending')] },
-      { type: 'heading', attrs: { level: 2 }, content: [{ type: 'text', text: 'Hidden Accepted Deletion',
-        marks: [{ type: 'suggestion_delete', attrs: { status: 'accepted' } }] }] },
+      {
+        type: 'heading', attrs: { level: 2 }, content: [{
+          type: 'text', text: 'Hidden Accepted Deletion',
+          marks: [{ type: 'suggestion_delete', attrs: { status: 'accepted' } }]
+        }]
+      },
       { type: 'blockquote', content: [heading('Visible')] },
       { type: 'code_block', attrs: { language: 'markdown' }, content: [{ type: 'text', text: '## Hidden Fence' }] },
     ]);
@@ -409,8 +431,10 @@ describe('post detail content-grant privacy', () => {
       expect(response.json().post.derivedMarkdown).toBe(WORKING);
     }
     const otherId = randomUUID();
-    await db.insert(posts).values({ id: otherId, slug: `other-${otherId}`, title: 'Other', authorId: ids.author,
-      yjsState: bytea(state('OTHER_PRIVATE_BODY')), workingMarkdown: 'OTHER_PRIVATE_BODY' });
+    await db.insert(posts).values({
+      id: otherId, slug: `other-${otherId}`, title: 'Other', authorId: ids.author,
+      yjsState: bytea(state('OTHER_PRIVATE_BODY')), workingMarkdown: 'OTHER_PRIVATE_BODY'
+    });
     const denied = await read({ id: otherId, slug: `other-${otherId}` }, 'viewer');
     expect(denied.statusCode).toBe(403);
     expect(denied.body).not.toContain('OTHER_PRIVATE_BODY');
@@ -497,8 +521,10 @@ describe('post detail content-grant privacy', () => {
     const { post } = await fixture({ status: 'published', publishedMarkdown: null });
     expect((await read(post)).statusCode).toBe(409);
     expect((await read({ id: randomUUID(), slug: 'missing' })).statusCode).toBe(404);
-    const invalidCookie = await app.inject({ method: 'GET', url: `/api/v1/posts/${post.id}`,
-      headers: { cookie: 'blogger_session=invalid' } });
+    const invalidCookie = await app.inject({
+      method: 'GET', url: `/api/v1/posts/${post.id}`,
+      headers: { cookie: 'blogger_session=invalid' }
+    });
     expect(invalidCookie.statusCode).toBe(409); // Existing public auth plugin treats invalid sessions as anonymous.
     await read(post, 'viewer'); // Cache login before failing database provenance reads.
     const original = pool.query.bind(pool);

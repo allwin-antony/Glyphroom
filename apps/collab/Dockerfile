@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.4
-# Enterprise Blogger 2.0 — Collaboration Engine Dockerfile
+# Glyphroom — Collaboration Engine Dockerfile
 # Multi-stage build for pnpm monorepo (minimal Debian-slim, non-root user, dumb-init signal forwarding)
 
 FROM node:22-bookworm-slim AS base
@@ -31,9 +31,9 @@ FROM dependencies AS builder
 COPY packages/shared ./packages/shared
 COPY apps/collab ./apps/collab
 
-RUN pnpm --filter @enterprise-blogger/shared run build
-RUN pnpm --filter @enterprise-blogger/collab run build
-RUN pnpm --filter @enterprise-blogger/collab --prod deploy /app/deployed
+RUN pnpm --filter @glyphroom/shared run build
+RUN pnpm --filter @glyphroom/collab run build
+RUN pnpm --filter @glyphroom/collab --prod deploy /app/deployed
 
 FROM base AS runner
 
@@ -49,7 +49,7 @@ RUN groupadd -g 10001 blogger && \
     chown -R blogger:blogger /app
 
 COPY --from=builder --chown=blogger:blogger /app/deployed /app
-COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@enterprise-blogger/shared/dist
+COPY --from=builder --chown=blogger:blogger /app/packages/shared/dist /app/node_modules/@glyphroom/shared/dist
 
 EXPOSE 4000
 

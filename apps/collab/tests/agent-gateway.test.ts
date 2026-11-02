@@ -7,7 +7,7 @@ import {
   getDocumentFragment,
   type AgentGatewayEditRequest,
   type AgentGatewayEditResponse,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import { createCollabServer, type CollabServerInstance } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
 import { createHeadlessAgentClient } from '../src/gateway/awareness.js';

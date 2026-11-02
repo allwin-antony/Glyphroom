@@ -101,7 +101,7 @@ describe('Collab Server & Standard WS Transport Suite', () => {
 
     const body: any = await res.json();
     expect(body.status).toBe('healthy');
-    expect(body.service).toBe('enterprise-blogger-collab');
+    expect(body.service).toBe('glyphroom-collab');
     expect(body.uptime).toBeGreaterThanOrEqual(0);
     expect(body.checks).toBeDefined();
     expect(body.checks.database).toContain('in-memory');

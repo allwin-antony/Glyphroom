@@ -130,10 +130,10 @@ Domain lifecycle events (`post:created`, `post:submitted_for_review`, `post:revi
 
 Glyphroom ships with two reference plugins illustrating full-stack extension patterns:
 
-- **`@enterprise-blogger/plugin-slack-notifier` (`plugins/slack-notifier`):**
+- **`@glyphroom/plugin-slack-notifier` (`plugins/slack-notifier`):**
   - Subscribes to durable `post:created` and `post:published` outbox events.
   - Formats rich Slack Block Kit payloads and dispatches them to configured incoming webhooks with automatic retry resilience.
-- **`@enterprise-blogger/plugin-jira-embed` (`plugins/jira-embed`):**
+- **`@glyphroom/plugin-jira-embed` (`plugins/jira-embed`):**
   - Registers a custom TipTap node view rendering styled Jira issue status cards.
   - Adds a `/jira` slash command to the document editor with collision protection against core slash commands.
 
@@ -186,20 +186,20 @@ pnpm build
 pnpm typecheck
 
 # 5. Seed demo users and initial spaces
-pnpm --filter @enterprise-blogger/api tsx src/scripts/seed-test-users.ts
+pnpm --filter @glyphroom/api tsx src/scripts/seed-test-users.ts
 
 # 6. Start development servers
 # Terminal 1: Fastify REST API (Port 4001)
-pnpm --filter @enterprise-blogger/api run dev
+pnpm --filter @glyphroom/api run dev
 
 # Terminal 2: Collaborative CRDT Server (Port 4000)
-pnpm --filter @enterprise-blogger/collab run dev
+pnpm --filter @glyphroom/collab run dev
 
 # Terminal 3: Vite React Web UI (Port 3000)
-pnpm --filter @enterprise-blogger/web run dev
+pnpm --filter @glyphroom/web run dev
 
 # Terminal 4: HTTP MCP server (Port 5000)
-pnpm --filter @enterprise-blogger/mcp-server run dev
+pnpm --filter @glyphroom/mcp-server run dev
 ```
 
 Visit **[http://localhost:3000](http://localhost:3000)**.
@@ -214,7 +214,7 @@ The sign-in page at `/signin` includes **one-click autofill buttons** for rapid 
 
 | User | Email | System Role | Default Context |
 | :--- | :--- | :--- | :--- |
-| **Maya (Admin)** | `admin@enterprise-blogger.local` | System Admin | Global admin access, user/PAT directory, plugin diagnostics |
+| **Maya (Admin)** | `admin@glyphroom.local` | System Admin | Global admin access, user/PAT directory, plugin diagnostics |
 | **Arjun** | `arjun.maintainer@enterprise.internal` | Member | Owner / Maintainer of *Payments Revamp* |
 | **Priya** | `priya.sharma@enterprise.internal` | Member | Author in *Payments Revamp* |
 | **Rahul** | `rahul.viewer@enterprise.internal` | Member | Viewer in *Payments Revamp* |
@@ -330,14 +330,14 @@ Glyphroom enforces a rigorous multi-tier testing pipeline. All suites are green:
 
 | Package | Test Files | Passed | Status |
 |---|---|---|---|
-| [`@enterprise-blogger/shared`](./packages/shared) | 17 | 332 | **PASS** |
-| [`@enterprise-blogger/collab`](./apps/collab) | 9 | 156 | **PASS** |
-| [`@enterprise-blogger/mcp-server`](./apps/mcp-server) | 9 | 72 | **PASS** |
-| [`@enterprise-blogger/web`](./apps/web) | 30 | 210 | **PASS** |
-| [`@enterprise-blogger/plugin-jira-embed`](./plugins/jira-embed) | 1 | 4 | **PASS** |
-| [`@enterprise-blogger/plugin-slack-notifier`](./plugins/slack-notifier) | 1 | 4 | **PASS** |
-| [`@enterprise-blogger/api`](./apps/api) | 28 | 215 (+42 PG) | **PASS** |
-| [`@enterprise-blogger/tests`](./tests) | 12 | 112 | **PASS** |
+| [`@glyphroom/shared`](./packages/shared) | 17 | 332 | **PASS** |
+| [`@glyphroom/collab`](./apps/collab) | 9 | 156 | **PASS** |
+| [`@glyphroom/mcp-server`](./apps/mcp-server) | 9 | 72 | **PASS** |
+| [`@glyphroom/web`](./apps/web) | 30 | 210 | **PASS** |
+| [`@glyphroom/plugin-jira-embed`](./plugins/jira-embed) | 1 | 4 | **PASS** |
+| [`@glyphroom/plugin-slack-notifier`](./plugins/slack-notifier) | 1 | 4 | **PASS** |
+| [`@glyphroom/api`](./apps/api) | 28 | 215 (+42 PG) | **PASS** |
+| [`@glyphroom/tests`](./tests) | 12 | 112 | **PASS** |
 
 ### Section 6 Acceptance Test Matrix (16 / 16 Rows Passed)
 

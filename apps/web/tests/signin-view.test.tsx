@@ -53,7 +53,7 @@ describe('SignInView Component', () => {
     const emailInput = screen.getByPlaceholderText('name@company.com') as HTMLInputElement;
     const passwordInput = screen.getByPlaceholderText('••••••••••••') as HTMLInputElement;
 
-    expect(emailInput.value).toBe('admin@enterprise-blogger.local');
+    expect(emailInput.value).toBe('admin@glyphroom.local');
     expect(passwordInput.value).toBe('admin2026!');
   });
 

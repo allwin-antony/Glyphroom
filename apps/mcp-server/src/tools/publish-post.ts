@@ -2,7 +2,7 @@ import {
   McpPublishPostInputSchema,
   type McpPublishPostInput,
   type McpPublishPostOutput,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { hasScope, type ApiClient } from '../api/client.js';
 import type pino from 'pino';

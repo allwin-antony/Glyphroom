@@ -46,7 +46,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
 
   if (options.db) {
     db = options.db;
-    closeDb = async () => {};
+    closeDb = async () => { };
   } else {
     const client = createDatabaseClient({ connectionString: options.connectionString });
     db = client.db;
@@ -86,7 +86,7 @@ export async function createApiApp(options: ApiAppOptions = {}): Promise<{
   await app.register(authPlugin, { authService, db });
 
   // Health check endpoint
-  app.get('/health', async () => ({ status: 'ok', service: 'enterprise-blogger-api' }));
+  app.get('/health', async () => ({ status: 'ok', service: 'glyphroom-api' }));
 
   // Register API v1 modules
   await app.register(authRoutes, {

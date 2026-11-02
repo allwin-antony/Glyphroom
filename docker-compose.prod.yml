@@ -1,4 +1,4 @@
-# Enterprise Blogger 2.0 — Production Docker Compose
+# Glyphroom — Production Docker Compose
 # Turnkey, 100% self-contained deployment topology.
 # Requires ONLY Docker Engine and Docker Compose on the host Linux VM.
 #
@@ -7,7 +7,7 @@
 # Or via automated turnkey launch script:
 #   ./scripts/deploy.sh
 
-name: enterprise-blogger
+name: glyphroom
 
 services:
   # =========================================================================
@@ -15,10 +15,10 @@ services:
   # =========================================================================
   postgres:
     image: postgres:16-alpine
-    container_name: enterprise-blogger-postgres
+    container_name: glyphroom-postgres
     restart: always
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-enterprise_blogger}
+      POSTGRES_DB: ${POSTGRES_DB:-glyphroom}
       POSTGRES_USER: ${POSTGRES_USER:-blogger}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-blogger_secure_password_2026}
       PGDATA: /var/lib/postgresql/data/pgdata
@@ -28,7 +28,7 @@ services:
     ports:
       - "${POSTGRES_BIND_IP:-127.0.0.1}:${POSTGRES_PORT:-5432}:5432"
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-blogger} -d ${POSTGRES_DB:-enterprise_blogger}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-blogger} -d ${POSTGRES_DB:-glyphroom}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -49,8 +49,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.api
-    image: enterprise-blogger-api:latest
-    container_name: enterprise-blogger-api
+    image: glyphroom-api:latest
+    container_name: glyphroom-api
     restart: always
     environment:
       PORT: 4001
@@ -58,7 +58,7 @@ services:
       HOST: 0.0.0.0
       API_HOST: 0.0.0.0
       ATTACHMENT_STORAGE_DIR: /app/uploads
-      DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-enterprise_blogger}
+      DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-glyphroom}
       SESSION_SECRET: ${SESSION_SECRET:-blogger_session_secret_key_32bytes_min}
       COOKIE_SECRET: ${COOKIE_SECRET:-blogger_cookie_secret_key_32bytes_min}
       BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
@@ -97,13 +97,13 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.collab
-    image: enterprise-blogger-collab:latest
-    container_name: enterprise-blogger-collab
+    image: glyphroom-collab:latest
+    container_name: glyphroom-collab
     restart: always
     environment:
       PORT: 4000
       HOST: 0.0.0.0
-      DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-enterprise_blogger}
+      DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-glyphroom}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://127.0.0.1:3000,https://blog.corp.internal}
       GLYPHROOM_API_URL: http://api:4001
       GATEWAY_SECRET: ${GATEWAY_SECRET:?Set a strong GATEWAY_SECRET}
@@ -144,8 +144,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.mcp
-    image: enterprise-blogger-mcp-server:latest
-    container_name: enterprise-blogger-mcp-server
+    image: glyphroom-mcp-server:latest
+    container_name: glyphroom-mcp-server
     restart: always
     environment:
       PORT: 5000
@@ -184,8 +184,8 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile.web
-    image: enterprise-blogger-web:latest
-    container_name: enterprise-blogger-web
+    image: glyphroom-web:latest
+    container_name: glyphroom-web
     restart: always
     ports:
       - "${WEB_PORT:-80}:80"
@@ -215,7 +215,7 @@ services:
   # =========================================================================
   redis:
     image: redis:7-alpine
-    container_name: enterprise-blogger-redis
+    container_name: glyphroom-redis
     restart: always
     command: redis-server --appendonly yes
     profiles:
@@ -236,16 +236,16 @@ services:
 # ===========================================================================
 volumes:
   postgres_data:
-    name: enterprise_blogger_postgres_data
+    name: glyphroom_postgres_data
     driver: local
   attachments_data:
-    name: enterprise_blogger_attachments_data
+    name: glyphroom_attachments_data
     driver: local
   logs_data:
-    name: enterprise_blogger_logs_data
+    name: glyphroom_logs_data
     driver: local
   redis_data:
-    name: enterprise_blogger_redis_data
+    name: glyphroom_redis_data
     driver: local
 
 # ===========================================================================
@@ -254,5 +254,5 @@ volumes:
 # ===========================================================================
 networks:
   blogger_network:
-    name: enterprise_blogger_network
+    name: glyphroom_network
     driver: bridge

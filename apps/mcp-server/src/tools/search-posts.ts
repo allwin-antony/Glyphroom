@@ -1,7 +1,7 @@
 import {
   McpSearchPostsInputSchema,
   type McpSearchPostsInput,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ApiClient } from '../api/client.js';
 import { wrapUntrustedJson } from '../api/read-formats.js';

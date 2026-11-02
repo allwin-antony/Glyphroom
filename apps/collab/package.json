@@ -1,5 +1,5 @@
 {
-  "name": "@enterprise-blogger/collab",
+  "name": "@glyphroom/collab",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -13,7 +13,7 @@
     "clean": "node -e \"const fs = require('fs'); fs.rmSync('dist', { recursive: true, force: true });\""
   },
   "dependencies": {
-    "@enterprise-blogger/shared": "workspace:*",
+    "@glyphroom/shared": "workspace:*",
     "@hocuspocus/extension-database": "4.7.1",
     "@hocuspocus/extension-redis": "4.7.1",
     "@hocuspocus/provider": "4.7.1",

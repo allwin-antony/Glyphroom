@@ -1,12 +1,12 @@
-# Project: Enterprise Blogger 2.0 Phase 0 Spike
+# Project: Glyphroom Phase 0 Spike
 
 ## Architecture
-Enterprise Blogger 2.0 is a self-hosted, collaborative enterprise blogging and knowledge platform.
+Glyphroom is a self-hosted, collaborative enterprise blogging and knowledge platform.
 The Phase 0 Spike proves the foundational real-time collaboration engine, CRDT convergence, Yjs suggestion mode, and in-process Agent Gateway before full application scaffolding.
 
 ### Monorepo Layout
 ```
-Enterprise_Blogger/
+glyphroom/
 ├── apps/
 │   ├── collab/                     # Hocuspocus collaboration server + in-process Agent Gateway
 │   └── mcp-server/                 # MCP agent server interface
@@ -145,7 +145,7 @@ Enterprise_Blogger/
 
 ## Code Layout
 ```
-Enterprise_Blogger/
+glyphroom/
 ├── package.json
 ├── pnpm-workspace.yaml
 ├── pnpm-lock.yaml

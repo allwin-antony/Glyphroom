@@ -150,7 +150,7 @@ describe('beta database initialization', () => {
 
     expect(initSql).not.toMatch(/INSERT\s+INTO\s+users/i);
     expect(initSql).not.toContain('admin@blogger.corp.internal');
-    expect(initSql).not.toContain('admin@enterprise-blogger.local');
+    expect(initSql).not.toContain('admin@glyphroom.local');
     expect(initSql).not.toContain('$2a$10$wYNBVWEHmj6BkDKsMjwwEuAfvPY2WS7ausLRXg613Nnls10A3/8Re');
     expect(initSql).toMatch(/submitted_version_id\s+UUID/i);
     expect(initSql).toMatch(/CREATE TABLE IF NOT EXISTS post_attachments/i);

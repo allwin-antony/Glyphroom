@@ -83,7 +83,7 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
     const statusCode = isHealthy ? 200 : 503;
     return reply.status(statusCode).send({
       status: isHealthy ? 'healthy' : 'unhealthy',
-      service: 'enterprise-blogger-collab',
+      service: 'glyphroom-collab',
       uptime: process.uptime(),
       timestamp: new Date().toISOString(),
       checks,

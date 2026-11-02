@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Enterprise Scenario Test Suite (Tier 4)
+ * Glyphroom — Enterprise Scenario Test Suite (Tier 4)
  * Simulates a production co-authoring session on an enterprise technical blog post
  * between 5 engineering co-authors and 1 AI review agent.
  */
@@ -9,7 +9,7 @@ import { ClientPool, NetworkSimulator } from '../harness/index.js';
 import {
   exportDerivedMarkdown,
   AgentMetadata,
-} from '@enterprise-blogger/shared';
+} from '@glyphroom/shared';
 
 describe('Tier 4: Real-World Application Scenario Suite', () => {
   it('executes full enterprise blog co-authoring session (5 engineers + 1 AI agent)', () => {
@@ -38,7 +38,7 @@ describe('Tier 4: Real-World Application Scenario Suite', () => {
 
     // --- Phase 1: Lead Author sets up initial blog post outline ---
     lead.insertHeading('Scaling Real-Time Collaboration with Yjs and CRDTs', 1);
-    lead.insertParagraph('Enterprise Blogger 2.0 provides self-hosted collaborative editing for enterprise teams.');
+    lead.insertParagraph('Glyphroom provides self-hosted collaborative editing for enterprise teams.');
     lead.insertHeading('1. Architecture Overview', 2);
     lead.insertParagraph('The collaboration engine uses Hocuspocus with standard WebSockets and a PostgreSQL persistence layer.');
     network.flush();
