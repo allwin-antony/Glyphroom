@@ -94,12 +94,17 @@ export type McpGetPostOutput = z.infer<typeof McpGetPostOutputSchema>;
 export const McpCreatePostInputSchema = z.object({
   title: z.string().min(1, 'Title is required').max(500, 'Title too long').describe('Title of the document (e.g. "Platform Architecture RFC")'),
   content: z.string().min(1, 'Initial content is required').describe(
-    'Initial document content in Markdown. Supports Glyphroom rich blocks:\n' +
-    '- Alerts: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`\n' +
-    '- Mermaid Diagrams: ```mermaid\\ngraph TD\\n...```\n' +
-    '- KaTeX Math Formulas: `$$ formula $$`\n' +
+    'Initial document content in standard Markdown. IMPORTANT: Must use raw multiline newlines (`\\n` control characters), NOT double-escaped literal `\\\\n` text strings.\n\n' +
+    'Supports Glyphroom rich blocks:\n' +
+    '- Headings: `# Level 1`, `## Level 2`, up to `###### Level 6`\n' +
+    '- Alerts / Callouts: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]` followed by `> message`\n' +
+    '- Blockquotes: `> Quoted text`\n' +
+    '- Mermaid Diagrams: ```mermaid\\ngraph TD\\n  A --> B\\n```\n' +
+    '- KaTeX Math Formulas: `$$ formula $$` or `$inline$`\n' +
+    '- Code Blocks: ```typescript\\nconst x = 1;\\n```\n' +
     '- Status Pulse Cards: `<!-- status-block ragStatus="green" milestoneTitle="Title" completionPercent="75" targetDate="2026-12-01" blockers="None" -->`\n' +
-    '- Checklists & Tables: `- [x] Done` and Markdown tables'
+    '- Checklists & Task Lists: `- [ ] Pending item` and `- [x] Completed item`\n' +
+    '- Markdown Tables: `| Col 1 | Col 2 |\\n|---|---|\\n| A | B |`'
   ),
   tags: z.array(TagSchema).max(20, 'Cannot exceed 20 tags').optional().describe('Keywords or tags for catalog discovery'),
   coeId: SafeIdentifierSchema.optional().describe('Center of Excellence category ID'),
@@ -124,12 +129,8 @@ export const McpAppendSectionInputSchema = z.object({
   postId: PostIdSchema.describe('UUID or slug of the target document'),
   heading: z.string().max(500, 'Heading cannot exceed 500 characters').optional().describe('Section heading title (e.g. "Security & Compliance Considerations")'),
   content: z.string().min(1, 'content is required').describe(
-    'Markdown content for the section. Supports full Glyphroom rich blocks:\n' +
-    '- Alerts: `> [!NOTE]`, `> [!TIP]`, `> [!IMPORTANT]`, `> [!WARNING]`, `> [!CAUTION]`\n' +
-    '- Mermaid Diagrams: ```mermaid\\ngraph TD\\n...```\n' +
-    '- KaTeX Math Formulas: `$$ formula $$`\n' +
-    '- Status Pulse Cards: `<!-- status-block ragStatus="green" milestoneTitle="Title" completionPercent="75" targetDate="2026-12-01" blockers="None" -->`\n' +
-    '- Checklists & Tables: `- [x] Done` and Markdown tables'
+    'Markdown content for the section. IMPORTANT: Must use raw multiline newlines (`\\n` control characters), NOT double-escaped literal `\\\\n` text strings.\n\n' +
+    'Supports Glyphroom rich blocks (Headings, Alerts, Blockquotes, Mermaid, Math, Code, Task Lists, Tables, Status Cards).'
   ),
 });
 export type McpAppendSectionInput = z.infer<typeof McpAppendSectionInputSchema>;
@@ -151,7 +152,7 @@ export const McpInsertAfterSectionInputSchema = z.object({
   targetHeading: z.string().min(1, 'targetHeading is required').max(500).describe('Exact or normalized heading of the existing section after which to insert'),
   heading: z.string().max(500, 'Heading cannot exceed 500 characters').optional().describe('New section heading to insert'),
   content: z.string().min(1, 'content is required').describe(
-    'Markdown content for the inserted section. Supports Glyphroom rich blocks (Alerts, Mermaid, Math, Status Cards, Tables).'
+    'Markdown content for the inserted section. IMPORTANT: Must use raw multiline newlines (`\\n` control characters), NOT double-escaped literal `\\\\n` text strings. Supports Glyphroom rich blocks (Alerts, Mermaid, Math, Status Cards, Tables).'
   ),
 });
 export type McpInsertAfterSectionInput = z.infer<typeof McpInsertAfterSectionInputSchema>;
@@ -172,7 +173,7 @@ export const McpSuggestEditSectionInputSchema = z.object({
   postId: PostIdSchema.describe('UUID or slug of the target document'),
   targetHeading: z.string().min(1, 'targetHeading is required').max(500).describe('Heading of the section you want to propose edits for'),
   newContent: z.string().min(1, 'newContent is required').describe(
-    'Proposed revised Markdown content for the section. The system calculates a diff and attaches suggestion marks without overwriting existing human text.'
+    'Proposed revised Markdown content for the section. IMPORTANT: Must use raw multiline newlines (`\\n` control characters), NOT double-escaped literal `\\\\n` text strings. The system calculates a diff and attaches suggestion marks without overwriting existing human text.'
   ),
   instruction: z.string().max(2000, 'Instruction cannot exceed 2000 characters').optional().describe('Reason or explanation for the editorial suggestion (e.g. "Clarify Redis cluster failover")'),
 });

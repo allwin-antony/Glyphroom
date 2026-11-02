@@ -382,3 +382,36 @@ function serializeJsonInline(child: ProseMirrorNodeJSON): string {
 
   return text;
 }
+
+/**
+ * Normalizes markdown input strings across API, MCP, and reader boundaries.
+ *
+ * Handles:
+ * - Carriage returns (\r\n -> \n)
+ * - Escaped newline sequences (\n / \r\n as literal character sequences) that occur
+ *   when MCP clients, curl commands, or LLM JSON serializers double-escape string payloads.
+ * - Structural double-escaped newlines separating headings, callouts, lists, and code fences.
+ */
+export function normalizeMarkdownInput(raw: string): string {
+  if (!raw || typeof raw !== 'string') return '';
+  let text = raw.replace(/\r\n/g, '\n');
+
+  // Case 1: If there are no actual newline characters but there are escaped newline literals,
+  // the entire payload was string-escaped during transport. Unescape all of them.
+  if (!text.includes('\n') && (text.includes('\\n') || text.includes('\\r\\n'))) {
+    return text.replace(/\\r\\n/g, '\n').replace(/\\n/g, '\n');
+  }
+
+  // Case 2: If the payload contains mixed escapes (e.g. literal \n\n separating paragraphs or before markdown block markers),
+  // safely unescape them without altering normal code escapes.
+  if (text.includes('\\n')) {
+    text = text
+      .replace(/\\r\\n/g, '\n')
+      .replace(/\\n\\n+/g, '\n\n')
+      .replace(/(#{1,6}\s+[^\n\\]+)\\n/g, '$1\n')
+      .replace(/\\n(?=#{1,6}\s+|>\s*\[!|>\s+|\s*[-*+]\s+|\s*\d+\.\s+|```|\$\$)/g, '\n');
+  }
+
+  return text;
+}
+

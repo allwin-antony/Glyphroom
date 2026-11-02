@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { eq, and, desc, asc, or, ne, inArray, ilike, isNull, isNotNull, sql } from 'drizzle-orm';
 import * as Y from 'yjs';
 import { yDocToProsemirrorJSON } from 'y-prosemirror';
-import { exportDerivedMarkdown, TagSchema } from '@glyphroom/shared';
+import { exportDerivedMarkdown, TagSchema, normalizeMarkdownInput } from '@glyphroom/shared';
 import type { Database } from '../db/index.js';
 import { posts, postViewCounts, postVersions, postReviews, users, centersOfExcellence, postAttachments, spaces, spaceMembers, postCollaborators, tags, postTags } from '../db/schema.js';
 import { PermissionService, type PostPermission } from '../services/permissions.js';
@@ -195,7 +195,8 @@ function persistedDocumentJson(state: Uint8Array | null): Record<string, unknown
 }
 
 function markdownToFallbackDocumentJson(markdown: string): Record<string, unknown> {
-  const blocks = markdown.replace(/\r\n/g, '\n').split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
+  const normalized = normalizeMarkdownInput(markdown);
+  const blocks = normalized.split(/\n\n+/).map((b) => b.trim()).filter(Boolean);
   if (blocks.length === 0) {
     return { type: 'doc', content: [{ type: 'paragraph' }] };
   }
@@ -206,6 +207,20 @@ function markdownToFallbackDocumentJson(markdown: string): Record<string, unknow
         type: 'heading',
         attrs: { level: headingMatch[1].length },
         content: headingMatch[2] ? [{ type: 'text', text: headingMatch[2] }] : [],
+      };
+    }
+    const alertMatch = block.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](.*)$/is);
+    if (alertMatch) {
+      const alertType = alertMatch[1].toLowerCase();
+      const body = alertMatch[2]
+        .split('\n')
+        .map((l) => l.replace(/^>\s?/, '').trim())
+        .filter(Boolean)
+        .join(' ');
+      return {
+        type: 'alert',
+        attrs: { type: alertType, alertType: alertType.toUpperCase() },
+        content: [{ type: 'paragraph', content: body ? [{ type: 'text', text: body }] : [] }],
       };
     }
     return {
@@ -947,7 +962,8 @@ export const postRoutes: FastifyPluginAsync<{
   // Helper: Server-side pure Yjs markdown parser
   function populateYjsFromMarkdown(ydoc: Y.Doc, markdown: string) {
     const fragment = ydoc.getXmlFragment('prosemirror');
-    const lines = markdown.replace(/\r\n/g, '\n').split('\n');
+    const normalized = normalizeMarkdownInput(markdown);
+    const lines = normalized.split('\n');
     let i = 0;
 
     while (i < lines.length) {
@@ -1015,6 +1031,75 @@ export const postRoutes: FastifyPluginAsync<{
         continue;
       }
 
+      // Alerts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
+      const alertMatch = line.match(/^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](.*)$/i);
+      if (alertMatch) {
+        const alertType = alertMatch[1].toLowerCase();
+        const firstLine = alertMatch[2].trim();
+        const alertLines: string[] = firstLine ? [firstLine] : [];
+        i++;
+        while (i < lines.length && lines[i].trim().startsWith('>')) {
+          alertLines.push(lines[i].replace(/^>\s?/, ''));
+          i++;
+        }
+        const alertEl = new Y.XmlElement('alert');
+        alertEl.setAttribute('type', alertType);
+        alertEl.setAttribute('alertType', alertType.toUpperCase());
+        const alertP = new Y.XmlElement('paragraph');
+        const alertText = new Y.XmlText(alertLines.join('\n').trim());
+        alertP.insert(0, [alertText]);
+        alertEl.insert(0, [alertP]);
+        fragment.push([alertEl]);
+        continue;
+      }
+
+      // Standard Blockquote: > text
+      if (line.trim().startsWith('>')) {
+        const bqLines: string[] = [];
+        while (i < lines.length && lines[i].trim().startsWith('>')) {
+          bqLines.push(lines[i].replace(/^>\s?/, ''));
+          i++;
+        }
+        const bqEl = new Y.XmlElement('blockquote');
+        const bqP = new Y.XmlElement('paragraph');
+        const bqText = new Y.XmlText(bqLines.join('\n').trim());
+        bqP.insert(0, [bqText]);
+        bqEl.insert(0, [bqP]);
+        fragment.push([bqEl]);
+        continue;
+      }
+
+      // Status Block HTML comment: <!-- status-block ... -->
+      const statusMatch = line.match(/<!--\s*status-block\s+(.*?)\s*-->/);
+      if (statusMatch) {
+        const rawAttrs = statusMatch[1];
+        const statusEl = new Y.XmlElement('projectStatusBlock');
+        const attrRe = /([a-zA-Z]+)="([^"]*)"/g;
+        let m: RegExpExecArray | null;
+        let ragStatus = 'green';
+        let milestoneTitle = '';
+        let completionPercent = '0';
+        let targetDate = '';
+        let blockers = '';
+        while ((m = attrRe.exec(rawAttrs)) !== null) {
+          const k = m[1];
+          const v = m[2];
+          if (k === 'ragStatus') ragStatus = v;
+          else if (k === 'milestoneTitle') milestoneTitle = v;
+          else if (k === 'completionPercent') completionPercent = v;
+          else if (k === 'targetDate') targetDate = v;
+          else if (k === 'blockers') blockers = v;
+        }
+        statusEl.setAttribute('ragStatus', ragStatus);
+        statusEl.setAttribute('milestoneTitle', milestoneTitle);
+        statusEl.setAttribute('completionPercent', completionPercent);
+        statusEl.setAttribute('targetDate', targetDate);
+        statusEl.setAttribute('blockers', blockers);
+        fragment.push([statusEl]);
+        i++;
+        continue;
+      }
+
       // Blank line
       if (!line.trim()) {
         i++;
@@ -1029,7 +1114,9 @@ export const postRoutes: FastifyPluginAsync<{
         lines[i].trim() &&
         !lines[i].match(/^#{1,6}\s+/) &&
         !lines[i].trim().startsWith('```') &&
-        lines[i].trim() !== '$$'
+        lines[i].trim() !== '$$' &&
+        !lines[i].trim().startsWith('>') &&
+        !lines[i].match(/<!--\s*status-block/)
       ) {
         paraLines.push(lines[i]);
         i++;

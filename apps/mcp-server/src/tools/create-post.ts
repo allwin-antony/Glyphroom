@@ -1,5 +1,6 @@
 import {
   McpCreatePostInputSchema,
+  normalizeMarkdownInput,
   type McpCreatePostInput,
   type McpCreatePostOutput,
 } from '@glyphroom/shared';
@@ -26,11 +27,13 @@ export function registerCreatePostTool(
           .slice(0, 128)
           .replace(/(^-|-$)+/g, '') || `agent-draft-${Date.now()}`;
 
+        const content = args.content ? normalizeMarkdownInput(args.content) : args.content;
+
         const created = await apiClient.createPost({
           title: args.title,
           slug,
           excerpt: args.excerpt,
-          content: args.content,
+          content,
           tags: args.tags,
           coeId: args.coeId,
         });

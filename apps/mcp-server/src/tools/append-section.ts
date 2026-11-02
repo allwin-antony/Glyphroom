@@ -1,5 +1,6 @@
 import {
   McpAppendSectionInputSchema,
+  normalizeMarkdownInput,
   type McpAppendSectionInput,
   type McpAppendSectionOutput,
 } from '@glyphroom/shared';
@@ -20,11 +21,13 @@ export function registerAppendSectionTool(
       logger.info({ postId: args.postId, heading: args.heading }, 'Executing append_section');
 
       try {
+        const content = args.content ? normalizeMarkdownInput(args.content) : args.content;
+
         const result = await client.sendEdit({
           operation: 'append_section',
           documentId: args.postId,
           heading: args.heading,
-          content: args.content,
+          content,
         });
 
         const output: McpAppendSectionOutput = {

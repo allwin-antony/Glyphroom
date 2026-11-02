@@ -1,5 +1,6 @@
 import {
   McpSuggestEditSectionInputSchema,
+  normalizeMarkdownInput,
   type McpSuggestEditSectionInput,
   type McpSuggestEditSectionOutput,
 } from '@glyphroom/shared';
@@ -23,11 +24,13 @@ export function registerSuggestEditSectionTool(
       );
 
       try {
+        const content = args.newContent ? normalizeMarkdownInput(args.newContent) : args.newContent;
+
         const result = await client.sendEdit({
           operation: 'suggest_edit_section',
           documentId: args.postId,
           targetHeading: args.targetHeading,
-          content: args.newContent,
+          content,
           instruction: args.instruction,
         });
 

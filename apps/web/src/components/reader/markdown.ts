@@ -12,6 +12,7 @@
 // into InlineNode trees that are rendered as escaped React text.
 
 import { isAllowedUrl } from './security.js';
+import { normalizeMarkdownInput } from '@glyphroom/shared';
 
 export interface InlineNode {
   type:
@@ -222,7 +223,8 @@ export interface ParseResult {
 
 /** Parse a full Markdown document into presentation blocks. */
 export function parseMarkdown(markdown: string): ParseResult {
-  const lines = markdown.split('\n');
+  const normalized = normalizeMarkdownInput(markdown);
+  const lines = normalized.split('\n');
   const blocks: BlockNode[] = [];
   let headingCount = 0;
   let i = 0;

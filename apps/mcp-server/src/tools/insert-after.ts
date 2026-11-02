@@ -1,5 +1,6 @@
 import {
   McpInsertAfterSectionInputSchema,
+  normalizeMarkdownInput,
   type McpInsertAfterSectionInput,
   type McpInsertAfterSectionOutput,
 } from '@glyphroom/shared';
@@ -23,12 +24,14 @@ export function registerInsertAfterSectionTool(
       );
 
       try {
+        const content = args.content ? normalizeMarkdownInput(args.content) : args.content;
+
         const result = await client.sendEdit({
           operation: 'insert_after_section',
           documentId: args.postId,
           targetHeading: args.targetHeading,
           heading: args.heading,
-          content: args.content,
+          content,
         });
 
         const output: McpInsertAfterSectionOutput = {
