@@ -12,6 +12,7 @@ $RootDir = Split-Path -Parent $PSScriptRoot
 $ComposeFile = Join-Path $RootDir 'docker-compose.prod.yml'
 $EnvFile = Join-Path $RootDir '.env'
 $EnvExample = Join-Path $RootDir '.env.example'
+$script:BootstrapAdminConfigured = $false
 
 function Write-Info($msg) { Write-Host "[INFO] $msg" -ForegroundColor Cyan }
 function Write-Success($msg) { Write-Host "[SUCCESS] $msg" -ForegroundColor Green }
@@ -92,33 +93,88 @@ function Check-Prerequisites {
 }
 
 # 2. Environment Configuration Bootstrap
+function New-SecureSecret {
+    $bytes = New-Object byte[] 32
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try {
+        $rng.GetBytes($bytes)
+    } finally {
+        $rng.Dispose()
+    }
+    return -join ($bytes | ForEach-Object { $_.ToString('x2') })
+}
+
+function Get-EnvSetting([string]$Content, [string]$Name) {
+    $pattern = '(?m)^' + [regex]::Escape($Name) + '=(.*)$'
+    $match = [regex]::Match($Content, $pattern)
+    if ($match.Success) {
+        return $match.Groups[1].Value.Trim()
+    }
+    return ''
+}
+
 function Ensure-Env {
     if (-not (Test-Path $EnvFile)) {
-        Write-Warn '.env file not found. Generating default production configuration...'
-        if (Test-Path $EnvExample) {
-            Copy-Item $EnvExample $EnvFile
-        } else {
-            New-Item -ItemType File -Path $EnvFile -Force | Out-Null
+        if (-not (Test-Path $EnvExample)) {
+            Write-Err '.env and .env.example are missing. Cannot continue.'
+            exit 1
         }
-
-        $pgPass = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
-        $gatewaySec = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
-        $sessSec = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
-        $cookieSec = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 32 | ForEach-Object { [char]$_ })
-
-        $lines = @(
-            'POSTGRES_DB=enterprise_blogger',
-            'POSTGRES_USER=blogger',
-            "POSTGRES_PASSWORD=$pgPass",
-            "GATEWAY_SECRET=$gatewaySec",
-            "SESSION_SECRET=$sessSec",
-            "COOKIE_SECRET=$cookieSec",
-            'NODE_ENV=production',
-            'LOG_LEVEL=info'
-        )
-        Set-Content -Path $EnvFile -Value ($lines -join [System.Environment]::NewLine)
-        Write-Success 'Generated secure .env file with randomized credentials.'
+        Write-Warn '.env file not found. Copying .env.example...'
+        Copy-Item $EnvExample $EnvFile
     }
+
+    $content = [System.IO.File]::ReadAllText($EnvFile)
+    $secretPlaceholders = @(
+        @{ Name = 'POSTGRES_PASSWORD'; Placeholder = 'REPLACE_WITH_STRONG_PASSWORD_IN_PROD' },
+        @{ Name = 'GATEWAY_SECRET'; Placeholder = 'REPLACE_WITH_STRONG_GATEWAY_SECRET' },
+        @{ Name = 'JWT_SECRET'; Placeholder = 'REPLACE_WITH_STRONG_JWT_SECRET' },
+        @{ Name = 'COOKIE_SECRET'; Placeholder = 'REPLACE_WITH_STRONG_COOKIE_SECRET' },
+        @{ Name = 'SESSION_SECRET'; Placeholder = 'REPLACE_WITH_STRONG_SESSION_SECRET' }
+    )
+
+    foreach ($entry in $secretPlaceholders) {
+        if ($content.Contains($entry.Placeholder)) {
+            $content = $content.Replace($entry.Placeholder, (New-SecureSecret))
+            Write-Success "Generated secure random $($entry.Name) in .env."
+        }
+    }
+
+    $sessionSecret = Get-EnvSetting $content 'SESSION_SECRET'
+    if ([string]::IsNullOrWhiteSpace($sessionSecret)) {
+        $sessionSecret = New-SecureSecret
+        if ([regex]::IsMatch($content, '(?m)^SESSION_SECRET=')) {
+            $content = [regex]::Replace($content, '(?m)^SESSION_SECRET=.*$', "SESSION_SECRET=$sessionSecret")
+        } else {
+            if ($content.Length -gt 0 -and -not $content.EndsWith([System.Environment]::NewLine)) {
+                $content += [System.Environment]::NewLine
+            }
+            $content += "SESSION_SECRET=$sessionSecret" + [System.Environment]::NewLine
+        }
+        Write-Success 'Added a secure random SESSION_SECRET to .env.'
+    }
+
+    $utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+    [System.IO.File]::WriteAllText($EnvFile, $content, $utf8NoBom)
+
+    $bootstrapEmail = Get-EnvSetting $content 'BOOTSTRAP_ADMIN_EMAIL'
+    $bootstrapPassword = Get-EnvSetting $content 'BOOTSTRAP_ADMIN_PASSWORD'
+    if (-not [string]::IsNullOrWhiteSpace($bootstrapEmail) -or -not [string]::IsNullOrWhiteSpace($bootstrapPassword)) {
+        if ([string]::IsNullOrWhiteSpace($bootstrapEmail) -or [string]::IsNullOrWhiteSpace($bootstrapPassword)) {
+            Write-Err 'BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must both be set or both be empty.'
+            exit 1
+        }
+        if ($bootstrapPassword -like 'REPLACE_*') {
+            Write-Err 'BOOTSTRAP_ADMIN_PASSWORD is still a placeholder; supply a unique strong password.'
+            exit 1
+        }
+        $script:BootstrapAdminConfigured = $true
+        Write-Info 'Explicit first-run local-admin bootstrap is configured (credentials are not displayed).'
+        Write-Warn 'After the first successful login, remove both BOOTSTRAP_ADMIN_* values from .env.'
+    } else {
+        Write-Warn 'No local-admin bootstrap is configured. This is correct for an existing database.'
+        Write-Warn 'For a fresh database, set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD in .env before launch; the API never creates a default account.'
+    }
+    Remove-Variable bootstrapPassword -ErrorAction SilentlyContinue
 }
 
 # 3. Actions & Flow
@@ -143,6 +199,7 @@ if ($Logs) {
 }
 
 if ($Restart) {
+    Ensure-Env
     Write-Info 'Restarting Enterprise Blogger stack...'
     docker compose -f $ComposeFile down
     docker compose -f $ComposeFile up -d --build --remove-orphans
@@ -220,6 +277,10 @@ Write-Host '  Collab HTTP Gateway:     http://localhost:4000'
 Write-Host '  MCP Agent Server:        http://localhost:5000'
 Write-Host '  PostgreSQL 16:           localhost:5432 (Internal)'
 Write-Host ''
+if ($script:BootstrapAdminConfigured) {
+    Write-Warn 'Security follow-up: remove BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD from .env after confirming the first login.'
+    Write-Host ''
+}
 Write-Host 'Management Commands:' -ForegroundColor Yellow
 Write-Host '  Check status:   .\scripts\deploy.ps1 -Status'
 Write-Host '  View logs:      .\scripts\deploy.ps1 -Logs'

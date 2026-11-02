@@ -67,6 +67,14 @@ describe('Milestone M4 Adversarial End-to-End Suite: MCP -> Gateway -> DirectCon
       port: 0,
       gatewaySecret,
       quiet: true,
+      authOptions: {
+        authenticate: async ({ token }) => ({
+          id: token ?? 'user-author-test',
+          role: 'author' as const,
+          name: 'Test Author',
+          permissions: ['edit' as const],
+        }),
+      },
     });
     const { port, url } = await collabInstance.listen();
 

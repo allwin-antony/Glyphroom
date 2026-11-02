@@ -19,6 +19,7 @@ ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 COMPOSE_FILE="${ROOT_DIR}/docker-compose.prod.yml"
 ENV_FILE="${ROOT_DIR}/.env"
 ENV_EXAMPLE="${ROOT_DIR}/.env.example"
+BOOTSTRAP_ADMIN_CONFIGURED=false
 
 # ANSI Colors
 BOLD="\033[1m"
@@ -125,6 +126,43 @@ setup_environment() {
         log_success "Generated secure random COOKIE_SECRET in .env."
     fi
 
+    if grep -q "REPLACE_WITH_STRONG_SESSION_SECRET" "${ENV_FILE}" 2>/dev/null; then
+        NEW_SESSION_SECRET="$(generate_secret)"
+        sed -i.bak "s/REPLACE_WITH_STRONG_SESSION_SECRET/${NEW_SESSION_SECRET}/g" "${ENV_FILE}" && rm -f "${ENV_FILE}.bak"
+        log_success "Generated secure random SESSION_SECRET in .env."
+    elif ! grep -q '^SESSION_SECRET=' "${ENV_FILE}" 2>/dev/null; then
+        NEW_SESSION_SECRET="$(generate_secret)"
+        printf '\nSESSION_SECRET=%s\n' "${NEW_SESSION_SECRET}" >> "${ENV_FILE}"
+        log_success "Added a secure random SESSION_SECRET to .env."
+    elif grep -q '^SESSION_SECRET=$' "${ENV_FILE}" 2>/dev/null; then
+        NEW_SESSION_SECRET="$(generate_secret)"
+        sed -i.bak "s/^SESSION_SECRET=$/SESSION_SECRET=${NEW_SESSION_SECRET}/" "${ENV_FILE}" && rm -f "${ENV_FILE}.bak"
+        log_success "Generated secure random SESSION_SECRET in .env."
+    fi
+
+    local bootstrap_email
+    local bootstrap_password
+    bootstrap_email="$(sed -n 's/^BOOTSTRAP_ADMIN_EMAIL=//p' "${ENV_FILE}" | tail -n 1)"
+    bootstrap_password="$(sed -n 's/^BOOTSTRAP_ADMIN_PASSWORD=//p' "${ENV_FILE}" | tail -n 1)"
+
+    if [ -n "${bootstrap_email}" ] || [ -n "${bootstrap_password}" ]; then
+        if [ -z "${bootstrap_email}" ] || [ -z "${bootstrap_password}" ]; then
+            log_error "BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD must both be set or both be empty."
+            exit 1
+        fi
+        if [[ "${bootstrap_password}" == REPLACE_* ]]; then
+            log_error "BOOTSTRAP_ADMIN_PASSWORD is still a placeholder; supply a unique strong password."
+            exit 1
+        fi
+        BOOTSTRAP_ADMIN_CONFIGURED=true
+        log_info "Explicit first-run local-admin bootstrap is configured (credentials are not displayed)."
+        log_warn "After the first successful login, remove both BOOTSTRAP_ADMIN_* values from .env."
+    else
+        log_warn "No local-admin bootstrap is configured. This is correct for an existing database."
+        log_warn "For a fresh database, set BOOTSTRAP_ADMIN_EMAIL and BOOTSTRAP_ADMIN_PASSWORD in .env before launch; the API never creates a default account."
+    fi
+    unset bootstrap_password
+
     log_success "Environment configuration verified (${ENV_FILE})."
 }
 
@@ -229,6 +267,11 @@ show_summary() {
     echo -e "  ${BOLD}PostgreSQL 16:${NC}            127.0.0.1:5432 (Internal)"
     echo -e "  ${BOLD}Persistent Volumes:${NC}       ${ROOT_DIR}/data/"
     echo ""
+    if ${BOOTSTRAP_ADMIN_CONFIGURED}; then
+        echo -e "  ${YELLOW}Security follow-up:${NC} remove BOOTSTRAP_ADMIN_EMAIL and"
+        echo -e "  BOOTSTRAP_ADMIN_PASSWORD from .env after confirming the first login."
+        echo ""
+    fi
     echo -e "${BOLD}Management Commands:${NC}"
     echo -e "  Check status:   ${CYAN}./scripts/deploy.sh --status${NC}"
     echo -e "  View logs:      ${CYAN}./scripts/deploy.sh --logs${NC}"

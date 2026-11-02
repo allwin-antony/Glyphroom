@@ -61,6 +61,10 @@ services:
       DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-enterprise_blogger}
       SESSION_SECRET: ${SESSION_SECRET:-blogger_session_secret_key_32bytes_min}
       COOKIE_SECRET: ${COOKIE_SECRET:-blogger_cookie_secret_key_32bytes_min}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_PASSWORD: ${BOOTSTRAP_ADMIN_PASSWORD:-}
+      COLLAB_URL: http://collab:4000
+      COLLAB_GATEWAY_SECRET: ${GATEWAY_SECRET:?Set a strong GATEWAY_SECRET}
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
@@ -101,11 +105,11 @@ services:
       HOST: 0.0.0.0
       DATABASE_URL: postgres://${POSTGRES_USER:-blogger}:${POSTGRES_PASSWORD:-blogger_secure_password_2026}@postgres:5432/${POSTGRES_DB:-enterprise_blogger}
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost,http://localhost:3000,http://127.0.0.1:3000,https://blog.corp.internal}
-      GATEWAY_SECRET: ${GATEWAY_SECRET:-blogger_gateway_secret_key_32bytes}
-      COLLAB_GATEWAY_SECRET: ${GATEWAY_SECRET:-blogger_gateway_secret_key_32bytes}
+      GLYPHROOM_API_URL: http://api:4001
+      GATEWAY_SECRET: ${GATEWAY_SECRET:?Set a strong GATEWAY_SECRET}
+      COLLAB_GATEWAY_SECRET: ${GATEWAY_SECRET:?Set a strong GATEWAY_SECRET}
       FLUSH_DEBOUNCE_MS: ${FLUSH_DEBOUNCE_MS:-3000}
       FLUSH_MAX_DEBOUNCE_MS: ${FLUSH_MAX_DEBOUNCE_MS:-10000}
-      REDIS_URL: ${REDIS_URL:-}
       NODE_ENV: production
       LOG_LEVEL: ${LOG_LEVEL:-info}
     ports:
@@ -115,6 +119,8 @@ services:
       - attachments_data:/app/attachments
     depends_on:
       postgres:
+        condition: service_healthy
+      api:
         condition: service_healthy
     healthcheck:
       test: ["CMD-SHELL", "node -e \"fetch('http://127.0.0.1:4000/healthz').then(r => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))\""]

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
-import { execSync } from 'node:child_process';
+import { execSync, spawnSync } from 'node:child_process';
 import { createCollabServer, type CollabServerInstance } from '@enterprise-blogger/collab';
 import { InMemoryPersistenceAdapter } from '@enterprise-blogger/collab';
 import * as Y from 'yjs';
@@ -191,10 +191,15 @@ describe('Milestone M5: Turnkey Production Deployment Hardening Suite', () => {
       expect(initSql).toContain(emptySha256);
     });
 
-    it('seeds default admin user with valid UUID and admin role', () => {
-      expect(initSql).toContain('admin@blogger.corp.internal');
-      expect(initSql).toContain('00000000-0000-0000-0000-000000000001');
-      expect(initSql).toContain("'admin'");
+    it('does not seed a default admin user (explicit bootstrap boundary)', () => {
+      // The obsolete insecure default-seed contract was removed; the turnkey
+      // container initializer must stay free of hard-coded default credentials.
+      // First-run local admin creation is operator-explicit via BOOTSTRAP_ADMIN_*,
+      // which is owned by the approved API bootstrap contract (not duplicated here).
+      expect(initSql).not.toMatch(/INSERT\s+INTO\s+users/i);
+      expect(initSql).not.toContain('admin@blogger.corp.internal');
+      expect(initSql).not.toContain('admin@enterprise-blogger.local');
+      expect(initSql).not.toContain('$2a$10$');
     });
   });
 
@@ -259,28 +264,29 @@ describe('Milestone M5: Turnkey Production Deployment Hardening Suite', () => {
     });
 
     it('FAILS GRACEFULLY: reports error when Docker is missing', () => {
-      try {
-        const cleanPath = (process.env.PATH || '')
-          .split(path.delimiter)
-          .filter(
-            (p) =>
-              !fs.existsSync(path.join(p, 'docker')) &&
-              !fs.existsSync(path.join(p, 'docker.exe'))
-          )
-          .join(path.delimiter);
-        execSync('bash ./scripts/deploy.sh --status', {
-          cwd: ROOT_DIR,
-          encoding: 'utf8',
-          stdio: 'pipe',
-          env: { ...process.env, PATH: cleanPath },
-        });
-        expect.unreachable('Should have failed when docker is missing');
-      } catch (err: any) {
-        expect([1, 127]).toContain(err.status);
-        const stderr = err.stderr?.toString() || '';
-        const stdout = err.stdout?.toString() || '';
-        expect(stderr + stdout).toContain('Docker is not installed on this host');
-      }
+      // Isolated Docker-free fixture: a private bin dir holding only the essential
+      // tool (dirname) required before the Docker prerequisite check. Bash is invoked
+      // through its existing absolute path with an argv-array spawn (no shell), so the
+      // interpreter cannot be masked away, and no Docker binary is reachable.
+      const bashExecutable = '/bin/bash';
+      const fixtureRoot = '/tmp/opencode/glyphroom-beta-execution-2026-11-02/deployment-fixture/docker-missing';
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+      const binDir = path.join(fixtureRoot, 'bin');
+      fs.mkdirSync(binDir, { recursive: true });
+      fs.symlinkSync('/usr/bin/dirname', path.join(binDir, 'dirname'), 'file');
+
+      const result = spawnSync(bashExecutable, ['scripts/deploy.sh', '--status'], {
+        cwd: ROOT_DIR,
+        encoding: 'utf8',
+        env: { ...process.env, PATH: binDir },
+      });
+
+      fs.rmSync(fixtureRoot, { recursive: true, force: true });
+
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(1);
+      const output = `${result.stdout ?? ''}${result.stderr ?? ''}`;
+      expect(output).toContain('Docker is not installed on this host');
     });
 
     it('CHALLENGE: verify_health hardcodes 4000/5000 rather than reading from .env', () => {

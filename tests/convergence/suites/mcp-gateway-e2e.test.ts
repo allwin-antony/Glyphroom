@@ -66,6 +66,14 @@ describe('Milestone M4 End-to-End: MCP Tool -> Agent Gateway -> Collab Server ->
       port: 0,
       gatewaySecret,
       quiet: true,
+      authOptions: {
+        authenticate: async ({ token }) => ({
+          id: token ?? 'user-author-alice',
+          role: 'author' as const,
+          name: 'Alice',
+          permissions: ['edit' as const],
+        }),
+      },
     });
     const { port, url } = await collabInstance.listen();
 

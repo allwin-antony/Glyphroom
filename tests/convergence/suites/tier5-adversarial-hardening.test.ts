@@ -32,10 +32,24 @@ import {
   type ProseMirrorDocJSON,
 } from '@enterprise-blogger/shared';
 import {
-  createCollabServer,
+  createCollabServer as createRawCollabServer,
   type CollabServerInstance,
+  type CollabServerOptions,
   InMemoryPersistenceAdapter,
 } from '@enterprise-blogger/collab';
+
+const createCollabServer = (options: CollabServerOptions = {}) => createRawCollabServer({
+  ...options,
+  authOptions: {
+    authenticate: async ({ token }) => ({
+      id: token ?? 'user-author-test',
+      role: 'author' as const,
+      name: 'Test Author',
+      permissions: ['edit' as const],
+    }),
+    ...options.authOptions,
+  },
+});
 import { CollabGatewayClient } from '@enterprise-blogger/mcp-server';
 import { ClientPool, NetworkSimulator } from '../harness/index.js';
 
