@@ -324,6 +324,7 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
           postId="post-1"
           status="draft"
           onStatusChange={onStatusChange}
+          prepareSubmission={async () => {}}
         />
       );
 
@@ -336,7 +337,8 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
       fireEvent.click(confirmBtn);
 
       await waitFor(() => {
-        expect(api.post).toHaveBeenCalledWith('/posts/post-1/submit-review');
+        expect(api.post).toHaveBeenCalledWith('/posts/post-1/submit-review', undefined,
+          expect.objectContaining({ signal: expect.any(AbortSignal) }));
         expect(onStatusChange).toHaveBeenCalledWith('in_review');
       });
     });

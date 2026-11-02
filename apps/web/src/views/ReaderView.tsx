@@ -1,5 +1,7 @@
 import { SlotRenderer } from '../components/plugins/SlotRenderer.js';
 import React, { useState, useEffect, useMemo } from 'react';
+import { MarkdownRenderer } from '../components/reader/MarkdownRenderer.js';
+import { parseMarkdown, type BlockNode } from '../components/reader/markdown.js';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -40,6 +42,9 @@ interface PostDetails {
   workingMarkdown?: string;
   derivedMarkdown?: string;
   publishedAt?: string;
+  /** Upcoming API A: authoritative source of the selected reader content. */
+  contentSource?: 'working' | 'submitted' | 'published';
+  contentVersionId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -63,6 +68,15 @@ interface BookmarkItem {
   postId: string;
   note?: string | null;
 }
+
+const TOC_LEVEL_CLASS: Record<number, string> = {
+  1: 'font-semibold',
+  2: 'pl-3',
+  3: 'pl-6 text-[11px]',
+  4: 'pl-9 text-[11px]',
+  5: 'pl-12 text-[11px]',
+  6: 'pl-14 text-[11px]',
+};
 
 export const ReaderView: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -102,6 +116,35 @@ export const ReaderView: React.FC = () => {
       // ignore
     }
   };
+
+  // Bridge window.scrollY and window.scrollTo to the scrollable <main> container
+  useEffect(() => {
+    const main = document.querySelector('main');
+    if (!main) return;
+    const origScrollTo = window.scrollTo.bind(window);
+    window.scrollTo = (optionsOrX: any, y?: any) => {
+      if (typeof optionsOrX === 'object') {
+        main.scrollTo(optionsOrX);
+      } else if (typeof optionsOrX === 'number' && typeof y === 'number') {
+        main.scrollTo(optionsOrX, y);
+      } else {
+        origScrollTo(optionsOrX, y);
+      }
+    };
+    try {
+      Object.defineProperty(window, 'scrollY', {
+        configurable: true,
+        get: () => main.scrollTop,
+      });
+      Object.defineProperty(window, 'pageYOffset', {
+        configurable: true,
+        get: () => main.scrollTop,
+      });
+    } catch {}
+    return () => {
+      window.scrollTo = origScrollTo;
+    };
+  }, []);
 
   // 1. Fetch Post Data
   useEffect(() => {
@@ -173,29 +216,36 @@ export const ReaderView: React.FC = () => {
 
   const rawMarkdown = useMemo(() => {
     if (!post) return '';
-    return post.derivedMarkdown || post.publishedMarkdown || post.workingMarkdown || `# ${post.title}\n\n${post.excerpt || ''}`;
+    // derivedMarkdown is the authoritative selected reader content (API A).
+    // Empty derived Markdown stays empty: do not fall back to published or
+    // working sources, since the API redacts working content for readers.
+    return post.derivedMarkdown ?? '';
   }, [post]);
 
-  // Extract headings for Table of Contents
+  // Source label derived from the authoritative contentSource field (API A),
+  // not just the workflow status. Backwards-compatible fallback only when the
+  // field is genuinely absent; never exposes working content to a reader.
+  const sourceLabel = useMemo(() => {
+    if (!post) return '';
+    if (post.contentSource === 'working') return 'Working Snapshot';
+    if (post.contentSource === 'submitted') return 'Submitted Version';
+    if (post.contentSource === 'published') return 'Published Version';
+    // Field genuinely absent: fall back to workflow status without exposing
+    // working content (the API redacts working content for readers).
+    return post.status !== 'published' ? `Working Snapshot (${post.status})` : 'Published Version';
+  }, [post]);
+
+  // Extract headings for Table of Contents (levels 1-6 aligned with MarkdownRenderer)
   const tocItems = useMemo<TocItem[]>(() => {
     if (!rawMarkdown) return [];
-    const lines = rawMarkdown.split('\n');
-    const items: TocItem[] = [];
-    let headingIdx = 0;
-
-    for (const line of lines) {
-      const match = line.match(/^(#{1,3})\s+(.+)$/);
-      if (match) {
-        const level = match[1].length;
-        const text = match[2].trim().replace(/[*_`]/g, '');
-        items.push({
-          id: `heading-${headingIdx++}`,
-          text,
-          level,
-        });
-      }
-    }
-    return items;
+    const { blocks } = parseMarkdown(rawMarkdown);
+    return blocks
+      .filter((b): b is BlockNode & { type: 'heading'; level: number; id: string; text: string } => b.type === 'heading')
+      .map((b) => ({
+        id: b.id,
+        text: (b.text ?? '').trim().replace(/[*_`]/g, ''),
+        level: b.level ?? 1,
+      }));
   }, [rawMarkdown]);
 
   // Handle Export Markdown download
@@ -253,197 +303,9 @@ export const ReaderView: React.FC = () => {
     lg: 'text-lg leading-relaxed',
   }[fontSize];
 
-  // Render markdown line-by-line helper
-  const renderMarkdownContent = () => {
-    const lines = rawMarkdown.split('\n');
-    const elements: React.ReactNode[] = [];
-    let headingCounter = 0;
-    let inCodeBlock = false;
-    let codeBlockContent: string[] = [];
-    let inList = false;
-    let listItems: string[] = [];
-
-    const flushList = (key: string) => {
-      if (listItems.length > 0) {
-        const listEl = (
-          <ul className="list-disc pl-6 space-y-1.5 text-text-secondary">
-            {listItems.map((item, idx) => (
-              <li key={idx} dangerouslySetInnerHTML={{ __html: formatInline(item) }} />
-            ))}
-          </ul>
-        );
-        if (readerViewMode === 'block') {
-          elements.push(
-            <div key={key} className="rounded-xl border border-border bg-surface p-5 shadow-xs my-3">
-              <div className="text-[10px] font-mono text-text-muted uppercase tracking-wider mb-2 font-bold">
-                List Cell
-              </div>
-              {listEl}
-            </div>
-          );
-        } else {
-          elements.push(<div key={key} className="my-3">{listEl}</div>);
-        }
-        listItems = [];
-        inList = false;
-      }
-    };
-
-    const flushCodeBlock = (key: string) => {
-      if (codeBlockContent.length > 0) {
-        const preEl = (
-          <pre className="p-3.5 rounded-lg bg-code-bg border border-border text-xs font-mono overflow-x-auto text-foreground">
-            <code>{codeBlockContent.join('\n')}</code>
-          </pre>
-        );
-        if (readerViewMode === 'block') {
-          elements.push(
-            <div key={key} className="rounded-xl border border-border bg-surface p-4 shadow-xs my-3">
-              <div className="text-[10px] font-mono text-accent font-semibold uppercase tracking-wider mb-2">
-                Code Cell
-              </div>
-              {preEl}
-            </div>
-          );
-        } else {
-          elements.push(<div key={key} className="my-4">{preEl}</div>);
-        }
-        codeBlockContent = [];
-        inCodeBlock = false;
-      }
-    };
-
-    const formatInline = (text: string) => {
-      return text
-        .replace(/`([^`]+)`/g, '<code class="px-1.5 py-0.5 rounded bg-code-bg font-mono text-[13px] border border-border">$1</code>')
-        .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-        .replace(/\*([^*]+)\*/g, '<em>$1</em>');
-    };
-
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-
-      // Code blocks
-      if (line.startsWith('```')) {
-        if (inCodeBlock) {
-          flushCodeBlock(`code-${i}`);
-        } else {
-          flushList(`list-before-code-${i}`);
-          inCodeBlock = true;
-          codeBlockContent = [];
-        }
-        continue;
-      }
-      if (inCodeBlock) {
-        codeBlockContent.push(line);
-        continue;
-      }
-
-      // Lists
-      if (line.startsWith('- ') || line.startsWith('* ')) {
-        inList = true;
-        listItems.push(line.replace(/^[-*]\s+/, ''));
-        continue;
-      } else if (inList) {
-        flushList(`list-${i}`);
-      }
-
-      // Alerts: > [!NOTE], > [!TIP], > [!IMPORTANT], > [!WARNING], > [!CAUTION]
-      if (line.startsWith('> [!')) {
-        const alertType = line.match(/> \[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\]/i)?.[1]?.toLowerCase() || 'note';
-        const alertBody: string[] = [];
-        let j = i + 1;
-        while (j < lines.length && lines[j].startsWith('>')) {
-          alertBody.push(lines[j].replace(/^>\s?/, ''));
-          j++;
-        }
-        i = j - 1;
-
-        elements.push(
-          <div key={`alert-${i}`} className={`enterprise-alert enterprise-alert-${alertType} my-4`}>
-            <div dangerouslySetInnerHTML={{ __html: formatInline(alertBody.join(' ')) }} />
-          </div>
-        );
-        continue;
-      }
-
-      // Headings
-      if (line.startsWith('# ')) {
-        const id = `heading-${headingCounter++}`;
-        if (readerViewMode === 'block') {
-          elements.push(
-            <div key={id} id={id} className="pt-8 pb-2 scroll-mt-20">
-              <div className="inline-block px-2 py-0.5 mb-2 rounded bg-accent-bg text-accent text-[10px] font-extrabold uppercase tracking-wider">
-                Block Title
-              </div>
-              <h1 className="text-2xl sm:text-3xl font-extrabold text-foreground border-b-2 border-border pb-2">
-                {line.replace(/^#\s+/, '')}
-              </h1>
-            </div>
-          );
-        } else {
-          elements.push(
-            <h1 key={id} id={id} className="text-2xl sm:text-3xl font-extrabold text-foreground pt-6 pb-2 scroll-mt-20">
-              {line.replace(/^#\s+/, '')}
-            </h1>
-          );
-        }
-        continue;
-      }
-      if (line.startsWith('## ')) {
-        const id = `heading-${headingCounter++}`;
-        elements.push(
-          <h2 key={id} id={id} className="text-xl sm:text-2xl font-bold text-foreground border-b border-border pb-2 pt-6 scroll-mt-20">
-            {line.replace(/^##\s+/, '')}
-          </h2>
-        );
-        continue;
-      }
-      if (line.startsWith('### ')) {
-        const id = `heading-${headingCounter++}`;
-        elements.push(
-          <h3 key={id} id={id} className="text-base sm:text-lg font-bold text-foreground pt-4 scroll-mt-20">
-            {line.replace(/^###\s+/, '')}
-          </h3>
-        );
-        continue;
-      }
-
-      // Empty line
-      if (!line.trim()) {
-        continue;
-      }
-
-      // Paragraph / Prose card
-      if (readerViewMode === 'block') {
-        elements.push(
-          <div key={`card-${i}`} className="rounded-xl border border-border bg-surface p-5 shadow-xs my-3">
-            <div className="text-[10px] font-mono text-text-muted uppercase tracking-wider mb-2 font-bold">
-              Text Cell
-            </div>
-            <p
-              className="text-foreground leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: formatInline(line) }}
-            />
-          </div>
-        );
-      } else {
-        elements.push(
-          <p
-            key={`p-${i}`}
-            className="text-text-main leading-relaxed my-2"
-            dangerouslySetInnerHTML={{ __html: formatInline(line) }}
-          />
-        );
-      }
-    }
-
-    if (inList) flushList('list-end');
-    if (inCodeBlock) flushCodeBlock('code-end');
-
-    return elements;
-  };
-
+  {/* Render markdown content via the unified read-only renderer (ReaderView & ReaderPreview share it). */}
+  {/* The renderer output is placed in the article canvas below. */}
+  
   if (isLoading) {
     return (
       <div className="max-w-[720px] mx-auto py-12 px-4 space-y-6 animate-pulse">
@@ -667,7 +529,7 @@ export const ReaderView: React.FC = () => {
                     document.getElementById(item.id)?.scrollIntoView({ behavior: 'smooth' });
                   }}
                   className={`block text-xs text-text-secondary hover:text-accent-main transition-colors py-1 truncate ${
-                    item.level === 1 ? 'font-semibold' : item.level === 2 ? 'pl-3' : 'pl-6 text-[11px]'
+                    TOC_LEVEL_CLASS[item.level] || 'pl-6 text-[11px]'
                   }`}
                 >
                   {item.text}
@@ -697,9 +559,9 @@ export const ReaderView: React.FC = () => {
                   {post.coeName}
                 </div>
               )}
-              {post.status !== 'published' && (
+              {(post.contentSource !== undefined || post.status !== 'published') && (
                 <div className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-semibold bg-status-warning/15 text-status-warning border border-status-warning/30">
-                  Working Snapshot ({post.status})
+                  {sourceLabel}
                 </div>
               )}
             </div>
@@ -740,7 +602,7 @@ export const ReaderView: React.FC = () => {
 
           {/* Reader Prose Content */}
           <article className={`space-y-4 ${fontSizeClass}`}>
-            {renderMarkdownContent()}
+            <MarkdownRenderer markdown={rawMarkdown} mode={readerViewMode} />
           </article>
         </div>
 

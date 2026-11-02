@@ -128,3 +128,64 @@ export const SuggestionDelete = Mark.create({
     ];
   },
 });
+
+export const Attribution = Mark.create({
+  name: 'attribution',
+
+  addOptions() {
+    return {
+      HTMLAttributes: {},
+    };
+  },
+
+  addAttributes() {
+    return {
+      authorType: { default: 'agent' },
+      agentId: { default: null },
+      tokenId: { default: null },
+      ownerUserId: { default: null },
+      acceptedBy: { default: null },
+      acceptedAt: { default: 0 },
+    };
+  },
+
+  parseHTML() {
+    return [
+      {
+        tag: 'span[data-attribution="true"]',
+        getAttrs: (element) => {
+          if (typeof element === 'string') return false;
+          return {
+            authorType: element.getAttribute('data-author-type') || 'agent',
+            agentId: element.getAttribute('data-agent-id') || null,
+            tokenId: element.getAttribute('data-token-id') || null,
+            ownerUserId: element.getAttribute('data-owner-user-id') || null,
+            acceptedBy: element.getAttribute('data-accepted-by') || null,
+            acceptedAt: Number(element.getAttribute('data-accepted-at')) || 0,
+          };
+        },
+      },
+      {
+        tag: 'span.provenance-attribution',
+      },
+    ];
+  },
+
+  renderHTML({ HTMLAttributes }) {
+    return [
+      'span',
+      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+        class: `provenance-attribution author-${HTMLAttributes.authorType || 'agent'}`,
+        'data-attribution': 'true',
+        'data-author-type': HTMLAttributes.authorType || 'agent',
+        'data-agent-id': HTMLAttributes.agentId || '',
+        'data-token-id': HTMLAttributes.tokenId || '',
+        'data-owner-user-id': HTMLAttributes.ownerUserId || '',
+        'data-accepted-by': HTMLAttributes.acceptedBy || '',
+        'data-accepted-at': String(HTMLAttributes.acceptedAt || 0),
+      }),
+      0,
+    ];
+  },
+});
+

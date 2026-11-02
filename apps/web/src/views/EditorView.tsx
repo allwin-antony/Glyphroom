@@ -10,6 +10,7 @@ import { WordCountIndicator } from '../components/editor/WordCountIndicator.js';
 import { SubmitReviewButton } from '../components/editor/SubmitReviewButton.js';
 import { DrawerPanel } from '../components/editor/DrawerPanel.js';
 import { api, ApiError } from '../lib/api.js';
+import { waitForCollabSync } from '../lib/collab-sync.js';
 import { useAuth } from '../context/AuthContext.js';
 import { getCollaboratorColor } from '../components/AwarenessBar.js';
 import {
@@ -20,6 +21,8 @@ import {
   PanelRightClose,
 } from 'lucide-react';
 
+type PendingTitle = { postId: string; userId: string; title: string };
+
 export const EditorView: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -27,22 +30,60 @@ export const EditorView: React.FC = () => {
 
   const [postMetadata, setPostMetadata] = useState<any>(null);
   const [title, setTitle] = useState('');
-  const [postStatus, setPostStatus] = useState<'draft' | 'in_review' | 'published' | 'changes_requested'>('draft');
+  const [postStatus, setPostStatus] = useState<'draft' | 'in_review' | 'approved' | 'published' | 'changes_requested'>('draft');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   // Editor instance and provider state
   const [editor, setEditor] = useState<any | null>(null);
-  const [provider, setProvider] = useState<HocuspocusProvider | null>(null);
+  const [editAccess, setEditAccess] = useState<{ routeId: string; userId: string; post: any } | null>(null);
+  const [collaboration, setCollaboration] = useState<{
+    access: NonNullable<typeof editAccess>; doc: Y.Doc; provider: HocuspocusProvider;
+  } | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(true);
   const [suggestionCount, setSuggestionCount] = useState(0);
 
   // Title debounce auto-save ref
   const titleTimerRef = useRef<any>(null);
+  const pendingTitleRef = useRef<PendingTitle | null>(null);
+  const titleSaveRef = useRef<{ pending: PendingTitle; promise: Promise<void> } | null>(null);
+  const userIdRef = useRef(user?.userId);
+  userIdRef.current = user?.userId;
+  const savePendingTitle = useCallback(async (expectedPostId?: string) => {
+    if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+    const inScope = (entry: PendingTitle) => !expectedPostId
+      || (entry.postId === expectedPostId && entry.userId === userIdRef.current);
+    const pending = pendingTitleRef.current && inScope(pendingTitleRef.current) ? pendingTitleRef.current : null;
+    const previous = titleSaveRef.current && inScope(titleSaveRef.current.pending) ? titleSaveRef.current : null;
+    if (!pending) return previous?.promise;
+    if (pending.userId !== userIdRef.current) {
+      pendingTitleRef.current = null;
+      return;
+    }
+    if (previous?.pending === pending) return previous.promise;
+    // Serialize title writes and reuse an already-dispatched save as a barrier.
+    // A failure keeps the latest title pending so preparation can retry it.
+    const persist = async () => {
+      if (pending.userId !== userIdRef.current) return;
+      await api.patch(`/posts/${pending.postId}`, { title: pending.title });
+      if (pendingTitleRef.current === pending) pendingTitleRef.current = null;
+    };
+    const sameDocument = previous?.pending.postId === pending.postId && previous.pending.userId === pending.userId;
+    const promise = sameDocument ? previous!.promise.catch(() => {}).then(persist) : persist();
+    const save = { pending, promise };
+    titleSaveRef.current = save;
+    try {
+      await promise;
+    } finally {
+      if (titleSaveRef.current === save) titleSaveRef.current = null;
+    }
+  }, []);
 
-  // 1. Stable Y.Doc per post ID
-  const ydoc = useMemo(() => new Y.Doc(), [id]);
-  const isWsSyncedRef = useRef(false);
+  const activeCollaboration = collaboration?.access === editAccess && editAccess?.routeId === id
+    && editAccess?.userId === user?.userId ? collaboration : null;
+  const provider = activeCollaboration?.provider ?? null;
+  const ydoc = activeCollaboration?.doc;
+  const postId = activeCollaboration?.access.post.id as string | undefined;
 
   // 2. Fetch post metadata from REST API
   useEffect(() => {
@@ -53,29 +94,24 @@ export const EditorView: React.FC = () => {
       try {
         setIsLoading(true);
         setLoadError(null);
+        setEditAccess(null);
+        setPostMetadata(null);
         const res = await api.get<{ post: any; userPermission: string }>(`/posts/${id}`);
         if (isMounted && res?.post) {
-          setPostMetadata(res.post);
-          setTitle(res.post.title || 'Untitled Post');
-          setPostStatus(res.post.status || 'draft');
-
-          if (res.post.yjsState) {
-            try {
-              let binary: Uint8Array | null = null;
-              if (res.post.yjsState.data && Array.isArray(res.post.yjsState.data)) {
-                binary = new Uint8Array(res.post.yjsState.data);
-              } else if (typeof res.post.yjsState === 'string') {
-                binary = new Uint8Array(res.post.yjsState.match(/.{1,2}/g)?.map((b: string) => parseInt(b, 16)) || []);
-              } else if (res.post.yjsState instanceof Uint8Array) {
-                binary = res.post.yjsState;
-              }
-              if (binary && binary.length > 0 && !isWsSyncedRef.current && ydoc.share.size === 0) {
-                Y.applyUpdate(ydoc, binary);
-              }
-            } catch (yErr) {
-              console.warn('Failed to hydrate initial Yjs document state:', yErr);
-            }
+          if (!user || !['admin', 'edit'].includes(res.userPermission)) {
+            setLoadError('Editing access is required. Open this post in the reader.');
+            return;
           }
+          // A navigation save may finish independently, but the new editor must
+          // never await or retry a different document's title operation.
+          if (pendingTitleRef.current?.postId !== res.post.id || pendingTitleRef.current?.userId !== user.userId) pendingTitleRef.current = null;
+          if (titleSaveRef.current?.pending.postId !== res.post.id || titleSaveRef.current?.pending.userId !== user.userId) titleSaveRef.current = null;
+          setPostMetadata(res.post);
+          setTitle(pendingTitleRef.current?.title ?? res.post.title ?? 'Untitled Post');
+          setPostStatus(res.post.status || 'draft');
+          setEditAccess({ routeId: id!, userId: user.userId, post: res.post });
+        } else if (isMounted) {
+          setLoadError('Failed to load post.');
         }
       } catch (err: any) {
         if (isMounted) {
@@ -95,25 +131,45 @@ export const EditorView: React.FC = () => {
     fetchPost();
     return () => {
       isMounted = false;
+      // Preserve the captured post's last title on navigation; an identity
+      // change is discarded by savePendingTitle rather than saved as a new user.
+      void savePendingTitle().catch((err) => console.error('Failed to autosave title:', err));
     };
-  }, [id]);
+  }, [id, user?.userId, savePendingTitle]);
 
   // 3. Connect HocuspocusProvider
   useEffect(() => {
-    if (!id || !user) return;
+    if (!id || !user || !editAccess || editAccess.routeId !== id || editAccess.userId !== user.userId) return;
+    const doc = new Y.Doc();
+    try {
+      const state = editAccess.post.yjsState;
+      const binary = Array.isArray(state?.data) ? new Uint8Array(state.data)
+        : state instanceof Uint8Array ? state
+        : typeof state === 'string' && /^(?:[a-f0-9]{2})+$/i.test(state)
+          ? new Uint8Array(state.match(/.{2}/g)!.map((byte: string) => parseInt(byte, 16))) : null;
+      if (!binary?.length) throw new Error('Missing editor state');
+      Y.applyUpdate(doc, binary);
+      if (doc.store.pendingStructs || doc.store.pendingDs) throw new Error('Incomplete editor state');
+    } catch {
+      doc.destroy();
+      setLoadError('The working document could not be loaded. Please reload before editing.');
+      return;
+    }
 
     const wsUrl = (import.meta as any).env?.VITE_COLLAB_WS_URL || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
-    const roomName = `post-${id}`;
-    const token = `token-${user.role}-${user.userId}`;
+    let disposed = false;
 
     const hpProvider = new HocuspocusProvider({
       url: wsUrl,
-      name: roomName,
-      document: ydoc,
-      token,
-      onSynced: (data) => {
-        if (data.state) {
-          isWsSyncedRef.current = true;
+      name: `post-${editAccess.post.id}`,
+      document: doc,
+      // The browser sends the HttpOnly session cookie on the WS upgrade.
+      onAuthenticationFailed: () => {
+        if (!disposed) {
+          pendingTitleRef.current = null;
+          if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
+          setLoadError('Collaboration authentication failed. Please sign in again or check your edit access.');
+          setEditAccess(null);
         }
       },
     });
@@ -128,13 +184,14 @@ export const EditorView: React.FC = () => {
       });
     }
 
-    setProvider(hpProvider);
+    setCollaboration({ access: editAccess, doc, provider: hpProvider });
 
     return () => {
+      disposed = true;
       hpProvider.destroy();
-      ydoc.destroy();
+      doc.destroy();
     };
-  }, [id, user, ydoc]);
+  }, [id, user?.userId, editAccess]);
 
   // 4. Scan suggestion count for drawer badge
   const updateSuggestionCount = useCallback(() => {
@@ -163,13 +220,10 @@ export const EditorView: React.FC = () => {
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
     if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
-    titleTimerRef.current = setTimeout(async () => {
-      if (!id) return;
-      try {
-        await api.patch(`/posts/${id}`, { title: newTitle });
-      } catch (err) {
-        console.error('Failed to autosave title:', err);
-      }
+    if (!postId || !user) return;
+    pendingTitleRef.current = { postId, userId: user.userId, title: newTitle };
+    titleTimerRef.current = setTimeout(() => {
+      void savePendingTitle().catch((err) => console.error('Failed to autosave title:', err));
     }, 800);
   };
 
@@ -182,7 +236,7 @@ export const EditorView: React.FC = () => {
     color: getCollaboratorColor(provider?.awareness?.clientID || 1, false),
   }), [user, provider?.awareness?.clientID]);
 
-  if (isLoading) {
+  if (isLoading || (!loadError && (!ydoc || !provider))) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] text-foreground">
         <Loader2 className="w-8 h-8 text-accent animate-spin mb-3" />
@@ -212,6 +266,8 @@ export const EditorView: React.FC = () => {
       </div>
     );
   }
+
+  if (!ydoc || !provider) return null;
 
   return (
     <div className="flex flex-col h-full bg-canvas text-foreground overflow-hidden">
@@ -245,10 +301,16 @@ export const EditorView: React.FC = () => {
           <AgentPresenceChip provider={provider} />
 
           {/* Submit for Review Flow */}
-          {id && (
+          {postId && (
             <SubmitReviewButton
-              postId={id}
+              postId={postId}
               status={postStatus}
+              submittedVersionId={postMetadata?.submittedVersionId}
+              hasPriorPublication={typeof postMetadata?.publishedMarkdown === 'string'}
+              prepareSubmission={async (signal) => {
+                await savePendingTitle(postId);
+                await waitForCollabSync(provider, { signal });
+              }}
               onStatusChange={(newStatus) => {
                 setPostStatus(newStatus as any);
                 setPostMetadata((prev: any) => prev ? { ...prev, status: newStatus } : prev);
@@ -295,16 +357,16 @@ export const EditorView: React.FC = () => {
             onEditorReady={setEditor}
             hideSidebar={true}
             onDocChange={() => {}}
-            postId={id}
+            postId={postId}
           />
         </main>
 
         {/* Tabbed Right Drawer Panel */}
-        {id && (
+        {postId && (
           <DrawerPanel
             isOpen={isDrawerOpen}
             onClose={() => setIsDrawerOpen(false)}
-            postId={id}
+            postId={postId}
             ydoc={ydoc}
             editor={editor}
             currentUser={currentUser}

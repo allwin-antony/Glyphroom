@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Search,
@@ -73,6 +73,8 @@ export const CatalogView: React.FC = () => {
   const [selectedCoe, setSelectedCoe] = useState('all');
   const [selectedStatus, setSelectedStatus] = useState('all');
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'title'>('newest');
+  const queryRef = useRef({ searchTerm, selectedCoe, selectedStatus, sortBy });
+  queryRef.current = { searchTerm, selectedCoe, selectedStatus, sortBy };
   const [viewMode, setViewMode] = useState<'grid' | 'list'>(() => {
     return (localStorage.getItem('glyphroom_catalog_view') as 'grid' | 'list') || 'grid';
   });
@@ -128,8 +130,17 @@ export const CatalogView: React.FC = () => {
     if (!pagination?.hasNextPage || isLoadingMore) return;
     setIsLoadingMore(true);
     setError(null);
+    const requested = { ...queryRef.current };
     try {
       const res = await api.get<CatalogResponse>(buildCatalogUrl(pagination.page + 1));
+      if (
+        queryRef.current.searchTerm !== requested.searchTerm ||
+        queryRef.current.selectedCoe !== requested.selectedCoe ||
+        queryRef.current.selectedStatus !== requested.selectedStatus ||
+        queryRef.current.sortBy !== requested.sortBy
+      ) {
+        return;
+      }
       setPosts((current) => [...current, ...(res.posts || [])]);
       setPagination(res.pagination || {
         ...pagination,
@@ -534,7 +545,7 @@ export const CatalogView: React.FC = () => {
             disabled={isLoadingMore}
             className="px-4 py-2 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-elevated disabled:opacity-60 transition-colors"
           >
-            {isLoadingMore ? 'Loading…' : `Load more${pagination.total ? ` (${posts.length} of ${pagination.total})` : ''}`}
+            {isLoadingMore ? 'Load more (Loading…)' : `Load more${pagination.total ? ` (${posts.length} of ${pagination.total})` : ''}`}
           </button>
         </div>
       )}

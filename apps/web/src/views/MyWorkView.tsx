@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   PlusCircle,
@@ -33,35 +33,88 @@ export const MyWorkView: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState<'drafts' | 'in_review' | 'published' | 'shared' | 'suggestions'>('drafts');
   const [posts, setPosts] = useState<CatalogPost[]>([]);
+  const [allPostsLoaded, setAllPostsLoaded] = useState(false);
+  const [tabPage, setTabPage] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
   const [submittingPostId, setSubmittingPostId] = useState<string | null>(null);
+
+  const TAB_LIMIT = 24;
+
+  const mountedRef = useRef(false);
+  const loadSequence = useRef(0);
+  const loadRequest = useRef<AbortController | null>(null);
 
   // Post Deletion state
   const [postToDelete, setPostToDelete] = useState<CatalogPost | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  const fetchMyPosts = () => {
-    setIsLoading(true);
-    setActionError(null);
-    api
-      .get<{ posts: CatalogPost[] }>('/posts')
-      .then((res) => {
-        if (res.posts) {
-          setPosts(res.posts);
-        }
-      })
-      .catch((err) => {
-        console.error('Failed to load my work posts:', err);
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+  const clampTabPage = () => {
+    const total = currentTabPosts.length;
+    const totalPages = Math.max(1, Math.ceil(total / TAB_LIMIT));
+    if (tabPage < 1 || tabPage > totalPages) {
+      setTabPage(totalPages || 1);
+    }
   };
 
   useEffect(() => {
+    clampTabPage();
+  }, [posts, activeTab, tabPage]);
+
+  const fetchMyPosts = async () => {
+    if (!mountedRef.current) return;
+    loadRequest.current?.abort();
+    const sequence = ++loadSequence.current;
+    const controller = new AbortController();
+    loadRequest.current = controller;
+    const isCurrent = () => mountedRef.current && !controller.signal.aborted && sequence === loadSequence.current;
+    setIsLoading(true);
+    setLoadError(null);
+    setAllPostsLoaded(false);
+    setPosts([]);
+    const collected: CatalogPost[] = [];
+    let page = 1;
+    let hasNextPage = true;
+    try {
+      // Collect every authorized page (max 100 each) so ownership/tab totals reflect the complete
+      // collection, not just the first 24. Follow pagination.metadata until exhausted; a partial
+      // failure is surfaced as an error, never as a complete success.
+      while (hasNextPage) {
+        if (!isCurrent()) return;
+        const res = await api.get<{ posts: CatalogPost[]; pagination?: { page: number; limit: number; total: number; totalPages: number; hasNextPage: boolean } }>(`/posts?page=${page}&limit=100`, { signal: controller.signal });
+        if (!isCurrent()) return;
+        if (!res.pagination) throw new Error('Unable to verify the complete work collection.');
+        collected.push(...(res.posts || []));
+        hasNextPage = res.pagination.hasNextPage;
+        page += 1;
+      }
+      if (!isCurrent()) return;
+      setPosts(collected);
+      if (!isCurrent()) return;
+      setAllPostsLoaded(true);
+    } catch (err: any) {
+      if (!isCurrent()) return;
+      setLoadError(err.message || 'Unable to load your work posts.');
+      if (!isCurrent()) return;
+      setAllPostsLoaded(false);
+    } finally {
+      if (!isCurrent()) return;
+      if (loadRequest.current === controller) loadRequest.current = null;
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    mountedRef.current = true;
     fetchMyPosts();
+    return () => {
+      mountedRef.current = false;
+      loadSequence.current++;
+      loadRequest.current?.abort();
+      loadRequest.current = null;
+    };
   }, []);
 
   // Filter posts by user ownership if author
@@ -88,17 +141,23 @@ export const MyWorkView: React.FC = () => {
     suggestions,
   }[activeTab];
 
+  const totalTabPages = Math.max(1, Math.ceil(currentTabPosts.length / TAB_LIMIT));
+  const tabStart = (tabPage - 1) * TAB_LIMIT;
+  const displayedTabPosts = currentTabPosts.slice(tabStart, tabStart + TAB_LIMIT);
+
   const handleSubmitForReview = async (postId: string) => {
     setSubmittingPostId(postId);
     setActionError(null);
     try {
       await api.post(`/posts/${postId}/submit-review`);
+      if (!mountedRef.current) return;
       fetchMyPosts();
     } catch (err: any) {
+      if (!mountedRef.current) return;
       console.error('Failed to submit post for review:', err);
       setActionError(err.message || 'Unable to submit post for review.');
     } finally {
-      setSubmittingPostId(null);
+      if (mountedRef.current) setSubmittingPostId(null);
     }
   };
 
@@ -108,13 +167,15 @@ export const MyWorkView: React.FC = () => {
     setDeleteError(null);
     try {
       await api.delete(`/posts/${postToDelete.id}`);
+      if (!mountedRef.current) return;
       setPostToDelete(null);
       fetchMyPosts();
     } catch (err: any) {
+      if (!mountedRef.current) return;
       console.error('Failed to delete post:', err);
       setDeleteError(err.message || 'Unable to delete post. Author or Admin permission required.');
     } finally {
-      setIsDeleting(false);
+      if (mountedRef.current) setIsDeleting(false);
     }
   };
 
@@ -155,11 +216,11 @@ export const MyWorkView: React.FC = () => {
       {/* Segmented Tabs */}
       <div className="flex border-b border-border gap-2 overflow-x-auto">
         {[
-          { id: 'drafts', label: `Drafts (${drafts.length})`, icon: FileText },
-          { id: 'in_review', label: `In Review (${inReview.length})`, icon: Clock },
-          { id: 'published', label: `Published (${published.length})`, icon: CheckCircle2 },
-          { id: 'shared', label: `Shared with Me (${sharedWithMe.length})`, icon: Users },
-          { id: 'suggestions', label: `Suggestions Waiting (${suggestions.length})`, icon: Sparkles },
+          { id: 'drafts', label: `Drafts (${allPostsLoaded ? drafts.length : '—'})`, icon: FileText },
+          { id: 'in_review', label: `In Review (${allPostsLoaded ? inReview.length : '—'})`, icon: Clock },
+          { id: 'published', label: `Published (${allPostsLoaded ? published.length : '—'})`, icon: CheckCircle2 },
+          { id: 'shared', label: `Shared with Me (${allPostsLoaded ? sharedWithMe.length : '—'})`, icon: Users },
+          { id: 'suggestions', label: `Suggestions Waiting (${allPostsLoaded ? suggestions.length : '—'})`, icon: Sparkles },
         ].map((tab) => {
           const Icon = tab.icon;
           return (
@@ -184,6 +245,20 @@ export const MyWorkView: React.FC = () => {
         {isLoading ? (
           <div className="p-8 text-center text-xs text-text-muted animate-pulse">
             Loading your workspace documents...
+          </div>
+        ) : !allPostsLoaded ? (
+          <div className="p-12 text-center space-y-3">
+            <AlertCircle className="w-10 h-10 mx-auto text-status-danger" />
+            <h3 className="text-sm font-bold text-foreground">Unable to load your work</h3>
+            <p className="text-xs text-text-secondary max-w-sm mx-auto">
+              {loadError || 'The complete work collection is temporarily unavailable.'}
+            </p>
+            <button
+              onClick={fetchMyPosts}
+              className="px-3.5 py-1.5 rounded-lg bg-surface border border-border text-xs font-semibold text-foreground hover:bg-elevated transition-colors"
+            >
+              Try again
+            </button>
           </div>
         ) : currentTabPosts.length === 0 ? (
           <div className="p-12 text-center space-y-3">
@@ -212,7 +287,7 @@ export const MyWorkView: React.FC = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-border text-text-secondary">
-              {currentTabPosts.map((post) => (
+              {displayedTabPosts.map((post) => (
                 <tr key={post.id} className="hover:bg-canvas/50 transition-colors">
                   <td className="px-5 py-4 font-medium text-foreground">
                     <div className="flex items-center gap-2">
@@ -306,6 +381,32 @@ export const MyWorkView: React.FC = () => {
           </table>
         )}
       </div>
+
+        {!isLoading && allPostsLoaded && currentTabPosts.length > 0 && (
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-4 border-t border-border bg-canvas/50">
+            <div className="text-xs text-text-secondary">
+              {currentTabPosts.length} item{currentTabPosts.length !== 1 ? 's' : ''} &bull; page {tabPage} of {totalTabPages}
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setTabPage(tabPage - 1)}
+                disabled={tabPage === 1 || isLoading}
+                aria-label="Previous page"
+                className="px-3 py-1 rounded bg-surface border border-border text-xs font-semibold text-foreground hover:bg-elevated disabled:opacity-50 disabled:pointer-events-none transition-colors"
+              >
+                Prev
+              </button>
+              <button
+                onClick={() => setTabPage(tabPage + 1)}
+                disabled={tabPage >= totalTabPages || isLoading}
+                aria-label="Next page"
+                className="px-3 py-1 rounded bg-surface border border-border text-xs font-semibold text-foreground hover:bg-elevated disabled:opacity-50 disabled:pointer-events-none transition-colors"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
 
       {/* Delete Post Confirmation Dialog */}
       <Dialog open={!!postToDelete} onOpenChange={(open) => !open && setPostToDelete(null)}>

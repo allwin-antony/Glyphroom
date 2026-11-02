@@ -104,9 +104,11 @@ export const SuggestionsTab: React.FC<SuggestionsTabProps> = ({
     };
   }, [editor, scanSuggestions]);
 
+  const fragmentName = ydoc.share.has('prosemirror') ? 'prosemirror' : ydoc.share.has('default') ? 'default' : 'prosemirror';
+
   const handleAccept = (sug: SuggestionItemData) => {
     try {
-      acceptSuggestion(ydoc, sug.id, currentUser.userId || 'human', 'prosemirror');
+      acceptSuggestion(ydoc, sug.id, currentUser.userId || 'human', fragmentName);
     } catch (e) {
       console.warn('acceptSuggestion fallback:', e);
       if (editor) {
@@ -122,7 +124,7 @@ export const SuggestionsTab: React.FC<SuggestionsTabProps> = ({
 
   const handleReject = (sug: SuggestionItemData) => {
     try {
-      rejectSuggestion(ydoc, sug.id, currentUser.userId || 'human', 'prosemirror');
+      rejectSuggestion(ydoc, sug.id, currentUser.userId || 'human', fragmentName);
     } catch (e) {
       console.warn('rejectSuggestion fallback:', e);
       if (editor) {
@@ -140,7 +142,7 @@ export const SuggestionsTab: React.FC<SuggestionsTabProps> = ({
     ydoc.transact(() => {
       suggestions.forEach((sug) => {
         try {
-          acceptSuggestion(ydoc, sug.id, currentUser.userId || 'human', 'prosemirror');
+          acceptSuggestion(ydoc, sug.id, currentUser.userId || 'human', fragmentName);
         } catch {
           handleAccept(sug);
         }
@@ -153,7 +155,7 @@ export const SuggestionsTab: React.FC<SuggestionsTabProps> = ({
     ydoc.transact(() => {
       suggestions.forEach((sug) => {
         try {
-          rejectSuggestion(ydoc, sug.id, currentUser.userId || 'human', 'prosemirror');
+          rejectSuggestion(ydoc, sug.id, currentUser.userId || 'human', fragmentName);
         } catch {
           handleReject(sug);
         }

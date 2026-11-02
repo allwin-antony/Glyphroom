@@ -11,6 +11,19 @@ export interface SaveStatusBadgeProps {
   className?: string;
 }
 
+/**
+ * Resolves connection status across both real HocuspocusProvider instances
+ * (where status resides on provider.configuration.websocketProvider.status)
+ * and test mock providers (which specify provider.status directly).
+ */
+function getProviderStatus(provider?: HocuspocusProvider | null): string | undefined {
+  if (!provider) return undefined;
+  return (
+    (provider as any).status ??
+    (provider as any).configuration?.websocketProvider?.status
+  );
+}
+
 export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
   provider,
   hasUnsavedChanges = false,
@@ -25,7 +38,8 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
     }
 
     const handleOnline = () => {
-      setStatus((provider as any)?.status === 'connected' ? 'saved' : 'reconnecting');
+      const currentStatus = getProviderStatus(provider);
+      setStatus(currentStatus === 'connected' ? (provider?.hasUnsyncedChanges ? 'saving' : 'saved') : 'reconnecting');
     };
     const handleOffline = () => setStatus('offline');
 
@@ -48,12 +62,12 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
       } else if (wsStatus === 'connecting') {
         setStatus('reconnecting');
       } else if (wsStatus === 'connected') {
-        setStatus((provider as any).hasUnsyncedChanges ? 'saving' : 'saved');
+        setStatus(provider.hasUnsyncedChanges ? 'saving' : 'saved');
       }
     };
 
     const onSynced = ({ state }: { state: boolean }) => {
-      if (state && !(provider as any).hasUnsyncedChanges) {
+      if (state && !provider.hasUnsyncedChanges) {
         clearTimeout(saveDebounceTimer);
         saveDebounceTimer = setTimeout(() => {
           setStatus('saved');
@@ -78,9 +92,12 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
     provider.on('unsyncedChanges', onUnsynced);
 
     // Initial state reflection
-    if ((provider as any)?.status === 'connected') {
-      setStatus((provider as any).hasUnsyncedChanges ? 'saving' : 'saved');
-    } else if ((provider as any)?.status === 'connecting') {
+    const currentStatus = getProviderStatus(provider);
+    if ((typeof navigator !== 'undefined' && !navigator.onLine) || currentStatus === 'disconnected') {
+      setStatus('offline');
+    } else if (currentStatus === 'connected') {
+      setStatus(provider.hasUnsyncedChanges ? 'saving' : 'saved');
+    } else if (currentStatus === 'connecting') {
       setStatus('reconnecting');
     }
 

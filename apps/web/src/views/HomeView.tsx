@@ -11,6 +11,7 @@ import {
   Plus,
   FileText,
   User,
+  AlertCircle,
 } from 'lucide-react';
 import type { CatalogPost } from './CatalogView.js';
 
@@ -20,11 +21,35 @@ export const HomeView: React.FC = () => {
 
   const [posts, setPosts] = useState<CatalogPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [homeError, setHomeError] = useState<string | null>(null);
+  const [counts, setCounts] = useState<{ published: number | null; review: number | null; drafts: number | null }>({ published: null, review: null, drafts: null });
+  const [countsLoading, setCountsLoading] = useState(true);
+  const [countsError, setCountsError] = useState<string | null>(null);
+
+  interface CountResponse {
+    posts: CatalogPost[];
+    pagination?: { page: number; limit: number; total: number; totalPages: number; hasNextPage: boolean };
+  }
+
+  // Small authorized count query (limit 1). The server returns pagination.total for the requested status.
+  // It rejects on failure so the caller can distinguish an unavailable count from a real zero.
+  const fetchCount = async (statuses: CatalogPost['status'][]): Promise<number> => {
+    const params = new URLSearchParams();
+    statuses.forEach((status) => params.append('status', status));
+    params.set('limit', '1');
+    const res = await api.get<CountResponse>(`/posts?${params.toString()}`);
+    const total = res.pagination?.total;
+    if (typeof total !== 'number' || !Number.isSafeInteger(total) || total < 0) {
+      throw new Error('Authorized count is unavailable.');
+    }
+    return total;
+  };
 
   useEffect(() => {
     let isCurrent = true;
-    api
-      .get<{ posts: CatalogPost[] }>('/posts')
+
+    // Recent stories preview: bounded first page, intentionally not a complete queue.
+    api.get<{ posts: CatalogPost[] }>('/posts')
       .then((res) => {
         if (isCurrent && res.posts) {
           setPosts(res.posts);
@@ -32,12 +57,37 @@ export const HomeView: React.FC = () => {
       })
       .catch((err) => {
         console.warn('Could not load home posts:', err);
+        if (isCurrent) setHomeError(err.message || 'Unable to load recent stories.');
       })
       .finally(() => {
-        if (isCurrent) {
-          setIsLoading(false);
+        if (isCurrent) setIsLoading(false);
+      });
+
+    // Accurate authorized totals via small status-specific count queries (limit 1).
+    // A failed or unavailable count is shown as such, never faked to zero or "all reviewed".
+    Promise.allSettled(
+      [
+        { key: 'published' as const, statuses: ['published'] as CatalogPost['status'][] },
+        { key: 'review' as const, statuses: ['in_review', 'approved'] as CatalogPost['status'][] },
+        { key: 'drafts' as const, statuses: ['draft'] as CatalogPost['status'][] },
+      ].map(({ key, statuses }) =>
+        fetchCount(statuses).then((total) => ({ key, total }))
+      )
+    ).then((results) => {
+      if (!isCurrent) return;
+      const next: { published: number | null; review: number | null; drafts: number | null } = { published: null, review: null, drafts: null };
+      let hadError = false;
+      results.forEach((result) => {
+        if (result.status === 'fulfilled') {
+          next[result.value.key] = result.value.total;
+        } else {
+          hadError = true;
         }
       });
+      setCounts(next);
+      setCountsLoading(false);
+      if (hadError) setCountsError('Some counts are temporarily unavailable.');
+    });
 
     return () => {
       isCurrent = false;
@@ -45,10 +95,10 @@ export const HomeView: React.FC = () => {
   }, []);
 
   const publishedPosts = posts.filter((p) => p.status === 'published');
-  const inReviewPosts = posts.filter((p) => p.status === 'in_review');
-  const draftPosts = posts.filter((p) => p.status === 'draft');
-
   const featuredPosts = publishedPosts.length > 0 ? publishedPosts.slice(0, 3) : posts.slice(0, 3);
+
+  const reviewCount = counts.review ?? 0;
+  const reviewAvailable = counts.review !== null;
 
   return (
     <div className="max-w-7xl mx-auto p-6 space-y-8">
@@ -90,19 +140,19 @@ export const HomeView: React.FC = () => {
         {[
           {
             label: 'Published Stories',
-            value: `${publishedPosts.length || 0} Stories`,
+            value: countsLoading ? '—' : (counts.published === null ? '—' : `${counts.published} Stories`),
             icon: BookOpen,
             color: 'text-accent-main',
           },
           {
             label: 'In Review',
-            value: `${inReviewPosts.length || 0} Pending`,
+            value: countsLoading ? '—' : (reviewAvailable ? `${reviewCount} Pending` : '—'),
             icon: Clock,
             color: 'text-status-warning',
           },
           {
             label: 'Your Drafts',
-            value: `${draftPosts.length || 0} Drafts`,
+            value: countsLoading ? '—' : (counts.drafts === null ? '—' : `${counts.drafts} Drafts`),
             icon: FileText,
             color: 'text-agent',
           },
@@ -124,6 +174,19 @@ export const HomeView: React.FC = () => {
           );
         })}
       </div>
+
+      {homeError && (
+        <div className="p-4 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{homeError}</span>
+        </div>
+      )}
+      {countsError && (
+        <div className="p-4 rounded-xl bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-center gap-2">
+          <AlertCircle className="w-4 h-4 shrink-0" />
+          <span>{countsError}</span>
+        </div>
+      )}
 
       {/* Main Grid: Featured Stories & Workspace */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
@@ -234,12 +297,16 @@ export const HomeView: React.FC = () => {
               <div className="p-3.5 rounded-lg bg-canvas border border-border">
                 <div className="text-xs font-semibold text-status-warning flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" />
-                  <span>Review Queue ({inReviewPosts.length})</span>
+                  <span>Review Queue ({countsLoading ? '—' : reviewAvailable ? reviewCount : '—'})</span>
                 </div>
                 <div className="text-[11px] text-text-secondary mt-1">
-                  {inReviewPosts.length > 0
-                    ? `${inReviewPosts.length} story submission(s) waiting for editorial review.`
-                    : 'All submitted stories have been reviewed.'}
+                  {countsLoading
+                    ? 'Loading review queue...'
+                    : reviewAvailable
+                    ? reviewCount > 0
+                      ? `${reviewCount} story submission(s) waiting for editorial review or publication approval.`
+                      : 'All submitted stories have been reviewed.'
+                    : 'Review queue count is temporarily unavailable.'}
                 </div>
                 <button
                   onClick={() => navigate('/reviews')}

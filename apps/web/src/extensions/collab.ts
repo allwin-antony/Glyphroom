@@ -70,6 +70,8 @@ export const Collaboration = Extension.create<CollaborationOptions>({
       'Mod-z': () => undo(this.editor.state),
       'Mod-y': () => redo(this.editor.state),
       'Mod-Shift-z': () => redo(this.editor.state),
+      'Control-End': () => this.editor.commands.focus('end'),
+      'Mod-End': () => this.editor.commands.focus('end'),
     };
   },
 

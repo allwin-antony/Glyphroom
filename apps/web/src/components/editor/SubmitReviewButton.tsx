@@ -26,27 +26,46 @@ import { cn } from '../../lib/utils.js';
 
 export interface SubmitReviewButtonProps {
   postId: string;
-  status: string; // 'draft' | 'in_review' | 'published' | 'changes_requested'
+  status: string; // 'draft' | 'in_review' | 'approved' | 'published' | 'changes_requested'
+  submittedVersionId?: string | null;
+  hasPriorPublication?: boolean;
   onStatusChange?: (newStatus: string) => void;
+  prepareSubmission?: (signal: AbortSignal) => Promise<void>;
   className?: string;
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function approvedCheckpoint(value: unknown): string | null {
+  return typeof value === 'string' && UUID_PATTERN.test(value) ? value : null;
 }
 
 export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
   postId,
   status,
+  submittedVersionId,
+  hasPriorPublication = false,
   onStatusChange,
+  prepareSubmission,
   className,
 }) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isRepublishOpen, setIsRepublishOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
   const [draftSavedFeedback, setDraftSavedFeedback] = useState(false);
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [changeSummary, setChangeSummary] = useState('');
 
   const dropdownRef = useRef<HTMLDivElement>(null);
+  const submissionRef = useRef<AbortController | null>(null);
+  useEffect(() => {
+    setIsSubmitting(false);
+    return () => {
+      const pending = submissionRef.current;
+      submissionRef.current = null;
+      pending?.abort();
+    };
+  }, [postId, submittedVersionId, hasPriorPublication]);
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -60,16 +79,24 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
   }, []);
 
   const handleConfirmSubmit = async () => {
+    if (submissionRef.current) return;
+    const controller = new AbortController();
+    submissionRef.current = controller;
     setIsSubmitting(true);
     setErrorMessage(null);
 
     try {
+      if (!prepareSubmission) throw new Error('Connect to the collaborative editor before submitting.');
+      await prepareSubmission(controller.signal);
+      if (controller.signal.aborted) return;
       const response = await api.post<{ post: { status: string } }>(
-        `/posts/${postId}/submit-review`
+        `/posts/${postId}/submit-review`, undefined, { signal: controller.signal }
       );
+      if (controller.signal.aborted || submissionRef.current !== controller) return;
       onStatusChange?.(response?.post?.status || 'in_review');
       setIsDialogOpen(false);
     } catch (err: any) {
+      if (controller.signal.aborted) return;
       if (err instanceof ApiError) {
         if (err.status === 403) {
           setErrorMessage('You do not have permission to submit this post for review.');
@@ -79,10 +106,13 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
           setErrorMessage(err.message || 'Submission failed.');
         }
       } else {
-        setErrorMessage('Failed to connect to review service. Please verify your connection.');
+        setErrorMessage(err?.message || 'Failed to connect to review service. Please verify your connection.');
       }
     } finally {
-      setIsSubmitting(false);
+      if (submissionRef.current === controller) {
+        submissionRef.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
 
@@ -104,46 +134,98 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
   };
 
   const handlePublish = async () => {
-    setIsSubmitting(true);
-    setErrorMessage(null);
-    try {
-      await api.post(`/posts/${postId}/publish`);
-      onStatusChange?.('published');
-    } catch (err: any) {
-      if (err instanceof ApiError) {
-        setErrorMessage(err.message || 'Publishing failed.');
-      } else {
-        setErrorMessage('Failed to connect to publishing service.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleRepublish = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!changeSummary.trim() || changeSummary.trim().length < 3) {
-      setErrorMessage('Please provide a meaningful change summary (minimum 3 characters).');
+    if (submissionRef.current) return;
+    const checkpoint = approvedCheckpoint(submittedVersionId);
+    if (!checkpoint) {
+      setErrorMessage('The approved checkpoint is unavailable. Reload the post before publishing.');
       return;
     }
 
+    const controller = new AbortController();
+    submissionRef.current = controller;
     setIsSubmitting(true);
     setErrorMessage(null);
-
     try {
-      await api.post(`/posts/${postId}/republish`, {
-        changeSummary: changeSummary.trim(),
-      });
-      setIsRepublishOpen(false);
-      setChangeSummary('');
-      setDraftSavedFeedback(true);
-      setTimeout(() => setDraftSavedFeedback(false), 3000);
+      const response = await api.post<{ post: {
+        id: string; status: string; publishedVersionId: string; publishedAt: string;
+      } }>(`/posts/${postId}/${hasPriorPublication ? 'republish' : 'publish'}`, {
+        submittedVersionId: checkpoint,
+      }, { signal: controller.signal });
+      if (controller.signal.aborted || submissionRef.current !== controller) return;
+      if (response?.post?.id !== postId || response.post.status !== 'published'
+        || response.post.publishedVersionId !== checkpoint || typeof response.post.publishedAt !== 'string') {
+        throw new Error('The publishing service returned an invalid checkpoint receipt.');
+      }
+      onStatusChange?.(response.post.status);
     } catch (err: any) {
-      setErrorMessage(err?.message || 'Failed to republish changes.');
+      if (controller.signal.aborted) return;
+      if (err instanceof ApiError) {
+        setErrorMessage(err.message || 'Publishing failed.');
+      } else {
+        setErrorMessage(err?.message || 'Failed to connect to publishing service.');
+      }
     } finally {
-      setIsSubmitting(false);
+      if (submissionRef.current === controller) {
+        submissionRef.current = null;
+        setIsSubmitting(false);
+      }
     }
   };
+
+  const submissionDialog = (
+    <Dialog open={isDialogOpen} onOpenChange={(open) => {
+      setIsDialogOpen(open);
+      if (!open) submissionRef.current?.abort();
+    }}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <FileCheck className="w-5 h-5 text-accent" />
+            <span>{status === 'published' ? 'Submit Changes for Review' : 'Submit Post for Review'}</span>
+          </DialogTitle>
+          <DialogDescription className="pt-2 text-xs text-text-secondary leading-relaxed">
+            Your latest edits will sync before an immutable checkpoint enters the
+            <strong> Moderator Review Queue</strong>. You can keep editing; reviewers and publication
+            use the submitted checkpoint, not subsequent working changes.
+          </DialogDescription>
+        </DialogHeader>
+
+        {errorMessage && (
+          <div className="p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+
+        <DialogFooter className="gap-2 sm:gap-0 pt-2">
+          <DialogClose asChild>
+            <Button variant="outline" size="sm" disabled={isSubmitting}>
+              Keep in Draft
+            </Button>
+          </DialogClose>
+          <Button
+            variant="default"
+            size="sm"
+            onClick={handleConfirmSubmit}
+            disabled={isSubmitting}
+            className="gap-1.5 bg-accent text-white hover:opacity-95"
+          >
+            {isSubmitting ? (
+              <>
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                <span>Submitting...</span>
+              </>
+            ) : (
+              <>
+                <FileCheck className="w-3.5 h-3.5" />
+                <span>Confirm & Submit</span>
+              </>
+            )}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
 
   // If already in review, display descriptive badge with revert option
   if (status === 'in_review') {
@@ -187,12 +269,12 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
           {isSubmitting ? (
             <>
               <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              <span>Publishing...</span>
+              <span>{hasPriorPublication ? 'Republishing...' : 'Publishing...'}</span>
             </>
           ) : (
             <>
               <UploadCloud className="w-3.5 h-3.5" />
-              <span>Publish</span>
+              <span>{hasPriorPublication ? 'Republish' : 'Publish'}</span>
             </>
           )}
         </Button>
@@ -208,11 +290,15 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
           {isSavingDraft ? <Loader2 className="w-3 h-3 animate-spin mr-1" /> : <Save className="w-3 h-3 mr-1 text-accent" />}
           <span>Revert to Draft</span>
         </Button>
+
+        {errorMessage && (
+          <span role="alert" className="text-xs text-status-danger">{errorMessage}</span>
+        )}
       </div>
     );
   }
 
-  // If published: display Published badge PLUS Republish action
+  // Published working-copy edits must create a new synchronized review checkpoint.
   if (status === 'published') {
     return (
       <div className={cn("flex items-center gap-2", className)}>
@@ -226,85 +312,15 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
           size="sm"
           onClick={() => {
             setErrorMessage(null);
-            setIsRepublishOpen(true);
+            setIsDialogOpen(true);
           }}
           className="gap-1.5 text-xs font-semibold border-accent text-accent hover:bg-accent hover:text-white transition-colors"
         >
-          <UploadCloud className="w-3.5 h-3.5" />
-          <span>Republish Changes</span>
+          <FileCheck className="w-3.5 h-3.5" />
+          <span>Submit Changes for Review</span>
         </Button>
 
-        {draftSavedFeedback && (
-          <span className="text-[11px] text-status-success font-semibold flex items-center gap-1 animate-in fade-in-50">
-            <Check className="w-3 h-3" />
-            <span>Republished ✓</span>
-          </span>
-        )}
-
-        {/* Republish Modal */}
-        <Dialog open={isRepublishOpen} onOpenChange={setIsRepublishOpen}>
-          <DialogContent className="sm:max-w-md">
-            <form onSubmit={handleRepublish}>
-              <DialogHeader>
-                <DialogTitle className="flex items-center gap-2">
-                  <UploadCloud className="w-5 h-5 text-accent" />
-                  <span>Republish Post with Changes</span>
-                </DialogTitle>
-                <DialogDescription className="pt-2 text-xs text-text-secondary leading-relaxed">
-                  Readers currently view the previous published version. To deploy your working revisions, enter a brief change summary for the audit trail.
-                </DialogDescription>
-              </DialogHeader>
-
-              {errorMessage && (
-                <div className="my-3 p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-                  <span>{errorMessage}</span>
-                </div>
-              )}
-
-              <div className="my-3 space-y-1.5">
-                <label className="text-xs font-semibold text-foreground">
-                  Change Summary / Changelog <span className="text-status-danger">*</span>
-                </label>
-                <textarea
-                  value={changeSummary}
-                  onChange={(e) => setChangeSummary(e.target.value)}
-                  placeholder="e.g. Updated architecture diagram and clarified Phase 2 requirements..."
-                  rows={3}
-                  required
-                  className="w-full text-xs px-3 py-2 rounded-lg bg-canvas border border-border text-foreground focus:outline-none focus:border-accent resize-none"
-                />
-              </div>
-
-              <DialogFooter className="gap-2 sm:gap-0 pt-2">
-                <DialogClose asChild>
-                  <Button variant="outline" size="sm" disabled={isSubmitting}>
-                    Cancel
-                  </Button>
-                </DialogClose>
-                <Button
-                  type="submit"
-                  variant="default"
-                  size="sm"
-                  disabled={isSubmitting || !changeSummary.trim()}
-                  className="gap-1.5 bg-accent text-white hover:opacity-95"
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Deploying...</span>
-                    </>
-                  ) : (
-                    <>
-                      <UploadCloud className="w-3.5 h-3.5" />
-                      <span>Deploy Revisions</span>
-                    </>
-                  )}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
+        {submissionDialog}
       </div>
     );
   }
@@ -386,56 +402,7 @@ export const SubmitReviewButton: React.FC<SubmitReviewButtonProps> = ({
         </div>
       )}
 
-      {/* Confirmation Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileCheck className="w-5 h-5 text-accent" />
-              <span>Submit Post for Review</span>
-            </DialogTitle>
-            <DialogDescription className="pt-2 text-xs text-text-secondary leading-relaxed">
-              Submitting this post locks standard author editing and places it into the 
-              <strong> Moderator Review Queue</strong>. Editorial reviewers and administrators 
-              will review your content, inspect suggestion diffs, and approve it for organization-wide publication.
-            </DialogDescription>
-          </DialogHeader>
-
-          {errorMessage && (
-            <div className="p-3 rounded-lg bg-status-danger/10 border border-status-danger/30 text-status-danger text-xs flex items-start gap-2">
-              <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
-              <span>{errorMessage}</span>
-            </div>
-          )}
-
-          <DialogFooter className="gap-2 sm:gap-0 pt-2">
-            <DialogClose asChild>
-              <Button variant="outline" size="sm" disabled={isSubmitting}>
-                Keep in Draft
-              </Button>
-            </DialogClose>
-            <Button
-              variant="default"
-              size="sm"
-              onClick={handleConfirmSubmit}
-              disabled={isSubmitting}
-              className="gap-1.5 bg-accent text-white hover:opacity-95"
-            >
-              {isSubmitting ? (
-                <>
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  <span>Submitting...</span>
-                </>
-              ) : (
-                <>
-                  <FileCheck className="w-3.5 h-3.5" />
-                  <span>Confirm & Submit</span>
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      {submissionDialog}
     </div>
   );
 };

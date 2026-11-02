@@ -1,6 +1,6 @@
 import { usePluginEditorExtensions } from '../plugins/PluginProvider.js';
 import { SlotRenderer } from './plugins/SlotRenderer.js';
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Image from '@tiptap/extension-image';
@@ -13,7 +13,7 @@ import { TaskItem } from '@tiptap/extension-task-item';
 import { TextAlign } from '@tiptap/extension-text-align';
 import * as Y from 'yjs';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
-import { SuggestionInsert, SuggestionDelete } from '../extensions/suggestion.js';
+import { SuggestionInsert, SuggestionDelete, Attribution } from '../extensions/suggestion.js';
 import { Alert } from '../extensions/alert.js';
 import { MathBlock } from '../extensions/math.js';
 import { MermaidBlock } from '../extensions/mermaid.js';
@@ -86,11 +86,20 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   hideSidebar = false,
   postId,
 }) => {
-  // Support both canonical 'prosemirror' and existing agent 'default' fragments
-  const fragment =
-    ydoc.share.has('default') && (!ydoc.share.has('prosemirror') || ydoc.getXmlFragment('prosemirror').length === 0)
-      ? ydoc.getXmlFragment('default')
-      : ydoc.getXmlFragment('prosemirror');
+  // Canonical-root selection: prefer 'prosemirror' (the server-canonical root).
+  // Fall back to legacy 'default' root only when 'prosemirror' is absent from the
+  // shared-types map. Checking ydoc.share.has() avoids the side effect of
+  // materialising the key in the map, which would make subsequent checks unreliable.
+  // Memoised on ydoc identity so the Collaboration extension receives a stable reference.
+  const fragment = useMemo(() => {
+    if (ydoc.share.has('prosemirror')) {
+      return ydoc.getXmlFragment('prosemirror');
+    }
+    if (ydoc.share.has('default')) {
+      return ydoc.getXmlFragment('default');
+    }
+    return ydoc.getXmlFragment('prosemirror');
+  }, [ydoc]);
 
   // Suggestion tracking state
   const [activeSuggestion, setActiveSuggestion] = useState<ActiveSuggestionInfo | null>(null);
@@ -308,21 +317,35 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         }>(`/posts/${postId}/attachments`, formData);
 
         if (editor && res) {
-          editor
-            .chain()
-            .focus()
-            .insertContent({
-              type: 'fileAttachmentBlock',
-              attrs: {
-                attachmentId: res.attachmentId,
-                fileName: res.fileName,
-                fileSize: res.fileSize,
-                mimeType: res.mimeType,
-                url: res.url,
-                scanStatus: res.scanStatus || 'clean',
-              },
-            })
-            .run();
+          if (res.mimeType?.startsWith('image/')) {
+            editor
+              .chain()
+              .focus()
+              .insertContent({
+                type: 'image',
+                attrs: {
+                  src: res.url,
+                  alt: res.fileName,
+                },
+              })
+              .run();
+          } else {
+            editor
+              .chain()
+              .focus()
+              .insertContent({
+                type: 'fileAttachmentBlock',
+                attrs: {
+                  attachmentId: res.attachmentId,
+                  fileName: res.fileName,
+                  fileSize: res.fileSize,
+                  mimeType: res.mimeType,
+                  url: res.url,
+                  scanStatus: res.scanStatus || 'clean',
+                },
+              })
+              .run();
+          }
         }
       } catch (err: any) {
         setUploadError(err?.message || 'Failed to upload attachment.');
@@ -363,6 +386,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       ProjectStatusBlock,
       SuggestionInsert,
       SuggestionDelete,
+      Attribution,
       Alert,
       ...pluginExtensions,
       Collaboration.configure({

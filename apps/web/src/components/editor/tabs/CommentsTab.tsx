@@ -107,7 +107,7 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
     let yjsAnchorStart: any = null;
     let yjsAnchorEnd: any = null;
 
-    if (editor && !editor.state.selection.empty) {
+    if (editor && selectedText && !editor.state.selection.empty) {
       const { from, to } = editor.state.selection;
       try {
         const syncState = ySyncPluginKey.getState(editor.state);
@@ -215,7 +215,26 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
         const docSize = editor.state.doc.content.size;
         const safeFrom = Math.min(Math.max(0, from), docSize);
         const safeTo = Math.min(Math.max(safeFrom, to), docSize);
-        editor.chain().focus().setTextSelection({ from: safeFrom, to: safeTo }).scrollIntoView().run();
+        editor.chain().setTextSelection({ from: safeFrom, to: safeTo }).focus().scrollIntoView().run();
+        try {
+          if (editor.view) {
+            editor.view.focus();
+            const domFrom = editor.view.domAtPos(safeFrom);
+            const domTo = editor.view.domAtPos(safeTo);
+            if (domFrom?.node && domTo?.node) {
+              const range = document.createRange();
+              range.setStart(domFrom.node, domFrom.offset);
+              range.setEnd(domTo.node, domTo.offset);
+              const sel = window.getSelection();
+              if (sel) {
+                sel.removeAllRanges();
+                sel.addRange(range);
+              }
+            }
+          }
+        } catch {
+          // Fallback handled by setTextSelection
+        }
       }
     } catch (err) {
       console.warn('Could not resolve comment relative position:', err);
@@ -403,6 +422,16 @@ export const CommentsTab: React.FC<CommentsTabProps> = ({
                           <span className="font-semibold text-foreground">{r.authorName || 'User'}</span>
                           <span>{new Date(r.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                         </div>
+                        {r.yjsAnchorStart && r.yjsAnchorEnd && (
+                          <button
+                            onClick={() => handleJumpToAnchor(r)}
+                            className="inline-flex items-center gap-1 text-[11px] text-accent hover:underline text-left"
+                            title="Jump to anchored document location"
+                          >
+                            <Quote className="w-2.5 h-2.5 shrink-0" />
+                            <span className="truncate max-w-[200px]">Jump to anchored text</span>
+                          </button>
+                        )}
                         <p className="text-foreground whitespace-pre-wrap">{r.content}</p>
                       </div>
                     ))}
