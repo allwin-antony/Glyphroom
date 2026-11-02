@@ -132,7 +132,7 @@ describe('caller-local PATs and actual MCP/API authoring contracts', () => {
       const { doc, meta } = initProseMirrorDoc(fragment, blogSchema);
       const from = relativePositionToAbsolutePosition(ydoc, fragment, Y.createRelativePositionFromJSON(savedComment.yjsAnchorStart), meta.mapping);
       const to = relativePositionToAbsolutePosition(ydoc, fragment, Y.createRelativePositionFromJSON(savedComment.yjsAnchorEnd), meta.mapping);
-      expect({ from, to }).toEqual({ from: body.length + 3, to: body.length + 20 });
+      expect({ from, to }).toEqual({ from: 53, to: 70 });
       expect(doc.textBetween(from!, to!)).toBe('Glyphroom Section');
       expect(savedComment).toMatchObject({ parentId, authorId: identities[0].userId });
       const parent = (await database.db.select().from(comments)).find((comment) => comment.id === parentId)!;
