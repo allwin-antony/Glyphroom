@@ -201,7 +201,7 @@ export const McpAddCommentInputSchema = z.object({
   postId: PostIdSchema,
   content: z.string().min(1, 'Comment text cannot be empty').max(10000),
   parentId: SafeIdentifierSchema.optional(),
-  anchorHeading: z.string().max(500).optional(),
+  anchorHeading: z.string().max(500).optional().describe('Unique heading label in the caller-visible clean document to anchor this comment or reply. Missing or ambiguous labels fail without creating a comment.'),
 });
 export type McpAddCommentInput = z.infer<typeof McpAddCommentInputSchema>;
 
@@ -219,7 +219,7 @@ export type McpAddCommentOutput = z.infer<typeof McpAddCommentOutputSchema>;
 // ==========================================
 export const McpPublishPostInputSchema = z.object({
   postId: PostIdSchema,
-  notes: z.string().max(2000).optional(),
+  notes: z.string().max(2000).optional().describe('Publisher operation notes retained with the published checkpoint in the durable event and best-effort audit metadata. Not reviewer notes or document content.'),
 });
 export type McpPublishPostInput = z.infer<typeof McpPublishPostInputSchema>;
 

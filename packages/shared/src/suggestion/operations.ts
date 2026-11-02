@@ -22,7 +22,10 @@ import type {
  * Resolves the active Y.XmlFragment from a Y.Doc.
  */
 export function getDocumentFragment(doc: Y.Doc, fieldName?: string): Y.XmlFragment {
-  if (fieldName) {
+  if (fieldName && fieldName !== 'prosemirror' && fieldName !== 'default') {
+    return doc.getXmlFragment(fieldName);
+  }
+  if (fieldName && doc.share.has(fieldName)) {
     return doc.getXmlFragment(fieldName);
   }
   // The Web Editor (Tiptap / ProseMirror) binds to 'prosemirror'
@@ -32,7 +35,7 @@ export function getDocumentFragment(doc: Y.Doc, fieldName?: string): Y.XmlFragme
   if (doc.share.has('default')) {
     return doc.getXmlFragment('default');
   }
-  return doc.getXmlFragment('prosemirror');
+  return doc.getXmlFragment(fieldName || 'prosemirror');
 }
 
 /**

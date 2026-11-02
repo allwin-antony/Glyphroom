@@ -25,6 +25,7 @@ export interface PluginEventMap {
     authorId: string;
     spaceId: string | null;
     title: string;
+    notes?: string;
   };
   'space:created': {
     spaceId: string;
