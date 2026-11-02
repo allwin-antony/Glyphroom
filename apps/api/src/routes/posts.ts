@@ -476,7 +476,7 @@ export const postRoutes: FastifyPluginAsync<{
         return { ok: true as const, current, checkpoint, published, notes };
       });
     } catch {
-      request.log.warn({ postId: id }, 'Publication transaction failed');
+      request.log.warn({ postId: rawId }, 'Publication transaction failed');
       return reply.status(503).send({
         error: 'Service Unavailable',
         message: 'Unable to publish the approved checkpoint',
@@ -815,7 +815,7 @@ export const postRoutes: FastifyPluginAsync<{
         } };
       });
     } catch {
-      request.log.warn({ postId: id }, 'Publication checkpoint read failed');
+      request.log.warn({ postId: rawId }, 'Publication checkpoint read failed');
       return reply.status(503).send({
         error: 'Service Unavailable',
         message: 'Unable to read the approved publication checkpoint',
@@ -932,10 +932,10 @@ function populateYjsFromMarkdown(ydoc: Y.Doc, markdown: string) {
     // Heading: #{1,6} Title
     const hMatch = line.match(/^(#{1,6})\s+(.+)$/);
     if (hMatch) {
-      const level = parseInt(hMatch[1].length, 10);
+      const level = hMatch[1].length;
       const text = hMatch[2].trim();
       const h = new Y.XmlElement('heading');
-      h.setAttribute('level', level);
+      h.setAttribute('level', String(level));
       const ht = new Y.XmlText(text);
       h.insert(0, [ht]);
       fragment.push([h]);
