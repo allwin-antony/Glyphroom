@@ -1,11 +1,14 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest';
 import crypto from 'node:crypto';
 import http from 'node:http';
+import * as Y from 'yjs';
+import { initProseMirrorDoc, relativePositionToAbsolutePosition } from 'y-prosemirror';
+import { blogSchema } from '@enterprise-blogger/shared';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js';
 import { createInMemoryDatabase } from '../../api/tests/helpers/test-db.js';
 import { createApiApp } from '../../api/src/app.js';
-import { users, personalAccessTokens, centersOfExcellence } from '../../api/src/db/schema.js';
+import { auditLogs, comments, posts, postReviews, postVersions, pluginEventOutbox, users, personalAccessTokens, centersOfExcellence } from '../../api/src/db/schema.js';
 import { startMcpServer } from '../src/index.js';
 
 describe('caller-local PATs and actual MCP/API authoring contracts', () => {
@@ -109,6 +112,77 @@ describe('caller-local PATs and actual MCP/API authoring contracts', () => {
     expect(wrongThread.status).toBe(400);
     const ownReply = unpack(await connected[0].callTool({ name: 'add_comment', arguments: { postId: drafts[0].id, content: 'Reply', parentId } }));
     expect(ownReply.authorId).toBe(identities[0].userId);
+    const savedPost = (await database.db.select().from(posts)).find((post) => post.id === drafts[0].id)!;
+    const ydoc = new Y.Doc();
+    try {
+      Y.applyUpdate(ydoc, savedPost.yjsState);
+      const fragment = ydoc.getXmlFragment('prosemirror');
+      // Model an editor-authored heading; create_post's raw Markdown paragraph
+      // must not be re-imported into invented Yjs identities by the anchor API.
+      const heading = new Y.XmlElement('heading');
+      heading.setAttribute('level', '2');
+      heading.insert(0, [new Y.XmlText('Glyphroom Section')]);
+      fragment.insert(fragment.length, [heading]);
+      await database.pool.query('UPDATE posts SET yjs_state = decode($1, \'hex\') WHERE id = $2',
+        [Buffer.from(Y.encodeStateAsUpdate(ydoc)).toString('hex'), drafts[0].id]);
+      const anchored = unpack(await connected[0].callTool({ name: 'add_comment', arguments: {
+        postId: drafts[0].id, content: 'Heading question', anchorHeading: 'Glyphroom Section', parentId,
+      } }));
+      const savedComment = (await database.db.select().from(comments)).find((comment) => comment.id === anchored.commentId)!;
+      const { doc, meta } = initProseMirrorDoc(fragment, blogSchema);
+      const from = relativePositionToAbsolutePosition(ydoc, fragment, Y.createRelativePositionFromJSON(savedComment.yjsAnchorStart), meta.mapping);
+      const to = relativePositionToAbsolutePosition(ydoc, fragment, Y.createRelativePositionFromJSON(savedComment.yjsAnchorEnd), meta.mapping);
+      expect({ from, to }).toEqual({ from: body.length + 3, to: body.length + 20 });
+      expect(doc.textBetween(from!, to!)).toBe('Glyphroom Section');
+      expect(savedComment).toMatchObject({ parentId, authorId: identities[0].userId });
+      const parent = (await database.db.select().from(comments)).find((comment) => comment.id === parentId)!;
+      expect(parent).toMatchObject({ yjsAnchorStart: null, yjsAnchorEnd: null });
+    } finally { ydoc.destroy(); }
+
+    const rawGetResult = await connected[0].callTool({
+      name: 'get_post',
+      arguments: { postId: drafts[0].id, format: 'prosemirror_json', includeSuggestions: true }
+    });
+    expect(rawGetResult.isError).not.toBe(true);
+    const unwrapEnvelope = (text: string) => {
+      const prefix = '<UNTRUSTED_CONTENT>\n';
+      const suffix = '\n</UNTRUSTED_CONTENT>';
+      expect(text.startsWith(prefix)).toBe(true);
+      expect(text.endsWith(suffix)).toBe(true);
+      return JSON.parse(text.slice(prefix.length, -suffix.length));
+    };
+    const getResult = unwrapEnvelope(rawGetResult.content[0].text);
+    expect(getResult.format).toBe('prosemirror_json');
+    expect(JSON.parse(getResult.content)).toMatchObject({ type: 'doc' });
+  });
+
+  it('validates publication notes at the actual MCP boundary and retains allowed notes with the approved pin', async () => {
+    const [publisher] = await database.db.insert(users).values({ email: 'publisher@mcp-arguments.test', fullName: 'Publisher', role: 'admin' }).returning();
+    const secret = `eb_pat_${crypto.randomBytes(32).toString('hex')}`;
+    await database.db.insert(personalAccessTokens).values({ userId: publisher.id, name: 'Publish only',
+      tokenHash: crypto.createHash('sha256').update(secret).digest('hex'), scopes: ['posts:publish'] });
+    const client = await connect(secret);
+    const [post] = await database.db.insert(posts).values({ slug: `notes-${crypto.randomUUID()}`, title: 'Notes contract',
+      authorId: identities[0].userId, status: 'approved', yjsState: Buffer.from('unavailable-working-state') }).returning();
+    const [checkpoint] = await database.db.insert(postVersions).values({ postId: post.id, versionNumber: 1,
+      triggerReason: 'review_submission', markdownSnapshot: '', yjsStateSnapshot: Buffer.from('historical-state'),
+      createdBy: identities[0].userId }).returning();
+    await database.pool.query('UPDATE posts SET submitted_version_id = $1 WHERE id = $2', [checkpoint.id, post.id]);
+    await database.db.insert(postReviews).values({ postId: post.id, submittedVersionId: checkpoint.id,
+      reviewerId: identities[1].userId, decision: 'approved', notes: 'Independent review notes' });
+
+    const invalid = await client.callTool({ name: 'publish_post', arguments: { postId: post.id, notes: 'n'.repeat(2001) } });
+    expect(invalid.isError).toBe(true);
+    expect((await database.db.select().from(pluginEventOutbox)).filter((event) => event.eventType === 'post:published')).toHaveLength(0);
+    const notes = 'n'.repeat(2000);
+    const receipt = unpack(await client.callTool({ name: 'publish_post', arguments: { postId: post.id, notes } }));
+    expect(receipt).toMatchObject({ success: true, postId: post.id, status: 'published' });
+    const event = (await database.db.select().from(pluginEventOutbox)).find((event) => event.eventType === 'post:published')!;
+    expect(event.payload).toMatchObject({ postId: post.id, publishedVersionId: checkpoint.id, notes });
+    const audit = (await database.db.select().from(auditLogs)).find((audit) => audit.action === 'post_published')!;
+    expect(audit.metadata).toEqual({ versionId: checkpoint.id, versionNumber: 1, notes });
+    const review = (await database.db.select().from(postReviews)).find((review) => review.postId === post.id)!;
+    expect(review.notes).toBe('Independent review notes');
   });
 
   it('does not fall back to a server credential and enforces the caller scope', async () => {
@@ -120,6 +194,12 @@ describe('caller-local PATs and actual MCP/API authoring contracts', () => {
     const result: any = await reader.callTool({ name: 'create_post', arguments: { title: 'Read-only draft', content: 'Denied' } });
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('posts:draft');
+    const anchored: any = await reader.callTool({ name: 'add_comment', arguments: { postId: crypto.randomUUID(), content: 'Denied', anchorHeading: 'Heading' } });
+    expect(anchored.isError).toBe(true);
+    expect(anchored.content[0].text).toContain('comments:write');
+    const publication: any = await reader.callTool({ name: 'publish_post', arguments: { postId: crypto.randomUUID(), notes: 'Denied' } });
+    expect(publication.isError).toBe(true);
+    expect(publication.content[0].text).toContain('posts:publish');
     const other = await connect(identities[1].secret);
     const revoked = await fetch(`${apiUrl}/api/v1/pats/${limited.id}`, { method: 'DELETE', headers: { Authorization: `Bearer ${identities[0].secret}` } });
     expect(revoked.status).toBe(200);

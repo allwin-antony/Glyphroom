@@ -4,7 +4,7 @@ import {
   type McpPublishPostOutput,
 } from '@enterprise-blogger/shared';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import type { ApiClient } from '../api/client.js';
+import { hasScope, type ApiClient } from '../api/client.js';
 import type pino from 'pino';
 
 export interface PublishPostToolOptions {
@@ -19,14 +19,14 @@ export function registerPublishPostTool(
 ): void {
   (server as any).tool(
     'publish_post',
-    'Publishes a post or submits it to the editorial review pipeline. Enforces strict enterprise governance: agents with draft-only scopes cannot publish.',
+    'Publishes the exact current submitted checkpoint only after independent approval. This tool never submits a draft or bypasses review.',
     McpPublishPostInputSchema.shape,
     async (args: McpPublishPostInput) => {
       logger.info({ postId: args.postId }, 'Executing publish_post');
 
       // Security check: prompt injection & privilege escalation guardrail (Task 3.6)
       const allowedScopes = options.agentScopes || ['posts:draft', 'posts:suggest'];
-      if (!allowedScopes.includes('posts:publish') && !allowedScopes.includes('admin')) {
+      if (!hasScope(allowedScopes, 'posts:publish') && !allowedScopes.includes('admin')) {
         logger.warn(
           { postId: args.postId, scopes: allowedScopes },
           'Security violation: Agent attempted unauthorized post publication without posts:publish scope'
@@ -36,20 +36,20 @@ export function registerPublishPostTool(
           content: [
             {
               type: 'text',
-              text: `Security policy violation: Agent Personal Access Token lacks "posts:publish" scope. Agents are restricted to draft-only editing and suggestions mode.`,
+              text: 'Security policy violation: Caller Personal Access Token lacks "posts:publish" scope. Publication never submits a draft or bypasses approved-checkpoint review.',
             },
           ],
         };
       }
 
       try {
-        const result = await apiClient.publishPost(args.postId);
+        const receipt = await apiClient.publishPost(args.postId, args.notes);
 
         const output: McpPublishPostOutput = {
           success: true,
-          postId: args.postId,
-          status: 'published',
-          message: 'Post successfully published according to governance workflow.',
+          postId: receipt.post.id,
+          status: receipt.post.status,
+          message: 'The independently approved current submitted checkpoint was published.',
         };
 
         return {
@@ -62,7 +62,7 @@ export function registerPublishPostTool(
           content: [
             {
               type: 'text',
-              text: `Error publishing post "${args.postId}": ${err.message}`,
+              text: `Error publishing approved checkpoint for post "${args.postId}": ${err.message}`,
             },
           ],
         };

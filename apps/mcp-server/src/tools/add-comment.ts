@@ -23,6 +23,7 @@ export function registerAddCommentTool(
         const result = await apiClient.addComment(args.postId, {
           content: args.content,
           parentId: args.parentId,
+          anchorHeading: args.anchorHeading,
         });
 
         const output: McpAddCommentOutput = {

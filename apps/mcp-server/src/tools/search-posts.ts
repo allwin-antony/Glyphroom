@@ -4,6 +4,7 @@ import {
 } from '@enterprise-blogger/shared';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ApiClient } from '../api/client.js';
+import { wrapUntrustedJson } from '../api/read-formats.js';
 import type pino from 'pino';
 
 export function registerSearchPostsTool(
@@ -21,11 +22,8 @@ export function registerSearchPostsTool(
       try {
         const result = await apiClient.searchPosts(args);
 
-        // Security requirement: prompt injection protection
-        const sanitized = `<UNTRUSTED_CONTENT>\n${JSON.stringify(result, null, 2)}\n</UNTRUSTED_CONTENT>`;
-
         return {
-          content: [{ type: 'text', text: sanitized }],
+          content: [{ type: 'text', text: wrapUntrustedJson(result) }],
         };
       } catch (err: any) {
         logger.error({ err, query: args.query }, 'search_posts failed');

@@ -1,3 +1,8 @@
+import {
+  formatPostForRead,
+  type ReadPostOptions,
+} from './read-formats.js';
+
 export interface AuthenticatedActor {
   userId: string;
   tokenId: string;
@@ -22,6 +27,17 @@ export interface ApiClientOptions {
   defaultToken?: string;
   actor?: AuthenticatedActor | null;
 }
+
+export interface PublicationReceipt {
+  post: {
+    id: string;
+    status: 'published';
+    publishedVersionId: string;
+    publishedAt: string;
+  };
+}
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 export class ApiClient {
   private readonly baseUrl: string;
@@ -66,10 +82,43 @@ export class ApiClient {
     return data.post.id;
   }
 
-  private async getPostDocument(postId: string): Promise<any> {
-    const res = await fetch(`${this.baseUrl}/api/v1/posts/${postId}`, { headers: this.buildHeaders(), signal: AbortSignal.timeout(10000) });
-    if (!res.ok) throw Object.assign(new Error(`Post not found or access denied: ${res.statusText}`), { status: res.status });
+  private async getPostDocument(postId: string, options: ReadPostOptions = {}): Promise<any> {
+    const query = new URLSearchParams();
+    if (options.format === 'prosemirror_json' || options.includeSuggestions) {
+      query.set('format', 'prosemirror_json');
+      query.set('includeSuggestions', String(options.includeSuggestions ?? false));
+    }
+    const queryString = query.toString();
+    const res = await fetch(
+      `${this.baseUrl}/api/v1/posts/${encodeURIComponent(postId)}${queryString ? `?${queryString}` : ''}`,
+      { headers: this.buildHeaders(), signal: AbortSignal.timeout(10000) }
+    );
+    if (!res.ok) throw await this.responseError('Failed to retrieve post', res);
     return res.json();
+  }
+
+  private async responseError(prefix: string, response: Response): Promise<Error> {
+    const body = await response.text().catch(() => '');
+    let detail = body;
+    let code: string | undefined;
+    if (body) {
+      try {
+        const parsed = JSON.parse(body);
+        if (parsed && typeof parsed === 'object') {
+          detail = typeof parsed.message === 'string'
+            ? parsed.message
+            : typeof parsed.error === 'string' ? parsed.error : body;
+          if (typeof parsed.code === 'string') code = parsed.code;
+        }
+      } catch {
+        // Preserve non-JSON API error text.
+      }
+    }
+    const status = `${response.status}${response.statusText ? ` ${response.statusText}` : ''}`;
+    return Object.assign(
+      new Error(`${prefix} (${status})${detail ? `: ${detail}` : ''}`),
+      { status: response.status, ...(code ? { code } : {}) }
+    );
   }
 
   private buildHeaders(customHeaders: Record<string, string> = {}): Record<string, string> {
@@ -83,52 +132,76 @@ export class ApiClient {
     return headers;
   }
 
-  async searchPosts(params: { query: string; limit?: number; offset?: number }): Promise<any> {
+  async searchPosts(params: {
+    query: string;
+    tags?: string[];
+    coeId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<any> {
     this.requireScope('posts:read');
-    const res = await fetch(`${this.baseUrl}/api/v1/posts`, {
+    const query = new URLSearchParams();
+    query.set('search', params.query);
+    for (const tag of params.tags ?? []) query.append('tags', tag);
+    if (params.coeId !== undefined) query.set('coeId', params.coeId);
+    query.set('limit', String(params.limit ?? 10));
+    query.set('offset', String(params.offset ?? 0));
+
+    const res = await fetch(`${this.baseUrl}/api/v1/posts?${query.toString()}`, {
       method: 'GET',
       headers: this.buildHeaders(),
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
-      throw new Error(`Failed to search posts: ${res.statusText}`);
+      throw await this.responseError('Failed to search posts', res);
     }
     const data: any = await res.json();
-    const queryLower = params.query.toLowerCase();
-    const filtered = (data.posts || []).filter((p: any) =>
-      p.title.toLowerCase().includes(queryLower) || (p.excerpt && p.excerpt.toLowerCase().includes(queryLower))
-    );
+    if (!Array.isArray(data.posts) || !Number.isInteger(data.pagination?.total) || data.pagination.total < 0) {
+      throw Object.assign(new Error('Glyphroom API returned an invalid search response.'), {
+        status: 502,
+        code: 'INVALID_API_RESPONSE',
+      });
+    }
     return {
-      posts: filtered.map((p: any) => ({
-        id: p.id,
-        title: p.title,
-        slug: p.slug,
-        excerpt: p.excerpt,
-        status: p.status,
-        tags: [],
-        author: { id: p.authorId, name: 'Author' },
-        updatedAt: p.updatedAt || new Date().toISOString(),
-      })),
-      totalCount: filtered.length,
+      posts: data.posts.map((p: any) => {
+        const author = p.author && typeof p.author === 'object' ? p.author : undefined;
+        const authorId = author?.id ?? p.authorId;
+        const authorName = author?.name ?? p.authorName;
+        if (
+          typeof p.id !== 'string' || typeof p.title !== 'string' || typeof p.slug !== 'string' ||
+          (p.excerpt !== null && typeof p.excerpt !== 'string') || typeof p.status !== 'string' ||
+          !Array.isArray(p.tags) || p.tags.some((tag: unknown) => typeof tag !== 'string') ||
+          typeof authorId !== 'string' || typeof authorName !== 'string' || typeof p.updatedAt !== 'string'
+        ) {
+          throw Object.assign(new Error('Glyphroom API returned invalid post search metadata.'), {
+            status: 502,
+            code: 'INVALID_API_RESPONSE',
+          });
+        }
+        return {
+          id: p.id,
+          title: p.title,
+          slug: p.slug,
+          excerpt: p.excerpt,
+          status: p.status,
+          ...(typeof p.coeName === 'string' ? { coeName: p.coeName } : {}),
+          tags: [...p.tags],
+          author: { id: authorId, name: authorName },
+          updatedAt: p.updatedAt,
+        };
+      }),
+      totalCount: data.pagination.total,
     };
   }
 
-  async getPost(postId: string): Promise<any> {
+  async getPost(postId: string, options: ReadPostOptions = {}): Promise<any> {
     this.requireScope('posts:read');
-    const data = await this.getPostDocument(postId);
-    const post = data.post;
-    return {
-      id: post.id,
-      title: post.title,
-      slug: post.slug,
-      status: post.status,
-      author: { id: post.authorId, name: post.authorName || 'Author' },
-      content: post.derivedMarkdown || post.publishedMarkdown || post.workingMarkdown || `# ${post.title}\n\nDraft content.`,
-      format: 'markdown' as const,
-      headings: [post.title],
-      tags: post.tags || [],
-      publishedAt: post.publishedAt,
-      updatedAt: post.updatedAt || new Date().toISOString(),
+    const normalizedOptions: ReadPostOptions = {
+      format: options.format ?? 'markdown',
+      includeSuggestions: options.includeSuggestions ?? false,
     };
+    const data = await this.getPostDocument(postId, normalizedOptions);
+    return formatPostForRead(data.post, normalizedOptions);
   }
 
   async createPost(params: { title: string; slug: string; content?: string; tags?: string[]; coeId?: string; excerpt?: string }): Promise<any> {
@@ -154,7 +227,7 @@ export class ApiClient {
     return res.json();
   }
 
-  async addComment(postId: string, params: { content: string; parentId?: string }): Promise<any> {
+  async addComment(postId: string, params: { content: string; parentId?: string; anchorHeading?: string }): Promise<any> {
     this.requireScope('comments:write');
     const res = await fetch(`${this.baseUrl}/api/v1/posts/${postId}/comments`, {
       method: 'POST',
@@ -164,6 +237,7 @@ export class ApiClient {
       body: JSON.stringify({
         content: params.content,
         parentId: params.parentId,
+        anchorHeading: params.anchorHeading,
       }),
     });
     if (!res.ok) {
@@ -173,18 +247,44 @@ export class ApiClient {
     return res.json();
   }
 
-  async publishPost(postId: string): Promise<any> {
+  async publishPost(postId: string, notes?: string): Promise<PublicationReceipt> {
     this.requireScope('posts:publish');
-    const res = await fetch(`${this.baseUrl}/api/v1/posts/${postId}/publish`, {
+    const checkpoint = await fetch(
+      `${this.baseUrl}/api/v1/posts/${encodeURIComponent(postId)}/publication-checkpoint`,
+      { headers: this.buildHeaders(), signal: AbortSignal.timeout(10000) }
+    );
+    if (!checkpoint.ok) {
+      throw await this.responseError('Failed to retrieve approved publication checkpoint', checkpoint);
+    }
+    const metadata: any = await checkpoint.json();
+    const approved = metadata?.post;
+    if (approved?.status !== 'approved' || typeof approved.id !== 'string' || !UUID_PATTERN.test(approved.id)
+      || typeof approved.submittedVersionId !== 'string' || !UUID_PATTERN.test(approved.submittedVersionId)) {
+      throw Object.assign(new Error('Post does not expose a valid approved submitted checkpoint.'), {
+        status: 409,
+        code: 'APPROVED_CHECKPOINT_UNAVAILABLE',
+      });
+    }
+    const submittedVersionId = approved.submittedVersionId;
+    const res = await fetch(`${this.baseUrl}/api/v1/posts/${encodeURIComponent(approved.id)}/publish`, {
       method: 'POST',
       headers: this.buildHeaders({
         'Content-Type': 'application/json',
       }),
+      body: JSON.stringify({ submittedVersionId, ...(notes !== undefined ? { notes } : {}) }),
+      signal: AbortSignal.timeout(10000),
     });
     if (!res.ok) {
-      const errBody = await res.text().catch(() => '');
-      throw new Error(`Failed to publish post (${res.status} ${res.statusText}): ${errBody}`);
+      throw await this.responseError('Failed to publish approved checkpoint', res);
     }
-    return res.json();
+    const receipt: any = await res.json();
+    if (receipt?.post?.id !== approved.id || receipt.post.status !== 'published'
+      || receipt.post.publishedVersionId !== submittedVersionId || typeof receipt.post.publishedAt !== 'string') {
+      throw Object.assign(new Error('Glyphroom API returned an invalid publication receipt.'), {
+        status: 502,
+        code: 'INVALID_API_RESPONSE',
+      });
+    }
+    return receipt as PublicationReceipt;
   }
 }

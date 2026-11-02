@@ -4,6 +4,7 @@ import {
 } from '@enterprise-blogger/shared';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { ApiClient } from '../api/client.js';
+import { wrapUntrustedJson } from '../api/read-formats.js';
 import type pino from 'pino';
 
 export function registerGetPostTool(
@@ -13,22 +14,19 @@ export function registerGetPostTool(
 ): void {
   (server as any).tool(
     'get_post',
-    'Retrieves post metadata and working content. All returned content is tagged as untrusted content to guard against prompt injection.',
+    'Retrieves the caller-authorized content snapshot in Markdown, bounded summary, or ProseMirror JSON format. Returned data is enclosed as untrusted content.',
     McpGetPostInputSchema.shape,
     async (args: McpGetPostInput) => {
       logger.info({ postId: args.postId }, 'Executing get_post');
 
       try {
-        const post = await apiClient.getPost(args.postId);
-
-        // Security requirement: prompt injection protection
-        const payload = {
-          ...post,
-          content: `<UNTRUSTED_CONTENT>\n${post.content}\n</UNTRUSTED_CONTENT>`,
-        };
+        const post = await apiClient.getPost(args.postId, {
+          format: args.format ?? 'markdown',
+          includeSuggestions: args.includeSuggestions ?? false,
+        });
 
         return {
-          content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+          content: [{ type: 'text', text: wrapUntrustedJson(post) }],
         };
       } catch (err: any) {
         logger.error({ err, postId: args.postId }, 'get_post failed');
