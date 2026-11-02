@@ -38,6 +38,16 @@ describe('Milestone M4 Adversarial Stress & Empirical Challenge Suite (challenge
       port: 0,
       adapter,
       gatewaySecret: testSecret,
+      authOptions: {
+        // Isolated stress-fixture identity seam: only the exact fixture token may
+        // authenticate. Production RBAC (canonical post-<uuid> room + PAT + API
+        // capability check) is intentionally bypassed here; this suite exercises
+        // gateway/CRDT concurrency, not real API admission.
+        authenticate: async ({ token }) => {
+          if (token !== 'token-author-alice') throw new Error('Invalid test identity');
+          return { id: 'alice', role: 'author', name: 'Alice', permissions: ['edit'] };
+        },
+      },
       quiet: true,
     });
     const { port, url } = await instance.listen();
@@ -57,14 +67,27 @@ describe('Milestone M4 Adversarial Stress & Empirical Challenge Suite (challenge
 
     await new Promise<void>((resolve, reject) => {
       const timer = setTimeout(() => reject(new Error('Sync timeout')), 10000);
-      provider.on('synced', () => {
+      const cleanup = () => {
         clearTimeout(timer);
+        provider.off('synced', onSynced);
+        provider.off('close', onClose);
+        provider.off('authenticationFailed', onAuthenticationFailed);
+      };
+      const onSynced = () => {
+        cleanup();
         resolve();
-      });
-      provider.on('close', (e: any) => {
-        clearTimeout(timer);
+      };
+      const onClose = (e: any) => {
+        cleanup();
         reject(new Error(`Closed: ${e?.code}`));
-      });
+      };
+      const onAuthenticationFailed = (data: { reason: string }) => {
+        cleanup();
+        reject(new Error(data.reason));
+      };
+      provider.on('synced', onSynced);
+      provider.on('close', onClose);
+      provider.on('authenticationFailed', onAuthenticationFailed);
     });
 
     return { doc, provider };
@@ -134,13 +157,14 @@ describe('Milestone M4 Adversarial Stress & Empirical Challenge Suite (challenge
       }
     });
 
-    it('rejects oversized header at transport layer via ECONNRESET', async () => {
+    it('rejects oversized header at transport layer via ECONNRESET or HTTP 431', async () => {
       const { port } = await setupServer();
       const endpoint = `http://127.0.0.1:${port}/internal/agent-gateway/edit`;
 
       // 64KB header exceeds Node maxHeaderSize (16KB)
-      await expect(
-        fetch(endpoint, {
+      let res: Response;
+      try {
+        res = await fetch(endpoint, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
@@ -153,8 +177,15 @@ describe('Milestone M4 Adversarial Stress & Empirical Challenge Suite (challenge
             documentId: 'post-sec-test',
             content: 'test',
           }),
-        })
-      ).rejects.toThrow();
+        });
+      } catch (err) {
+        // In Node runtimes where transport abruptly resets connection
+        expect(err).toBeDefined();
+        return;
+      }
+
+      // Assert status outside try/catch so unexpected status codes (e.g. 200) fail the test
+      expect([400, 431]).toContain(res.status);
     });
 
     it('rejects requests missing required headers', async () => {

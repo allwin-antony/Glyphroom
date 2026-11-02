@@ -2,11 +2,30 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as Y from 'yjs';
 import WebSocket from 'ws';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { createCollabServer, type CollabServerInstance } from '../src/server.js';
+import { createCollabServer as createServer, type CollabServerInstance, type CollabServerOptions } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
 import { PostgresPersistenceAdapter } from '../src/persistence/postgres.js';
 import { newDb } from 'pg-mem';
 import { createAuthHooks } from '../src/auth/hooks.js';
+
+// Legacy stress identities are deliberately confined to this test factory.
+const authenticate = async ({ token }: { token?: string }) => {
+  if (token?.startsWith('token-author-')) return { id: token, role: 'author' as const, name: 'Test editor', permissions: ['edit' as const] };
+  if (token?.startsWith('token-reader-')) return { id: token, role: 'reader' as const, name: 'Test viewer', permissions: ['view' as const] };
+  if (token?.startsWith('token-reviewer-')) return { id: token, role: 'author' as const, name: 'Test reviewer', permissions: ['review' as const] };
+  throw new Error('Invalid test identity');
+};
+const createCollabServer = (options: CollabServerOptions) => createServer({
+  ...options, authOptions: { authenticate, ...options.authOptions },
+});
+
+async function expectDenied(provider: HocuspocusProvider) {
+  await new Promise<void>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('Expected authentication failure')), 5000);
+    provider.on('authenticationFailed', () => { clearTimeout(timer); resolve(); });
+  });
+  expect(provider.isSynced).toBe(false);
+}
 
 describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () => {
   let instance: CollabServerInstance | null = null;
@@ -313,11 +332,12 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
         ),
       );
 
-      // Continuous typing: 3 clients each insert a character every 35ms for 1200ms (~34 edits each = ~102 edits)
+      // Continuous typing: 3 clients each insert a character every 35ms for 1260ms (36 edits each = 108 edits).
+      // Cover two complete 500ms max-debounce windows plus transport/timer margin.
       // Because interval (35ms) is much less than debounceMs (250ms), inactivity timer NEVER expires during typing!
       // All stores during this window are strictly forced by maxDebounce (500ms).
       const typingStartTime = Date.now();
-      const totalSteps = 30;
+      const totalSteps = 36;
 
       for (let step = 0; step < totalSteps; step++) {
         for (let c = 0; c < 3; c++) {
@@ -328,7 +348,7 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
       }
 
       const activeTypingDuration = Date.now() - typingStartTime;
-      expect(activeTypingDuration).toBeGreaterThanOrEqual(1000);
+      expect(activeTypingDuration).toBeGreaterThanOrEqual(1200);
 
       // At this point, maxDebounce (500ms) must have forced stores at least once or twice during typing
       expect(storeHistory.length).toBeGreaterThanOrEqual(2);
@@ -475,7 +495,7 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
   // Dimension 3: Read-Only Mutation Rejection & Adversarial Packet Tampering
   // =========================================================================
   describe('3. Read-Only Mutation Rejection & Adversarial Packet Tampering', () => {
-    it('strictly drops insertions, deletions, and map injections from readOnly reader clients', async () => {
+    it('blocks reader sync, insertions, deletions, and map injections before exposing the working CRDT', async () => {
       const adapter = new InMemoryPersistenceAdapter();
       instance = await createCollabServer({
         port: 0,
@@ -515,14 +535,14 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
       });
       providersToClean.push(readerProvider);
 
-      await new Promise<void>((resolve) => readerProvider.on('synced', () => resolve()));
-      expect(readerDoc.getText('content').toString()).toBe('Canonical Enterprise Text');
+      await expectDenied(readerProvider);
+      expect(readerDoc.getText('content').toString()).toBe('');
 
       // 3. Reader attempts hostile insertion
       readerDoc.getText('content').insert(0, 'MALICIOUS_PREFIX_');
 
       // 4. Reader attempts hostile deletion of author text
-      readerDoc.getText('content').delete(readerDoc.getText('content').length - 4, 4); // deletes 'Text'
+      readerDoc.getText('content').delete(0, 4);
 
       // 5. Reader attempts metadata map injection
       readerDoc.getMap('metadata').set('pwned', true);
@@ -544,7 +564,7 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
       expect(auditDoc.getText('content').toString()).toBe('Canonical Enterprise Text');
       expect(auditDoc.getMap('metadata').has('pwned')).toBe(false);
 
-      // 6. A fresh reader client connecting gets only the uncorrupted author state
+      // 6. A fresh viewer must not receive even uncorrupted working content.
       const freshReaderDoc = new Y.Doc();
       const freshReaderProvider = new HocuspocusProvider({
         url,
@@ -555,8 +575,8 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
       });
       providersToClean.push(freshReaderProvider);
 
-      await new Promise<void>((resolve) => freshReaderProvider.on('synced', () => resolve()));
-      expect(freshReaderDoc.getText('content').toString()).toBe('Canonical Enterprise Text');
+      await expectDenied(freshReaderProvider);
+      expect(freshReaderDoc.getText('content').toString()).toBe('');
       expect(freshReaderDoc.getMap('metadata').has('pwned')).toBe(false);
     });
 
@@ -590,8 +610,8 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
       });
       providersToClean.push(reviewerProvider);
 
-      await new Promise<void>((resolve) => reviewerProvider.on('synced', () => resolve()));
-      expect(reviewerDoc.getText('content').toString()).toBe('Stable Article');
+      await expectDenied(reviewerProvider);
+      expect(reviewerDoc.getText('content').toString()).toBe('');
 
       // Reviewer attempts direct document modification
       reviewerDoc.getText('content').insert(0, 'Reviewer edit: ');
@@ -1047,6 +1067,7 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
       // When allowedOrigins is configured with a strict whitelist without '*'
       const auth = createAuthHooks({
         allowedOrigins: ['https://cms.enterprise.corp'],
+        authenticate,
       });
 
       // A request that provides NO origin header (e.g. native client, curl, backend service)
@@ -1067,4 +1088,3 @@ describe('Milestone M3 Adversarial Stress & Edge Case Verification Suite', () =>
     });
   });
 });
-

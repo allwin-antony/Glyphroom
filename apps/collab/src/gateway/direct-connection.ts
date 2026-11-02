@@ -80,10 +80,16 @@ export async function executeAgentEdit(
     let suggestionIds: string[] = [];
 
     await conn.transact((doc) => {
+      const fragmentName = doc.share.has('prosemirror')
+        ? 'prosemirror'
+        : doc.share.has('default')
+        ? 'default'
+        : 'prosemirror';
+
       switch (request.operation) {
         case 'append_section': {
           const result = appendSection(doc, request.heading, request.content, agentMeta, {
-            fragmentName: 'prosemirror',
+            fragmentName,
           });
           changesSummary = result.changesSummary;
           suggestionIds = result.suggestionIds;
@@ -97,7 +103,7 @@ export async function executeAgentEdit(
             request.heading,
             request.content,
             agentMeta,
-            { fragmentName: 'prosemirror' }
+            { fragmentName }
           );
           if (!result.success) {
             throw new GatewayError(
@@ -117,7 +123,7 @@ export async function executeAgentEdit(
             request.targetHeading,
             request.content,
             agentMeta,
-            { fragmentName: 'prosemirror' }
+            { fragmentName }
           );
           if (!result.success) {
             throw new GatewayError(

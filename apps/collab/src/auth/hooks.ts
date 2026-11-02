@@ -1,136 +1,146 @@
 import type { onAuthenticatePayload, onLoadDocumentPayload } from '@hocuspocus/server';
+import { z } from 'zod';
 
 export interface UserContext {
   id: string;
   role: 'admin' | 'moderator' | 'author' | 'reader';
   name: string;
-  permissions: Array<'edit' | 'review' | 'view'>;
+  permissions: Array<'admin' | 'edit' | 'review' | 'view'>;
+}
+
+export interface CollabAuthenticationRequest {
+  documentName: string;
+  token?: string;
+  authorization?: string;
+  cookie?: string;
 }
 
 export interface CollabAuthOptions {
   allowedOrigins?: string[];
-  mockUsers?: Record<string, UserContext>;
-  adapter?: any;
+  apiUrl?: string;
+  timeoutMs?: number;
+  /** Explicit test-only identity injection. Never populated from env or WS input. */
+  authenticate?: (request: CollabAuthenticationRequest) => Promise<UserContext>;
+}
+
+export class CollabAuthenticationError extends Error {
+  readonly reason: string;
+  constructor(message: string, public readonly statusCode: 401 | 403 | 503) {
+    super(message);
+    this.name = 'CollabAuthenticationError';
+    this.reason = message;
+  }
+}
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/;
+const AccessResponse = z.object({
+  success: z.literal(true),
+  postId: z.string().regex(UUID),
+  user: z.object({
+    id: z.string().regex(UUID),
+    role: z.enum(['admin', 'moderator', 'author', 'reader']),
+    name: z.string().min(1),
+  }),
+  capabilities: z.object({ edit: z.boolean() }),
+});
+
+function header(data: onAuthenticatePayload, name: string): string | undefined {
+  const headers = data.requestHeaders as any;
+  const value = headers?.get?.(name) ?? headers?.[name] ?? (data as any).request?.headers?.[name];
+  return typeof value === 'string' ? value : undefined;
+}
+
+function requireEditor(user: UserContext): void {
+  if (!user || typeof user.id !== 'string' || !user.id || !Array.isArray(user.permissions)
+    || (!user.permissions.includes('edit') && !user.permissions.includes('admin'))) {
+    // readOnly still sends the full working CRDT. Pure viewers/reviewers cannot join.
+    throw new CollabAuthenticationError('Forbidden: Document edit access required', 403);
+  }
 }
 
 export function createAuthHooks(options: CollabAuthOptions = {}) {
+  if (options.authenticate && process.env.NODE_ENV === 'production') {
+    throw new Error('Test collaboration authenticator cannot be used in production');
+  }
   const allowedOrigins = options.allowedOrigins ??
-    (process.env.ALLOWED_ORIGINS
-      ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim())
-      : ['*']);
+    (process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',').map((s) => s.trim()) : []);
+  const apiUrl = options.apiUrl ?? process.env.GLYPHROOM_API_URL;
+  const timeoutMs = options.timeoutMs ?? 5000;
 
   return {
     async onAuthenticate(data: onAuthenticatePayload) {
-      // 1. Origin verification
-      const origin =
-        data.requestHeaders?.get?.('origin') ??
-        (data.requestHeaders as any)?.origin ??
-        (data.request as any)?.headers?.origin;
-
+      const origin = header(data, 'origin');
       if (origin && !allowedOrigins.includes('*') && !allowedOrigins.includes(origin)) {
-        throw new Error('Forbidden: Invalid origin');
+        throw new CollabAuthenticationError('Forbidden: Invalid origin', 403);
+      }
+      if (data.token != null && typeof data.token !== 'string') {
+        throw new CollabAuthenticationError('Unauthorized: Invalid credentials', 401);
+      }
+      const token = data.token || undefined;
+      const authorization = header(data, 'authorization');
+      const sessions = (header(data, 'cookie') ?? '').split(';').map((s) => s.trim())
+        .filter((s) => s.startsWith('blogger_session=') && s.length > 'blogger_session='.length);
+      if (sessions.length > 1) throw new CollabAuthenticationError('Unauthorized: Invalid credentials', 401);
+      const cookie = sessions[0];
+      if (!token && !authorization && !cookie) {
+        throw new CollabAuthenticationError('Unauthorized: Missing session or PAT credentials', 401);
       }
 
-      // 2. Token / credential resolution
-      let token =
-        data.token ||
-        data.requestParameters?.get?.('token') ||
-        (data.requestParameters as any)?.token;
-
-      if (!token) {
-        const authHeader =
-          data.requestHeaders?.get?.('authorization') ??
-          (data.requestHeaders as any)?.authorization ??
-          (data.request as any)?.headers?.authorization;
-
-        if (authHeader && typeof authHeader === 'string' && authHeader.startsWith('Bearer ')) {
-          token = authHeader.slice(7).trim();
-        }
-      }
-
-      if (!token) {
-        throw new Error('Unauthorized: Missing authentication token');
-      }
-
-      // 3. Resolve user identity and RBAC
       let user: UserContext;
-      if (options.mockUsers && options.mockUsers[token]) {
-        user = options.mockUsers[token];
-      } else if (token.startsWith('token-admin') || token === 'admin') {
-        user = { id: 'admin-1', role: 'admin', name: 'Admin User', permissions: ['edit'] };
-      } else if (token.startsWith('token-moderator') || token === 'moderator') {
-        user = { id: 'mod-1', role: 'moderator', name: 'Moderator User', permissions: ['edit'] };
-      } else if (token.startsWith('token-author') || token === 'author') {
-        user = { id: 'author-1', role: 'author', name: 'Author User', permissions: ['edit'] };
-      } else if (token.startsWith('token-reader') || token === 'reader') {
-        user = { id: 'reader-1', role: 'reader', name: 'Reader User', permissions: ['view'] };
-      } else if (token.startsWith('token-reviewer') || token === 'reviewer') {
-        user = { id: 'reviewer-1', role: 'author', name: 'Reviewer User', permissions: ['review'] };
+      if (options.authenticate) {
+        user = await options.authenticate({ documentName: data.documentName, token, authorization, cookie });
       } else {
-        throw new Error('Unauthorized: Invalid credentials');
-      }
-
-      // 4. Enforce read-only access for readers and reviewers
-      let isReadOnly = false;
-      if (user.role !== 'reader' && user.permissions.includes('edit')) {
-        isReadOnly = false;
-      } else if (
-        user.role === 'reader' ||
-        user.permissions.includes('view') ||
-        user.permissions.includes('review')
-      ) {
-        isReadOnly = true;
-      }
-
-      // Check if user has explicit collaborator permission on this document
-      if (isReadOnly && options.adapter?.getPool && data.documentName) {
-        try {
-          const docId = data.documentName.startsWith('post-')
-            ? data.documentName.slice(5)
-            : data.documentName;
-          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(docId);
-          const userIdFromToken = token.startsWith('token-') ? token.split('-').slice(2).join('-') : null;
-
-          if (isUuid && userIdFromToken) {
-            const pool = options.adapter.getPool();
-            const res = await pool.query(
-              `SELECT permission FROM post_collaborators WHERE post_id = $1::uuid AND user_id = $2::uuid LIMIT 1`,
-              [docId, userIdFromToken]
-            );
-            if (res.rows.length > 0 && res.rows[0].permission === 'edit') {
-              isReadOnly = false;
-              user.permissions = ['edit'];
-            }
-          }
-        } catch {
-          // Keep default isReadOnly on error
+        if (!data.documentName.startsWith('post-') || !UUID.test(data.documentName.slice(5))) {
+          throw new CollabAuthenticationError('Forbidden: Canonical post room required', 403);
         }
+        // A provider may send a real PAT as its auth token; browser providers
+        // leave token empty and use the HttpOnly session cookie on the WS upgrade.
+        const bearer = token ? `Bearer ${token}` : authorization;
+        if (bearer && !/^Bearer eb_pat_[^\s]+$/.test(bearer)) {
+          throw new CollabAuthenticationError('Unauthorized: Invalid credentials', 401);
+        }
+        if (!apiUrl) throw new CollabAuthenticationError('Service unavailable: Collaboration authorization unavailable', 503);
+        let response: Response;
+        let access: z.infer<typeof AccessResponse>;
+        try {
+          const url = new URL(apiUrl);
+          if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) throw new Error('Invalid API URL');
+          const result = await fetch(`${apiUrl.replace(/\/+$/, '')}/api/v1/posts/${data.documentName.slice(5)}/collab-access`, {
+            headers: bearer ? { authorization: bearer } : { cookie: cookie! },
+            signal: AbortSignal.timeout(timeoutMs),
+            redirect: 'error',
+          });
+          response = result;
+          if (response.status === 401) throw new CollabAuthenticationError('Unauthorized: Invalid credentials', 401);
+          if (response.status === 403 || response.status === 404) {
+            throw new CollabAuthenticationError('Forbidden: Document edit access required', 403);
+          }
+          if (!response.ok) throw new Error('Authorization dependency failed');
+          access = AccessResponse.parse(await response.json());
+        } catch (error) {
+          if (error instanceof CollabAuthenticationError) throw error;
+          throw new CollabAuthenticationError('Service unavailable: Collaboration authorization unavailable', 503);
+        }
+        if (access.postId !== data.documentName.slice(5) || !access.capabilities.edit) {
+          throw new CollabAuthenticationError('Forbidden: Document edit access required', 403);
+        }
+        user = { ...access.user, permissions: ['edit'] };
       }
 
-      data.connectionConfig.readOnly = isReadOnly;
-
-      // 5. Populate connection context
-      if (!data.context) {
-        data.context = {} as any;
-      }
+      requireEditor(user);
+      data.connectionConfig.readOnly = false;
+      if (!data.context) data.context = {};
       data.context.user = user;
       data.context.documentName = data.documentName;
-
-      return {
-        user,
-        documentName: data.documentName,
-      };
+      return { user, documentName: data.documentName };
     },
 
     async onLoadDocument(data: onLoadDocumentPayload) {
       const user = data.context?.user as UserContext | undefined;
-      if (!user) {
-        throw new Error('Unauthorized: No user session found');
-      }
-
-      // RBAC document access check
-      if (user.role === 'reader' && data.documentName.startsWith('draft-private-')) {
-        throw new Error('Forbidden: Readers cannot view private drafts');
+      if (!user) throw new CollabAuthenticationError('Unauthorized: No user session found', 401);
+      requireEditor(user);
+      if (data.context.documentName && data.context.documentName !== data.documentName) {
+        throw new CollabAuthenticationError('Forbidden: Document edit access required', 403);
       }
     },
   };

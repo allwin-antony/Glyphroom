@@ -3,10 +3,20 @@ import * as Y from 'yjs';
 import WebSocket from 'ws';
 import { HocuspocusProvider } from '@hocuspocus/provider';
 import { newDb } from 'pg-mem';
-import { createCollabServer, type CollabServerInstance } from '../src/server.js';
+import { createCollabServer as createServer, type CollabServerInstance, type CollabServerOptions } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
 import { PostgresPersistenceAdapter } from '../src/persistence/postgres.js';
 import { exportDerivedMarkdown } from '@enterprise-blogger/shared';
+
+const createCollabServer = (options: CollabServerOptions) => createServer({
+  ...options,
+  authOptions: {
+    authenticate: async ({ token }) => {
+      if (!token?.startsWith('token-author-')) throw new Error('Invalid test identity');
+      return { id: token, role: 'author', name: 'Persistence fixture editor', permissions: ['edit'] };
+    },
+  },
+});
 
 // Helper to construct in-memory PostgreSQL database matching production schema
 function createTestDb() {

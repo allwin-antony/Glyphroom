@@ -1,56 +1,61 @@
-import type { FastifyInstance } from 'fastify';
+import { createHash, timingSafeEqual } from 'node:crypto';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { Server } from '@hocuspocus/server';
-import * as Y from 'yjs';
-import { yDocToProsemirrorJSON } from 'y-prosemirror';
 import {
   AgentGatewayHeadersSchema,
   AgentGatewayEditRequestSchema,
-  exportDerivedMarkdown,
   type AgentGatewayErrorResponse,
 } from '@enterprise-blogger/shared';
 import { executeAgentEdit, GatewayError } from './direct-connection.js';
-import type { DocumentPersistenceAdapter } from '../persistence/adapter.js';
+import { DocumentLifecycle, DocumentLifecycleError } from '../document-lifecycle.js';
 
 export interface AgentGatewayRouteOptions {
   gatewaySecret?: string;
-  adapter?: DocumentPersistenceAdapter;
+  lifecycle?: DocumentLifecycle;
 }
 
 export function registerAgentGatewayRoutes(
   app: FastifyInstance,
   getServer: () => Server | null,
-  options: AgentGatewayRouteOptions = {}
+  options: AgentGatewayRouteOptions = {},
 ): void {
-  const getExpectedSecret = () =>
-    options.gatewaySecret ??
-    process.env.AGENT_GATEWAY_SECRET ??
-    process.env.GATEWAY_SECRET ??
-    process.env.COLLAB_GATEWAY_SECRET ??
-    'blogger_gateway_secret_key_32bytes';
+  const expectedSecret = options.gatewaySecret ?? process.env.COLLAB_GATEWAY_SECRET
+    ?? process.env.GATEWAY_SECRET ?? process.env.AGENT_GATEWAY_SECRET;
 
-  function findActiveDocument(server: Server, docName: string) {
-    const norm = docName.startsWith('post-') ? docName.slice(5) : docName;
-    const candidates = [docName, `post-${norm}`, norm];
-    for (const c of candidates) {
-      if (server.hocuspocus.documents.has(c)) {
-        return { name: c, doc: server.hocuspocus.documents.get(c)! };
-      }
+  function authorize(headers: Record<string, unknown>, reply: FastifyReply, agentGateway = false): boolean {
+    if (!expectedSecret) {
+      reply.status(503).send({ success: false, code: agentGateway ? 'INTERNAL_ERROR' : 'UNAVAILABLE', message: 'Gateway authentication is not configured' });
+      return false;
     }
-    return null;
+    const provided = headers['x-gateway-secret'] ?? headers['x-internal-service-key'];
+    if (typeof provided !== 'string' || !timingSafeEqual(
+      createHash('sha256').update(provided).digest(),
+      createHash('sha256').update(expectedSecret).digest(),
+    )) {
+      reply.status(401).send({ success: false, code: 'UNAUTHORIZED', message: 'Invalid or missing gateway secret' });
+      return false;
+    }
+    return true;
   }
 
-  function isAuthorized(headers: Record<string, any>): boolean {
-    const providedSecret = headers['x-gateway-secret'] || headers['x-internal-service-key'];
-    const expectedSecret = getExpectedSecret();
-    return (
-      providedSecret === expectedSecret ||
-      providedSecret === 'blogger_gateway_secret_key_32bytes' ||
-      providedSecret === 'REPLACE_WITH_STRONG_GATEWAY_SECRET'
-    );
+  function lifecycle(): DocumentLifecycle {
+    if (!options.lifecycle) throw new DocumentLifecycleError('UNAVAILABLE', 'Document lifecycle is unavailable', 503);
+    return options.lifecycle;
+  }
+
+  function lifecycleError(error: unknown, reply: FastifyReply) {
+    if (error instanceof DocumentLifecycleError) {
+      return reply.status(error.statusCode).send({
+        success: false,
+        code: error.code,
+        message: error.message,
+        outcomeUnknown: error.outcomeUnknown,
+      });
+    }
+    return reply.status(503).send({ success: false, code: 'UNAVAILABLE', message: 'Document lifecycle failed', outcomeUnknown: true });
   }
 
   app.post('/internal/agent-gateway/edit', async (request, reply) => {
-    // 1. Validate Headers
     const headersResult = AgentGatewayHeadersSchema.safeParse(request.headers);
     if (!headersResult.success) {
       const errResponse: AgentGatewayErrorResponse = {
@@ -63,16 +68,7 @@ export function registerAgentGatewayRoutes(
     }
 
     const headers = headersResult.data;
-    if (!isAuthorized(headers)) {
-      const errResponse: AgentGatewayErrorResponse = {
-        success: false,
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or missing gateway secret',
-      };
-      return reply.status(401).send(errResponse);
-    }
-
-    // 2. Validate Request Body
+    if (!authorize(headers, reply, true)) return;
     const bodyResult = AgentGatewayEditRequestSchema.safeParse(request.body);
     if (!bodyResult.success) {
       const errResponse: AgentGatewayErrorResponse = {
@@ -86,174 +82,67 @@ export function registerAgentGatewayRoutes(
 
     const server = getServer();
     if (!server) {
-      const errResponse: AgentGatewayErrorResponse = {
-        success: false,
-        code: 'INTERNAL_ERROR',
-        message: 'Collaboration server is not initialized',
-      };
-      return reply.status(500).send(errResponse);
+      return reply.status(503).send({ success: false, code: 'INTERNAL_ERROR', message: 'Collaboration server is unavailable' });
     }
-
-    // 3. Execute Mutation via Direct Connection
     try {
+      lifecycle().assertAvailable(bodyResult.data.documentId);
       const response = await executeAgentEdit(server, bodyResult.data, {
         userId: headers['x-user-id'],
         agentId: headers['x-agent-id'],
         tokenId: headers['x-token-id'],
       });
       return reply.status(200).send(response);
-    } catch (err: any) {
-      if (err instanceof GatewayError || err.code === 'VALIDATION_FAILED') {
+    } catch (error: any) {
+      if (error instanceof DocumentLifecycleError) {
+        // Preserve the shared agent-gateway error enum; lifecycle RPCs have
+        // their own detailed dependency/conflict codes.
         const errResponse: AgentGatewayErrorResponse = {
           success: false,
-          code: err.code,
-          message: err.message,
+          code: error.code === 'VALIDATION_FAILED' ? 'VALIDATION_FAILED' : 'INTERNAL_ERROR',
+          message: error.message,
         };
-        return reply.status(err.statusCode || 400).send(errResponse);
+        return reply.status(error.statusCode).send(errResponse);
       }
-
-      const errResponse: AgentGatewayErrorResponse = {
-        success: false,
-        code: 'INTERNAL_ERROR',
-        message: err?.message || 'An unexpected error occurred during edit',
-      };
-      return reply.status(500).send(errResponse);
+      if (error instanceof GatewayError || error?.code === 'VALIDATION_FAILED') {
+        const errResponse: AgentGatewayErrorResponse = { success: false, code: error.code, message: error.message };
+        return reply.status(error.statusCode || 400).send(errResponse);
+      }
+      return reply.status(500).send({ success: false, code: 'INTERNAL_ERROR', message: 'An unexpected error occurred during edit' });
     }
   });
 
-  // 2. Synchronous Snapshot / Flush (B03)
   app.post('/internal/documents/:documentName/flush', async (request, reply) => {
-    if (!isAuthorized(request.headers as any)) {
-      return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or missing gateway secret' });
-    }
-
+    if (!authorize(request.headers, reply)) return;
     const { documentName } = request.params as { documentName: string };
-    const server = getServer();
-    if (!server) {
-      return reply.status(500).send({ error: 'Collab server is not initialized' });
+    try {
+      return reply.send(await lifecycle().capture(documentName));
+    } catch (error) {
+      return lifecycleError(error, reply);
     }
-
-    const found = findActiveDocument(server, documentName);
-    if (found) {
-      const doc = found.doc;
-      const state = Y.encodeStateAsUpdate(doc);
-      const fragmentName = doc.share.has('default') && (!doc.share.has('prosemirror') || doc.getXmlFragment('prosemirror').length === 0)
-        ? 'default' : 'prosemirror';
-      const pmJson = yDocToProsemirrorJSON(doc, fragmentName);
-      const workingMarkdown = exportDerivedMarkdown(pmJson as any);
-
-      if (options.adapter) {
-        await options.adapter.store(found.name, state, doc);
-      }
-
-      return reply.send({
-        success: true,
-        inMemory: true,
-        documentName: found.name,
-        yjsState: Buffer.from(state).toString('base64'),
-        workingMarkdown,
-      });
-    }
-
-    return reply.send({
-      success: true,
-      inMemory: false,
-      documentName,
-    });
   });
 
-  // 3. In-Place Collaborative Document Restore (B06)
   app.post('/internal/documents/:documentName/restore', async (request, reply) => {
-    if (!isAuthorized(request.headers as any)) {
-      return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or missing gateway secret' });
-    }
-
+    if (!authorize(request.headers, reply)) return;
     const { documentName } = request.params as { documentName: string };
-    const { yjsState } = (request.body as any) || {};
-
-    let snapshotBytes: Uint8Array | null = null;
-    if (yjsState) {
-      snapshotBytes = typeof yjsState === 'string'
-        ? new Uint8Array(Buffer.from(yjsState, 'base64'))
-        : new Uint8Array(yjsState);
+    const { yjsState, expectedCurrentFingerprint } = (request.body as any) ?? {};
+    if (typeof yjsState !== 'string' || !yjsState || Buffer.from(yjsState, 'base64').toString('base64') !== yjsState
+      || typeof expectedCurrentFingerprint !== 'string' || !/^[0-9a-f]{64}$/.test(expectedCurrentFingerprint)) {
+      return reply.status(400).send({ success: false, code: 'VALIDATION_FAILED', message: 'Valid Yjs state and expected current fingerprint are required' });
     }
-
-    const server = getServer();
-    const found = server ? findActiveDocument(server, documentName) : null;
-
-    if (found && snapshotBytes) {
-      const doc = found.doc;
-      const tempDoc = new Y.Doc();
-      Y.applyUpdate(tempDoc, snapshotBytes);
-      const fragmentName = tempDoc.share.has('default') && (!tempDoc.share.has('prosemirror') || tempDoc.getXmlFragment('prosemirror').length === 0)
-        ? 'default' : 'prosemirror';
-      const tempFrag = tempDoc.getXmlFragment(fragmentName);
-
-      doc.transact(() => {
-        const targetFrag = doc.getXmlFragment(fragmentName);
-        while (targetFrag.length > 0) {
-          targetFrag.delete(0, 1);
-        }
-        for (let i = 0; i < tempFrag.length; i++) {
-          const item = tempFrag.get(i);
-          targetFrag.push([item.clone()]);
-        }
-      }, 'restore');
-
-      const updatedState = Y.encodeStateAsUpdate(doc);
-      if (options.adapter) {
-        await options.adapter.store(found.name, updatedState, doc);
-      }
-
-      return reply.send({
-        success: true,
-        inMemory: true,
-        documentName: found.name,
-        message: 'Restored active document and broadcast to connected clients',
-      });
+    try {
+      return reply.send(await lifecycle().restore(documentName, new Uint8Array(Buffer.from(yjsState, 'base64')), expectedCurrentFingerprint));
+    } catch (error) {
+      return lifecycleError(error, reply);
     }
-
-    if (options.adapter && snapshotBytes) {
-      await options.adapter.store(documentName, snapshotBytes);
-    }
-
-    return reply.send({
-      success: true,
-      inMemory: false,
-      documentName,
-      message: 'Restored document directly in persistent storage',
-    });
   });
 
-  // 4. Document Tombstone / Deletion Coordination (B06)
   app.post('/internal/documents/:documentName/tombstone', async (request, reply) => {
-    if (!isAuthorized(request.headers as any)) {
-      return reply.status(401).send({ error: 'Unauthorized', message: 'Invalid or missing gateway secret' });
-    }
-
+    if (!authorize(request.headers, reply)) return;
     const { documentName } = request.params as { documentName: string };
-    const server = getServer();
-    if (server) {
-      const found = findActiveDocument(server, documentName);
-      const name = found ? found.name : (documentName.startsWith('post-') ? documentName : `post-${documentName}`);
-      try {
-        server.hocuspocus.closeConnections(name);
-      } catch {
-        // ignore
-      }
-      if (server.hocuspocus.documents.has(name)) {
-        server.hocuspocus.documents.delete(name);
-      }
+    try {
+      return reply.send(await lifecycle().tombstone(documentName));
+    } catch (error) {
+      return lifecycleError(error, reply);
     }
-
-    if (options.adapter && typeof (options.adapter as any).tombstone === 'function') {
-      (options.adapter as any).tombstone(documentName);
-    }
-
-    return reply.send({
-      success: true,
-      tombstoned: true,
-      documentName,
-    });
   });
 }

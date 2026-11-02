@@ -25,7 +25,7 @@ export class InMemoryPersistenceAdapter implements DocumentPersistenceAdapter {
     this.storeMap.set(documentName, new Uint8Array(state));
   }
 
-  tombstone(documentName: string): void {
+  async tombstone(documentName: string): Promise<void> {
     const id = documentName.startsWith('post-') ? documentName.slice(5) : documentName;
     this.tombstones.add(id);
     this.tombstones.add(documentName);

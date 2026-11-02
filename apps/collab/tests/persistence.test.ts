@@ -68,6 +68,16 @@ describe('Persistence Adapters Suite', () => {
       expect(adapter.size()).toBe(0);
       expect(adapter.has('doc-a')).toBe(false);
     });
+
+    it('awaits tombstoning and prevents delayed stores from recreating canonical state', async () => {
+      const doc = new Y.Doc();
+      doc.getText('content').insert(0, 'Durable state');
+      const state = Y.encodeStateAsUpdate(doc);
+      await adapter.store('post-deleted', state);
+      await adapter.tombstone('post-deleted');
+      await adapter.store('post-deleted', state);
+      expect(await adapter.fetch('post-deleted')).toBeNull();
+    });
   });
 
   describe('PostgresPersistenceAdapter (pg-mem PostgreSQL emulation)', () => {
@@ -219,6 +229,81 @@ describe('Persistence Adapters Suite', () => {
       // Ensure row count is still 1
       const countRes = await pool.query('SELECT COUNT(*) as count FROM posts WHERE id = $1', [docId]);
       expect(Number(countRes.rows[0].count)).toBe(1);
+    });
+
+    it('projects an empty canonical prosemirror root rather than nonempty legacy default content', async () => {
+      const doc = new Y.Doc();
+      const legacy = new Y.XmlElement('paragraph');
+      legacy.insert(0, [new Y.XmlText('Stale default')]);
+      doc.getXmlFragment('default').insert(0, [legacy]);
+      const current = new Y.XmlElement('paragraph');
+      current.insert(0, [new Y.XmlText('Deleted current content')]);
+      doc.getXmlFragment('prosemirror').insert(0, [current]);
+      doc.getXmlFragment('prosemirror').delete(0, 1);
+      const id = '44444444-4444-4444-4444-444444444444';
+      await adapter.store(id, Y.encodeStateAsUpdate(doc), doc);
+      const result = await pool.query('SELECT working_markdown FROM posts WHERE id = $1', [id]);
+      expect(result.rows[0].working_markdown).toBe('');
+    });
+
+    it('rejects missing production rows instead of acknowledging a store that updated nothing', async () => {
+      const production = new PostgresPersistenceAdapter({ pool, allowAutoInsert: false });
+      const doc = new Y.Doc();
+      doc.getText('content').insert(0, 'Must not auto-insert');
+      await expect(production.store('55555555-5555-5555-5555-555555555555', Y.encodeStateAsUpdate(doc), doc)).rejects.toThrow('target does not exist');
+      expect((await pool.query('SELECT COUNT(*) AS count FROM posts')).rows[0].count).toBe(0);
+    });
+
+    it('uses the canonical UUID identity instead of reading or updating another row with a matching slug', async () => {
+      const first = '77777777-7777-7777-7777-777777777777';
+      const second = '88888888-8888-8888-8888-888888888888';
+      const own = new Y.Doc();
+      own.getText('content').insert(0, 'Authorized row');
+      const other = new Y.Doc();
+      other.getText('content').insert(0, 'Other private row');
+      await adapter.store(first, Y.encodeStateAsUpdate(own));
+      await adapter.store(second, Y.encodeStateAsUpdate(other));
+      await pool.query('UPDATE posts SET slug = $1 WHERE id = $2', ['authorized-row-slug', first]);
+      await pool.query('UPDATE posts SET slug = $1 WHERE id = $2', [`post-${first}`, second]);
+      expect(await adapter.fetch(`post-${first}`)).toEqual(Y.encodeStateAsUpdate(own));
+      own.getText('content').insert(own.getText('content').length, ' updated');
+      await adapter.store(`post-${first}`, Y.encodeStateAsUpdate(own));
+      expect(await adapter.fetch(first)).toEqual(Y.encodeStateAsUpdate(own));
+      expect(await adapter.fetch(second)).toEqual(Y.encodeStateAsUpdate(other));
+    });
+
+    it('awaits an already-running SQL store before tombstone acknowledgement, keeps the row, and prevents late writes', async () => {
+      const id = '66666666-6666-6666-6666-666666666666';
+      const doc = new Y.Doc();
+      doc.getText('content').insert(0, 'Before barrier');
+      await adapter.store(`post-${id}`, Y.encodeStateAsUpdate(doc), doc);
+      let release!: () => void;
+      let entered!: () => void;
+      const pause = new Promise<void>((resolve) => { release = resolve; });
+      const started = new Promise<void>((resolve) => { entered = resolve; });
+      const query = pool.query.bind(pool);
+      let writes = 0;
+      pool.query = async (sql: string, values?: any[]) => {
+        if (sql.includes('UPDATE posts')) { writes++; entered(); await pause; }
+        return query(sql, values);
+      };
+      doc.getText('content').insert(doc.getText('content').length, ' plus pending store');
+      const state = Y.encodeStateAsUpdate(doc);
+      const storing = adapter.store(`post-${id}`, state, doc);
+      await started;
+      let acknowledged = false;
+      const deleting = adapter.tombstone(id).then(() => { acknowledged = true; });
+      expect(acknowledged).toBe(false);
+      release();
+      await storing;
+      await deleting;
+      expect(acknowledged).toBe(true);
+      expect(await adapter.fetch(`post-${id}`)).toBeNull();
+      await adapter.store(id, Y.encodeStateAsUpdate(new Y.Doc()));
+      expect(writes).toBe(1);
+      const row = await query('SELECT yjs_state FROM posts WHERE id = $1', [id]);
+      expect(row.rows).toHaveLength(1); // API, not collab, owns final row deletion.
+      expect(new Uint8Array(row.rows[0].yjs_state)).toEqual(state);
     });
   });
 });

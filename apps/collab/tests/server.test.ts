@@ -2,8 +2,20 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as Y from 'yjs';
 import WebSocket from 'ws';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { createCollabServer, type CollabServerInstance } from '../src/server.js';
+import { createCollabServer as createServer, type CollabServerInstance, type CollabServerOptions } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
+
+// Transport fixtures use explicit, server-side test identities, not runtime role tokens.
+const createCollabServer = (options: CollabServerOptions = {}) => createServer({
+  ...options,
+  authOptions: {
+    authenticate: async ({ token }) => {
+      if (!['token-author-alice', 'token-author-bob', 'token-reader-bob'].includes(token ?? '')) throw new Error('Invalid test identity');
+      return { id: token!, role: token === 'token-reader-bob' ? 'reader' : 'author', name: 'Fixture user', permissions: token === 'token-reader-bob' ? ['view'] : ['edit'] };
+    },
+    ...options.authOptions,
+  },
+});
 
 describe('Collab Server & Standard WS Transport Suite', () => {
   let instance: CollabServerInstance | null = null;
@@ -75,12 +87,14 @@ describe('Collab Server & Standard WS Transport Suite', () => {
   });
 
   it('serves Fastify /healthz co-hosted on the exact same HTTP port', async () => {
+    const signalListeners = ['SIGINT', 'SIGQUIT', 'SIGTERM'].map((signal) => process.listenerCount(signal));
     instance = await createCollabServer({
       port: 0,
       quiet: true,
     });
 
     const { port } = await instance.listen();
+    expect(['SIGINT', 'SIGQUIT', 'SIGTERM'].map((signal) => process.listenerCount(signal))).toEqual(signalListeners);
 
     const res = await fetch(`http://127.0.0.1:${port}/healthz`);
     expect(res.status).toBe(200);
@@ -112,7 +126,7 @@ describe('Collab Server & Standard WS Transport Suite', () => {
     expect(readyRes.headers.get('location')).toBe('/healthz');
   });
 
-  it('enforces read-only access for readers and drops reader client mutations', async () => {
+  it('rejects readers before syncing any working state or accepting mutations', async () => {
     const adapter = new InMemoryPersistenceAdapter();
     instance = await createCollabServer({
       port: 0,
@@ -141,7 +155,7 @@ describe('Collab Server & Standard WS Transport Suite', () => {
     // Wait a brief moment for author edit to sync
     await new Promise((r) => setTimeout(r, 100));
 
-    // 2. Reader connects with reader token (read-only enforced)
+    // 2. A validated viewer still must not receive the working CRDT.
     const readerDoc = new Y.Doc();
     const readerProvider = new HocuspocusProvider({
       url,
@@ -152,8 +166,12 @@ describe('Collab Server & Standard WS Transport Suite', () => {
     });
     providersToClean.push(readerProvider);
 
-    await new Promise<void>((resolve) => readerProvider.on('synced', () => resolve()));
-    expect(readerDoc.getText('content').toString()).toBe('Original Content By Author');
+    await new Promise<void>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error('Expected authentication failure')), 5000);
+      readerProvider.on('authenticationFailed', () => { clearTimeout(timer); resolve(); });
+    });
+    expect(readerProvider.isSynced).toBe(false);
+    expect(readerDoc.getText('content').toString()).toBe('');
 
     // Reader attempts unauthorized mutation
     readerDoc.getText('content').insert(0, 'UNAUTHORIZED EDIT: ');

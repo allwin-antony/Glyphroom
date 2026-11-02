@@ -2,14 +2,26 @@ import { describe, it, expect, afterEach } from 'vitest';
 import * as Y from 'yjs';
 import WebSocket from 'ws';
 import { HocuspocusProvider } from '@hocuspocus/provider';
-import { createCollabServer, type CollabServerInstance } from '../src/server.js';
+import { createCollabServer as createServer, type CollabServerInstance, type CollabServerOptions } from '../src/server.js';
 import { InMemoryPersistenceAdapter } from '../src/persistence/in-memory.js';
+
+const createCollabServer = (options: CollabServerOptions) => createServer({
+  ...options,
+  authOptions: {
+    authenticate: async ({ token }) => {
+      if (token !== 'token-author-alice') throw new Error('Invalid test identity');
+      return { id: 'alice', role: 'author', name: 'Alice', permissions: ['edit'] };
+    },
+  },
+});
 
 describe('Flush Debouncing & Graceful Shutdown Suite', () => {
   let instance: CollabServerInstance | null = null;
   const providersToClean: HocuspocusProvider[] = [];
+  const cleanupActions: Array<() => void> = [];
 
   afterEach(async () => {
+    cleanupActions.splice(0).forEach((cleanup) => cleanup());
     while (providersToClean.length > 0) {
       const p = providersToClean.pop();
       try {
@@ -175,5 +187,37 @@ describe('Flush Debouncing & Graceful Shutdown Suite', () => {
     expect(recovered.getText('content').toString()).toBe(
       'Critical Unpersisted Edit Prior To Shutdown',
     );
+  });
+
+  it('makes concurrent destroy callers await the same in-flight persistence barrier', async () => {
+    const base = new InMemoryPersistenceAdapter();
+    let release!: () => void;
+    let entered!: () => void;
+    const pause = new Promise<void>((resolve) => { release = resolve; });
+    cleanupActions.push(release);
+    const started = new Promise<void>((resolve) => { entered = resolve; });
+    const adapter = {
+      fetch: base.fetch.bind(base), destroy: base.destroy.bind(base),
+      store: async (name: string, state: Uint8Array, doc?: Y.Doc) => { entered(); await pause; await base.store(name, state, doc); },
+    };
+    instance = await createCollabServer({ port: 0, adapter, debounceMs: 5000, quiet: true });
+    const { url } = await instance.listen();
+    const doc = new Y.Doc();
+    const provider = new HocuspocusProvider({ url, name: 'post-shutdown-barrier', document: doc, token: 'token-author-alice', WebSocketPolyfill: WebSocket as any });
+    providersToClean.push(provider);
+    await new Promise<void>((resolve) => provider.on('synced', () => resolve()));
+    doc.getText('content').insert(0, 'Await both shutdown callers');
+    await expect.poll(() => instance!.server.hocuspocus.documents.get('post-shutdown-barrier')?.getText('content').toString()).toBe('Await both shutdown callers');
+    const first = instance.destroy();
+    await started;
+    const second = instance.destroy();
+    expect(second).toBe(first);
+    expect(await base.fetch('post-shutdown-barrier')).toBeNull();
+    release();
+    await Promise.all([first, second]);
+    const state = await base.fetch('post-shutdown-barrier');
+    const recovered = new Y.Doc();
+    Y.applyUpdate(recovered, state!);
+    expect(recovered.getText('content').toString()).toBe('Await both shutdown callers');
   });
 });

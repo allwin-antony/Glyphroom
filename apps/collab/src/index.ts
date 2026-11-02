@@ -7,6 +7,7 @@ export * from './server.js';
 export * from './persistence/index.js';
 export * from './auth/index.js';
 export * from './gateway/index.js';
+export * from './document-lifecycle.js';
 
 export const COLLAB_APP_NAME = 'enterprise-blogger-collab';
 
@@ -28,7 +29,10 @@ async function main() {
   const instance = await createCollabServer({
     port,
     adapter,
-    redisUrl: process.env.REDIS_URL,
+    gatewaySecret: process.env.COLLAB_GATEWAY_SECRET ?? process.env.GATEWAY_SECRET ?? process.env.AGENT_GATEWAY_SECRET,
+    authOptions: { apiUrl: process.env.GLYPHROOM_API_URL },
+    debounceMs: process.env.FLUSH_DEBOUNCE_MS ? Number(process.env.FLUSH_DEBOUNCE_MS) : undefined,
+    maxDebounceMs: process.env.FLUSH_MAX_DEBOUNCE_MS ? Number(process.env.FLUSH_MAX_DEBOUNCE_MS) : undefined,
     quiet: false,
   });
 
@@ -43,6 +47,7 @@ async function main() {
   };
 
   process.on('SIGINT', () => shutdown('SIGINT'));
+  process.on('SIGQUIT', () => shutdown('SIGQUIT'));
   process.on('SIGTERM', () => shutdown('SIGTERM'));
 }
 

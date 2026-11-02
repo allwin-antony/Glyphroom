@@ -38,6 +38,12 @@ describe('Milestone M4: In-Process Agent Gateway & Direct Connection Suite', () 
       port: 0,
       adapter,
       gatewaySecret: testSecret,
+      authOptions: {
+        authenticate: async ({ token }) => {
+          if (token !== 'test-editor' && token !== 'test-moderator') throw new Error('Invalid test identity');
+          return { id: token, role: token === 'test-moderator' ? 'moderator' : 'author', name: 'Test editor', permissions: ['view', 'edit'] };
+        },
+      },
       quiet: true,
     });
     const { port, url } = await instance.listen();
@@ -45,7 +51,7 @@ describe('Milestone M4: In-Process Agent Gateway & Direct Connection Suite', () 
   }
 
   // Helper to connect a standard WS client and wait for sync
-  async function connectClient(url: string, documentName: string, token: string = 'token-author-alice') {
+  async function connectClient(url: string, documentName: string, token: string = 'test-editor') {
     const doc = new Y.Doc();
     const provider = new HocuspocusProvider({
       url,
@@ -72,6 +78,39 @@ describe('Milestone M4: In-Process Agent Gateway & Direct Connection Suite', () 
   }
 
   describe('1. Secret Authentication & Security Boundary', () => {
+    it.each(['blogger_gateway_secret_key_32bytes', 'REPLACE_WITH_STRONG_GATEWAY_SECRET'])(
+      'rejects the previously hard-coded secret %s when it is not configured', async (secret) => {
+        const { port } = await setupServer();
+        for (const header of ['X-Gateway-Secret', 'X-Internal-Service-Key']) {
+          const res = await fetch(`http://127.0.0.1:${port}/internal/agent-gateway/edit`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', [header]: secret, 'X-User-Id': 'usr-1', 'X-Agent-Id': 'agent-1' },
+            body: JSON.stringify({ operation: 'append_section', documentId: 'post-legacy-secret', content: 'Must not be applied' }),
+          });
+          expect(res.status).toBe(401);
+          expect((await res.json()).success).toBe(false);
+        }
+        expect(instance!.server.hocuspocus.getDocumentsCount()).toBe(0);
+      },
+    );
+
+    it('fails closed when no gateway secret is configured', async () => {
+      instance = await createCollabServer({ port: 0, gatewaySecret: '', quiet: true });
+      const { port } = await instance.listen();
+      const res = await fetch(`http://127.0.0.1:${port}/internal/documents/post-no-config/flush`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Gateway-Secret': testSecret }, body: '{}',
+      });
+      expect(res.status).toBe(503);
+      expect((await res.json()).code).toBe('UNAVAILABLE');
+      const agentRes = await fetch(`http://127.0.0.1:${port}/internal/agent-gateway/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Gateway-Secret': testSecret, 'X-User-Id': 'usr-1', 'X-Agent-Id': 'agent-1' },
+        body: JSON.stringify({ operation: 'append_section', documentId: 'post-no-config', content: 'Must not mutate' }),
+      });
+      expect(agentRes.status).toBe(503);
+      expect(await agentRes.json()).toMatchObject({ success: false, code: 'INTERNAL_ERROR' });
+    });
+
     it('rejects requests missing gateway secret with 401 UNAUTHORIZED', async () => {
       const { port } = await setupServer();
       const res = await fetch(`http://127.0.0.1:${port}/internal/agent-gateway/edit`, {
@@ -138,6 +177,18 @@ describe('Milestone M4: In-Process Agent Gateway & Direct Connection Suite', () 
       const data = await res.json();
       expect(data.success).toBe(true);
       expect(data.documentId).toBe('post-auth-3');
+    });
+
+    it('preserves valid maximum-length gateway identifiers through canonical room gating', async () => {
+      const { port } = await setupServer();
+      const documentId = 'a'.repeat(128);
+      const res = await fetch(`http://127.0.0.1:${port}/internal/agent-gateway/edit`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Gateway-Secret': testSecret, 'X-User-Id': 'usr-1', 'X-Agent-Id': 'agent-1' },
+        body: JSON.stringify({ operation: 'append_section', documentId, content: 'Valid boundary content' }),
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).documentId).toBe(documentId);
     });
 
     it('accepts requests with valid legacy X-Internal-Service-Key', async () => {
@@ -503,6 +554,7 @@ describe('Milestone M4: In-Process Agent Gateway & Direct Connection Suite', () 
         documentName: docName,
         agentId: 'agent-headless-1',
         ownerUserId: 'alice-owner',
+        token: 'test-editor',
       });
       providersToClean.push(headless);
 
@@ -625,7 +677,7 @@ describe('Milestone M4: In-Process Agent Gateway & Direct Connection Suite', () 
       const docName = 'post-multi-perm-test';
 
       // Connect with token-moderator (has permissions: ['edit'] or custom multi-permission)
-      const { doc: modDoc } = await connectClient(url, docName, 'token-moderator');
+      const { doc: modDoc } = await connectClient(url, docName, 'test-moderator');
 
       // Moderator writes text
       let threw = false;

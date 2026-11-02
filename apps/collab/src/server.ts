@@ -1,12 +1,12 @@
-import { Server, type ServerConfiguration } from '@hocuspocus/server';
-import { Database } from '@hocuspocus/extension-database';
-import { Redis } from '@hocuspocus/extension-redis';
+import { Server, type onAuthenticatePayload, type ServerConfiguration } from '@hocuspocus/server';
 import fastify, { type FastifyInstance } from 'fastify';
+import * as Y from 'yjs';
 import type { DocumentPersistenceAdapter } from './persistence/adapter.js';
 import { InMemoryPersistenceAdapter } from './persistence/in-memory.js';
 import { PostgresPersistenceAdapter } from './persistence/postgres.js';
 import { createAuthHooks, type CollabAuthOptions } from './auth/hooks.js';
 import { registerAgentGatewayRoutes } from './gateway/routes.js';
+import { decodeDocumentState, DocumentLifecycle } from './document-lifecycle.js';
 
 export interface CollabServerOptions {
   port?: number;
@@ -24,6 +24,7 @@ export interface CollabServerInstance {
   server: Server;
   fastify: FastifyInstance;
   adapter: DocumentPersistenceAdapter;
+  lifecycle: DocumentLifecycle;
   readonly port: number;
   listen(): Promise<{ port: number; url: string }>;
   destroy(): Promise<void>;
@@ -38,6 +39,9 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
   const debounce = options.debounceMs ?? 3000;
   const maxDebounce = options.maxDebounceMs ?? 10000;
   const redisUrl = options.redisUrl || process.env.REDIS_URL;
+  if (redisUrl) {
+    throw new Error('Collaboration lifecycle requires a single instance; Redis clustering is not supported');
+  }
 
   // 1. Initialize Fastify for HTTP endpoints (/healthz, agent gateway)
   const app = fastify({ logger: false });
@@ -46,7 +50,7 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
     const checks: Record<string, string> = {
       database: 'ok',
       hocuspocus: 'ok',
-      redis: redisUrl ? 'configured' : 'disabled',
+      redis: 'disabled',
     };
 
     let isHealthy = true;
@@ -90,48 +94,24 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
   app.get('/readyz', async (_req, reply) => reply.redirect('/healthz'));
 
   let serverInstance: Server | null = null;
+  const lifecycle = new DocumentLifecycle(() => serverInstance, adapter);
   registerAgentGatewayRoutes(app, () => serverInstance, {
     gatewaySecret: options.gatewaySecret,
-    adapter,
+    lifecycle,
   });
 
   await app.ready();
 
-  // 2. Configure Hocuspocus Extensions
-  const extensions: any[] = [
-    new Database({
-      fetch: async ({ documentName }) => adapter.fetch(documentName),
-      store: async ({ documentName, state, document }) => adapter.store(documentName, state, document),
-    }),
-  ];
-
-  // Optional Redis Pub/Sub extension for multi-node clustering
-  if (redisUrl) {
-    try {
-      const parsed = new URL(redisUrl);
-      extensions.push(
-        new Redis({
-          host: parsed.hostname,
-          port: parseInt(parsed.port || '6379', 10),
-          prefix: 'enterprise_blogger:collab',
-        }),
-      );
-    } catch {
-      extensions.push(
-        new Redis({
-          host: '127.0.0.1',
-          port: 6379,
-          prefix: 'enterprise_blogger:collab',
-        }),
-      );
-    }
-  }
-
-  // 3. Configure Authentication and Authorization Hooks
+  // Authentication precedes any working-document sync, including warm rooms.
   const authHooks = createAuthHooks({
     ...options.authOptions,
-    adapter,
   });
+  const authenticate = async (data: onAuthenticatePayload) => {
+    lifecycle.assertAvailable(data.documentName);
+    const context = await authHooks.onAuthenticate(data);
+    lifecycle.assertAvailable(data.documentName);
+    return context;
+  };
 
   const serverConfig: Partial<ServerConfiguration> = {
     port: options.port ?? 4000,
@@ -140,9 +120,47 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
     maxDebounce,
     unloadImmediately: false,
     quiet: options.quiet ?? true,
-    extensions,
-    onAuthenticate: authHooks.onAuthenticate,
-    onLoadDocument: authHooks.onLoadDocument,
+    // The bootstrap owns signals and must use the awaited lifecycle shutdown,
+    // not Hocuspocus's native destroy path which swallows persistence failures.
+    stopOnSignals: false,
+    onAuthenticate: authenticate,
+    async onTokenSync(data) {
+      return authenticate({ ...data, request: data.connection.request, providerVersion: null });
+    },
+    async connected(data) {
+      try {
+        lifecycle.assertAvailable(data.documentName);
+      } catch (error) {
+        // A load admitted before deletion may finish connection setup later.
+        data.connection.close({ code: 1013, reason: 'Document collaboration is unavailable' });
+        throw error;
+      }
+    },
+    async onLoadDocument(data) {
+      await authHooks.onLoadDocument(data);
+      try {
+        const state = await adapter.fetch(data.documentName);
+        if (state) {
+          const snapshot = decodeDocumentState(state);
+          try {
+            Y.applyUpdate(data.document, Y.encodeStateAsUpdate(snapshot));
+          } finally {
+            snapshot.destroy();
+          }
+        }
+      } catch {
+        throw new Error('Document persistence is unavailable');
+      }
+    },
+    async beforeHandleMessage(data) {
+      await lifecycle.beforeMessage(data.documentName, data.connection, data.document);
+    },
+    async afterHandleMessage(data) {
+      lifecycle.afterMessage(data.connection);
+    },
+    async onStoreDocument(data) {
+      await lifecycle.store(data.documentName, data.document);
+    },
     async onRequest({ request, response }) {
       const url = request.url || '';
       if (url.startsWith('/health') || url.startsWith('/readyz') || url.startsWith('/internal/')) {
@@ -155,29 +173,46 @@ export async function createCollabServer(options: CollabServerOptions = {}): Pro
   const server = new Server(serverConfig);
   serverInstance = server;
 
-  let destroyed = false;
-  const destroy = async () => {
-    if (destroyed) return;
-    destroyed = true;
-
-    // Immediately flush any debounced stores queued in memory before closing
+  // Hocuspocus hooks alone don't cover the entire load/unload operation, and
+  // direct transactions bypass WS hooks. Gate these public engine boundaries
+  // too, so no load can install a room after a deletion acknowledgement.
+  const engine = server.hocuspocus;
+  const createDocument = engine.createDocument.bind(engine);
+  engine.createDocument = (name, request, socketId, config, context) =>
+    lifecycle.runMutation(name, () => createDocument(name, request, socketId, config, context));
+  const unloadDocument = engine.unloadDocument.bind(engine);
+  engine.unloadDocument = (document) => lifecycle.unload(document, () => unloadDocument(document));
+  const openDirectConnection = engine.openDirectConnection.bind(engine);
+  engine.openDirectConnection = async (name, context) => {
+    const connection = await openDirectConnection(name, context);
     try {
-      server.hocuspocus.flushPendingStores();
-    } catch {
-      // ignore
+      lifecycle.assertAvailable(name);
+    } catch (error) {
+      await connection.disconnect({ unloadImmediately: false });
+      throw error;
     }
+    const transact = connection.transact.bind(connection);
+    connection.transact = (transaction) => lifecycle.runMutation(name, () => transact(transaction));
+    return connection;
+  };
 
-    await server.destroy();
-    await app.close();
-    if (!options.adapter) {
-      await adapter.destroy();
-    }
+  let destroying: Promise<void> | undefined;
+  const destroy = (): Promise<void> => {
+    destroying ??= (async () => {
+      // Concurrent callers/signals share the same awaited durability barrier.
+      await lifecycle.shutdown();
+      await server.destroy();
+      await app.close();
+      if (!options.adapter) await adapter.destroy();
+    })();
+    return destroying;
   };
 
   return {
     server,
     fastify: app,
     adapter,
+    lifecycle,
     get port() {
       return server.address.port;
     },

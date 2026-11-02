@@ -25,6 +25,7 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
   private readonly defaultAuthorId: string;
   private readonly allowAutoInsert: boolean;
   private readonly tombstones: Set<string> = new Set<string>();
+  private readonly pendingStores = new Map<string, Promise<void>>();
 
   constructor(options: PostgresPersistenceOptions = {}) {
     this.tableName = options.tableName || 'posts';
@@ -54,11 +55,12 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
     return this.pool;
   }
 
-  public tombstone(documentName: string): void {
+  public async tombstone(documentName: string): Promise<void> {
     const id = this.normalizeDocId(documentName);
     this.tombstones.add(id);
     this.tombstones.add(documentName);
     this.tombstones.add(`post-${id}`);
+    await this.pendingStores.get(id);
   }
 
   private normalizeDocId(documentName: string): string {
@@ -67,12 +69,13 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
 
   async fetch(documentName: string): Promise<Uint8Array | null> {
     const id = this.normalizeDocId(documentName);
+    if (this.tombstones.has(id)) return null;
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
     const query = isUuid
       ? `
         SELECT yjs_state
         FROM ${this.tableName}
-        WHERE id = $1::uuid OR slug = $2
+        WHERE id = $1::uuid
         LIMIT 1
       `
       : `
@@ -81,37 +84,39 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
         WHERE slug = $1 OR slug = $2
         LIMIT 1
       `;
-    const result = await this.pool.query<{ yjs_state: Buffer | Uint8Array | null }>(query, [id, documentName]);
+    const result = await this.pool.query<{ yjs_state: Buffer | Uint8Array | null }>(query, isUuid ? [id] : [id, documentName]);
 
     if (result.rows.length === 0 || !result.rows[0].yjs_state) {
       return null;
     }
 
     const buf = result.rows[0].yjs_state;
-    if (Buffer.isBuffer(buf)) {
-      return new Uint8Array(buf.buffer, buf.byteOffset, buf.byteLength);
-    }
     return new Uint8Array(buf);
   }
 
   async store(documentName: string, state: Uint8Array, doc?: Y.Doc): Promise<void> {
     const id = this.normalizeDocId(documentName);
+    if (this.tombstones.has(id)) return;
+    const previous = this.pendingStores.get(id) ?? Promise.resolve();
+    // Capture the projection with the supplied state before waiting on I/O.
+    const fragmentName = doc?.share.has('prosemirror') ? 'prosemirror' : doc?.share.has('default') ? 'default' : 'prosemirror';
+    const workingMarkdown = doc ? exportDerivedMarkdown(yDocToProsemirrorJSON(doc, fragmentName) as any) : null;
+    const bytes = new Uint8Array(state);
+    const store = previous.catch(() => {}).then(() => this.storeState(documentName, bytes, workingMarkdown));
+    this.pendingStores.set(id, store);
+    try {
+      await store;
+    } finally {
+      if (this.pendingStores.get(id) === store) this.pendingStores.delete(id);
+    }
+  }
+
+  private async storeState(documentName: string, state: Uint8Array, workingMarkdown: string | null): Promise<void> {
+    const id = this.normalizeDocId(documentName);
     if (this.tombstones.has(id) || this.tombstones.has(documentName) || this.tombstones.has(`post-${id}`)) {
       return;
     }
     const hex = Buffer.from(state).toString('hex');
-
-    let workingMarkdown: string | null = null;
-    if (doc) {
-      try {
-        const fragmentName = doc.share.has('default') && (!doc.share.has('prosemirror') || doc.getXmlFragment('prosemirror').length === 0)
-          ? 'default' : 'prosemirror';
-        const pmJson = yDocToProsemirrorJSON(doc, fragmentName);
-        workingMarkdown = exportDerivedMarkdown(pmJson as any);
-      } catch {
-        workingMarkdown = null;
-      }
-    }
 
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
 
@@ -122,7 +127,7 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
         SET yjs_state = decode($1, 'hex'),
             working_markdown = COALESCE($2, working_markdown),
             updated_at = NOW()
-        WHERE id = $3::uuid OR slug = $4
+        WHERE id = $3::uuid
       `
       : `
         UPDATE ${this.tableName}
@@ -131,7 +136,11 @@ export class PostgresPersistenceAdapter implements DocumentPersistenceAdapter {
             updated_at = NOW()
         WHERE slug = $3 OR slug = $4
       `;
-    const updateRes = await this.pool.query(updateSql, [hex, workingMarkdown, id, documentName]);
+    const updateRes = await this.pool.query(updateSql, isUuid ? [hex, workingMarkdown, id] : [hex, workingMarkdown, id, documentName]);
+    if (this.tombstones.has(id)) return;
+    if (updateRes.rowCount === 0 && !this.allowAutoInsert) {
+      throw new Error('Document persistence target does not exist');
+    }
 
     // 2. Only auto-insert for development/test seeding if explicitly allowed;
     // in normal operation, prevents recreating deleted posts from delayed flush.
