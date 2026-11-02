@@ -1,5 +1,14 @@
 import { Extension } from '@tiptap/core';
-import { ySyncPlugin, yCursorPlugin, undo, redo, undoCommand, redoCommand } from 'y-prosemirror';
+import {
+  ySyncPlugin,
+  yCursorPlugin,
+  undo,
+  redo,
+  undoCommand,
+  redoCommand,
+  defaultDeleteFilter,
+  defaultProtectedNodes,
+} from 'y-prosemirror';
 import * as Y from 'yjs';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
 import { createHumanUndoManager, createHumanUndoPlugin } from '@enterprise-blogger/shared';
@@ -45,11 +54,11 @@ export const Collaboration = Extension.create<CollaborationOptions>({
       plugins.push(ySyncPlugin(fragment));
 
       // 2. Human UndoManager isolation (Feature 25)
-      // Allow deleteFilter to restore deleted blocks and cards on Ctrl+Z
+      // Allow deleteFilter to protect paragraph nodes while safely undoing human text edits
       const undoManager =
         this.options.undoManager ??
         createHumanUndoManager(fragment, {
-          deleteFilter: () => true,
+          deleteFilter: (item) => defaultDeleteFilter(item, defaultProtectedNodes),
         });
       plugins.push(createHumanUndoPlugin({ undoManager }));
     }

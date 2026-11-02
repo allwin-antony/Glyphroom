@@ -1,5 +1,5 @@
 import * as Y from 'yjs';
-import { ySyncPluginKey, yUndoPlugin } from 'y-prosemirror';
+import { ySyncPluginKey, yUndoPlugin, defaultDeleteFilter, defaultProtectedNodes } from 'y-prosemirror';
 import { Plugin } from 'prosemirror-state';
 import type { AgentMetadata } from '../types/index.js';
 import type { AgentTransactionOrigin } from './types.js';
@@ -52,13 +52,18 @@ export function createHumanUndoManager(
 ): Y.UndoManager {
   const trackedOrigins =
     options?.trackedOrigins ??
-    new Set<any>([ySyncPluginKey, null, ...(options?.additionalTrackedOrigins || [])]);
+    new Set<any>([ySyncPluginKey, ...(options?.additionalTrackedOrigins || [])]);
 
   return new Y.UndoManager(scope, {
     trackedOrigins,
     captureTimeout: options?.captureTimeout ?? 500,
-    deleteFilter: options?.deleteFilter,
+    deleteFilter:
+      options?.deleteFilter ?? ((item: Y.Item) => defaultDeleteFilter(item, defaultProtectedNodes)),
     captureTransaction: (tr: Y.Transaction) => {
+      // Honor ProseMirror / ySyncPlugin transaction history suppression
+      if (tr.meta.get('addToHistory') === false) {
+        return false;
+      }
       const origin = tr.origin;
       // Filter out agent-originated transactions
       if (isAgentOrigin(origin)) {
@@ -86,7 +91,7 @@ export function createHumanUndoPlugin(options?: {
 }): Plugin {
   return yUndoPlugin({
     undoManager: options?.undoManager || null,
-    trackedOrigins: options?.trackedOrigins || [ySyncPluginKey, null],
+    trackedOrigins: options?.trackedOrigins || [ySyncPluginKey],
   });
 }
 

@@ -134,6 +134,7 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
         extensions: [
           StarterKit.configure({
             history: false,
+            undoRedo: false,
           }),
           SuggestionInsert,
           SuggestionDelete,
@@ -144,9 +145,9 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
         content: '<p>Collaboration test</p>',
       });
 
-      // Assert TipTap history extension is NOT active
+      // Assert TipTap history / undoRedo extension is NOT active
       const historyExtension = editor.extensionManager.extensions.find(
-        (e: any) => e.name === 'history'
+        (e: any) => e.name === 'history' || e.name === 'undoRedo'
       );
       expect(historyExtension).toBeUndefined();
 

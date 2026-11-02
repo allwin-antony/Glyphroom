@@ -1239,7 +1239,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         {/* Text styling */}
         {/* Undo & Redo History Triggers */}
         <button
-          onClick={() => editor.chain().focus().undo().run()}
+          onClick={() => {
+            editor.commands.undo();
+            editor.commands.focus();
+          }}
           disabled={!editor.can().undo()}
           className={`p-1.5 rounded-lg border transition-colors ${
             !editor.can().undo()
@@ -1251,7 +1254,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           <RotateCcw size={13} />
         </button>
         <button
-          onClick={() => editor.chain().focus().redo().run()}
+          onClick={() => {
+            editor.commands.redo();
+            editor.commands.focus();
+          }}
           disabled={!editor.can().redo()}
           className={`p-1.5 rounded-lg border transition-colors ${
             !editor.can().redo()
