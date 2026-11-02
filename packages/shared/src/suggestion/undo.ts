@@ -39,6 +39,19 @@ export function isAgentOrigin(origin: any): boolean {
 }
 
 /**
+ * Specialized Set that matches ySyncPluginKey across module boundaries and duplicate bundles.
+ */
+export class HumanTrackedOriginsSet extends Set<any> {
+  has(item: any): boolean {
+    if (super.has(item)) return true;
+    if (item && typeof item === 'object' && typeof item.key === 'string' && item.key.startsWith('y-sync')) {
+      return true;
+    }
+    return false;
+  }
+}
+
+/**
  * Constructs a Y.UndoManager explicitly filtered to isolate human edits.
  *
  * Guarantees:
@@ -52,7 +65,7 @@ export function createHumanUndoManager(
 ): Y.UndoManager {
   const trackedOrigins =
     options?.trackedOrigins ??
-    new Set<any>([ySyncPluginKey, ...(options?.additionalTrackedOrigins || [])]);
+    new HumanTrackedOriginsSet([ySyncPluginKey, ...(options?.additionalTrackedOrigins || [])]);
 
   return new Y.UndoManager(scope, {
     trackedOrigins,

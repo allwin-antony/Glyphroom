@@ -1235,6 +1235,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             {/* Text styling */}
             {/* Undo & Redo History Triggers */}
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 editor.commands.undo();
                 editor.commands.focus();
@@ -1249,6 +1250,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
               <RotateCcw size={13} />
             </button>
             <button
+              onMouseDown={(e) => e.preventDefault()}
               onClick={() => {
                 editor.commands.redo();
                 editor.commands.focus();

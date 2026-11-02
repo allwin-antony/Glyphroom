@@ -8,6 +8,14 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
     },
+    dedupe: [
+      'yjs',
+      'y-prosemirror',
+      'prosemirror-state',
+      'prosemirror-model',
+      'prosemirror-view',
+      'prosemirror-transform',
+    ],
   },
   server: {
     port: 3000,

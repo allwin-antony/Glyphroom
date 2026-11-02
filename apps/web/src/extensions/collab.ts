@@ -2,6 +2,7 @@ import { Extension } from '@tiptap/core';
 import {
   ySyncPlugin,
   yCursorPlugin,
+  ySyncPluginKey,
   undo,
   redo,
   undoCommand,
@@ -58,9 +59,10 @@ export const Collaboration = Extension.create<CollaborationOptions>({
       const undoManager =
         this.options.undoManager ??
         createHumanUndoManager(fragment, {
+          additionalTrackedOrigins: [ySyncPluginKey],
           deleteFilter: (item) => defaultDeleteFilter(item, defaultProtectedNodes),
         });
-      plugins.push(createHumanUndoPlugin({ undoManager }));
+      plugins.push(createHumanUndoPlugin({ undoManager, trackedOrigins: [ySyncPluginKey] }));
     }
 
     // 3. Collaborative Cursors & Awareness (Feature 15)
