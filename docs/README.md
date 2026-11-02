@@ -52,9 +52,3 @@ A self-hosted collaborative blogging and knowledge platform for private corporat
 
 > [!NOTE]
 > These are engineering hypotheses until Phase 0 spike and Phase 6 load tests confirm them. Any miss is reported openly, not hidden.
-
----
-
-## Legacy Reference
-
-The scrapped v1 implementation lives in [`legacy_docs/`](../legacy_docs/README.md). Read the post-mortem there before touching anything related to collaboration or persistence.

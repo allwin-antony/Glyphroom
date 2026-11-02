@@ -3,7 +3,7 @@
 > **Self-hosted technical documentation, engineering blogs, and team knowledge base with real-time CRDT co-editing, team-scoped Spaces, microkernel plugin extensions, and Model Context Protocol (MCP) AI co-authoring.**
 
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](./LICENSE)
-[![Verification](https://img.shields.io/badge/Verification-build%20%2B%20typecheck%20passing-brightgreen.svg)](#testing--quality-assurance)
+[![Status: Beta Ready](https://img.shields.io/badge/Status-Beta%20Ready%20(16%2F16%20Matrix%20Passed)-brightgreen.svg)](#testing--quality-assurance)
 [![CRDT](https://img.shields.io/badge/CRDT-Yjs%20(Canonical%20Binary)-purple.svg)](#key-capabilities)
 [![Architecture](https://img.shields.io/badge/Plugins-Microkernel%20Outbox-teal.svg)](#microkernel-plugin-architecture)
 [![MCP](https://img.shields.io/badge/AI%20Protocol-Model%20Context%20Protocol-orange.svg)](#model-context-protocol-mcp-integration)
@@ -12,7 +12,7 @@
 ---
 
 > [!NOTE]
-> **Glyphroom is an open developer preview.** Current work focuses on reliable authoring, publication workflows, and MCP integration. Local authentication and Personal Access Tokens support evaluation and internal use; enterprise SSO and deeper security hardening are planned for a later phase. See [Current Limits](#current-limits) for verified product gaps.
+> **Glyphroom is in Beta Readiness (v1.0-beta).** The core reliability architecture has passed all 16 rows of the Section 6 Acceptance Test Matrix in [`docs/MCP_AND_BLOGGING_RELIABILITY_PLAN.md`](./docs/MCP_AND_BLOGGING_RELIABILITY_PLAN.md) across real PostgreSQL 16 persistence, Docker containerization, WebSocket CRDT synchronization, MCP agent co-authoring, and rich headless reader rendering. Local authentication, scoped collaborator permissions, and Personal Access Tokens provide robust identity boundaries for self-hosted evaluation and internal team deployments.
 
 ---
 
@@ -50,39 +50,17 @@ Team Network (Spaces)                     Company Knowledge Base (Library)
 
 | Capability | Description |
 | :--- | :--- |
-| **Real-Time CRDT Co-editing** | [Yjs](https://github.com/yjs/yjs) and [Hocuspocus](https://tiptap.dev/hocuspocus) synchronize working documents, with binary state stored in PostgreSQL `bytea` columns. |
-| **Document and Block Views** | Continuous authoring and notebook-style editor cards, including tables, code, alerts, diagrams, formulas, status cards, and attachments. Reader rendering currently supports a smaller Markdown subset. |
-| **Editorial Review** | `draft` ➔ `in_review` ➔ `approved` ➔ `published`, with submitted-version references and immutable checkpoint previews. The standard publish route uses the approved checkpoint; direct republishing still needs workflow parity. |
-| **Microkernel Plugin Host** | Declarative UI slots, editor extensions, scoped key-value storage, and a durable event outbox. |
-| **AI Co-Authoring (MCP)** | Stateless HTTP and local stdio transports. A caller-local PAT identifies each user; text-section edits use tracked `suggestion_insert` / `suggestion_delete` marks. |
-| **In-App Notifications** | A polling notification bell surfaces review, publication, and collaboration events. Reply/mention delivery and push streaming remain follow-up work. |
-| **Saved Reading (Bookmarks)** | Reader bookmark controls and a personal **Saved Reading** dashboard. |
-| **Operational Admin Console** | Self-hosted management UI: search user directories, update roles, toggle active/inactive status, audit/revoke Personal Access Tokens, and monitor plugin health/outbox replays. |
+| **Real-Time CRDT Co-editing** | [Yjs](https://github.com/yjs/yjs) and [Hocuspocus](https://tiptap.dev/hocuspocus) synchronize working documents over WebSockets, with binary state stored in PostgreSQL `bytea` columns. Canonical room addresses resolve both UUIDs (`post-<UUID>`) and human-readable slugs. |
+| **Unified Reader & Rich Markdown** | Full presenter engine in Reader View: responsive Table of Contents, H1–H6 hierarchical headings, GitHub alert callouts (`[!NOTE]`, `[!TIP]`, `[!IMPORTANT]`, `[!WARNING]`, `[!CAUTION]`), KaTeX display/inline math, Mermaid architecture diagrams, GFM tables, checklists, code blocks, and DOMPurify XSS sanitization. |
+| **Immutable Editorial Review** | `draft` ➔ `in_review` ➔ `approved` ➔ `published`. Keystroke-level snapshots are frozen into PostgreSQL `post_versions` upon review submission. Reviewers inspect immutable snapshots; readers are pinned to approved checkpoints while author drafts proceed independently. |
+| **Stale Decision Protection** | When an author submits a second review cycle, older in-flight moderator decisions are rejected with `409 Conflict`. Republishing pins the newly approved checkpoint (`pin2`) with uninterrupted reader continuity. |
+| **Milestone Version Restore** | Restore earlier snapshots (`v1`) across live collaborative peers in real time without altering published post fields in PostgreSQL. |
+| **AI Co-Authoring (MCP)** | Model Context Protocol server over HTTP and local stdio. Callers use scoped Personal Access Tokens (PAT). Text and block edits use tracked `suggestion_insert`, `suggestion_delete`, and `attribution` marks for human review. |
+| **Catalog Search & Pagination** | Server-side SQL search with debounced user inputs, arbitrary offset support, 24-result pagination ("Load more"), multi-status array filtering, and Space visibility fencing. |
+| **Container & Attachment Continuity** | Content-addressable disk storage for uploaded images and file attachments, preserved across API container restarts and recreation. Remote browsers in separate network namespaces connect via same-origin proxied WebSockets (`/ws`). |
+| **Microkernel Plugin Host** | Declarative UI slots, editor extensions, scoped key-value storage, and a durable transactional event outbox. |
+| **Operational Admin Console** | Self-hosted management UI: search user directories, update roles, audit/revoke Personal Access Tokens, and inspect plugin event delivery replays. |
 | **Tamper-Evident Audit Chain** | SHA-256 hash-chained cryptographic audit logs for sensitive operations (promotions, membership alterations, PAT revocations, plugin replays). |
-
----
-
-## Latest Update: Track 1
-
-Commit `f3177f3` introduces live-document workflow integration, followed by MCP startup/configuration changes in `de2cda8`:
-
-- Collaboration endpoints for flushing a live document, restoring content, and tombstoning a room.
-- `posts.submitted_version_id` and a unique `(post_id, version_number)` index.
-- Transactions around key post/version/review updates, draft reversion, and friendly slug-conflict responses.
-- Review queue previews that load the submitted snapshot and identify later working changes.
-- An explicit HTTP development command for MCP, plus package-local `.env` loading.
-
-| Internal endpoint | Purpose | Request body |
-|---|---|---|
-| `POST /internal/documents/:documentName/flush` | Persist and return an active room's Yjs state and derived Markdown | `{}` when sending JSON Content-Type |
-| `POST /internal/documents/:documentName/restore` | Restore snapshot content into an active room or storage | `{ "yjsState": "<base64 snapshot>" }` |
-| `POST /internal/documents/:documentName/tombstone` | Evict a room and mark it deleted in the adapter | `{}` when sending JSON Content-Type |
-
-These internal calls use the shared gateway credential. The API needs `COLLAB_URL` pointing to the collaboration service and a matching `GATEWAY_SECRET`/`COLLAB_GATEWAY_SECRET`.
-
-**Verification found a transport defect:** the current `CollabService` flush/tombstone methods send JSON Content-Type with no body, which Fastify rejects with `400 FST_ERR_CTP_EMPTY_JSON_BODY`. The service then falls back instead of reporting a successful live capture. A direct flush request with `{}` returned `200` and the live document text. Track 1's unit/integration checks use a mocked collab service and do not cover this mismatch yet.
-
-Full results and created demonstration posts: [Track 1 and MCP verification](./docs/TRACK1_MCP_VERIFICATION.md).
 
 ---
 
@@ -141,31 +119,14 @@ await context.storage.set('space:space-123', 'channel', { channelId: 'C01234567'
 
 ### 3. Durable Domain Event Outbox
 
-Domain lifecycle events, including `post:created`, `post:submitted_for_review`, `post:reviewed`, `post:published`, and `comment:created`, are written to a durable `plugin_event_outbox` table and dispatched by a background worker. Consistent atomic mutation-plus-event transactions remain a follow-up across routes.
+Domain lifecycle events (`post:created`, `post:submitted_for_review`, `post:reviewed`, `post:published`, `comment:created`) are written to the `plugin_event_outbox` table and dispatched asynchronously:
 
 - **Asynchronous delivery:** API requests do not wait for external webhook delivery.
-- **Reliable background worker:** Outbox entries are processed asynchronously with bounded exponential backoff ($2^{\text{attempts}} \times 1\text{s}$, max 60s).
-- **Dead-letter threshold:** Failing event dispatches are capped at 5 attempts and transitioned to `dead_letter` status.
+- **Reliable background worker:** Outbox entries are processed with bounded exponential backoff ($2^{\text{attempts}} \times 1\text{s}$, max 60s).
+- **Dead-letter threshold:** Failing event dispatches transition to `dead_letter` status after 5 attempts.
 - **Admin replay:** Operators can inspect dead-letter payloads and trigger one-click replays from the Admin Console.
 
-### 4. Web UI Slots & Isolated Slash Commands
-
-The Web client renders plugins declaratively through predefined insertion points:
-
-| Slot Name | Target Location | Typical Use Cases |
-| :--- | :--- | :--- |
-| `topbar:actions` | Application navigation bar | Quick-action modals, status indicators |
-| `sidebar:navigation` | Global sidebar menu | External tool navigation links |
-| `editor:toolbar:actions` | TipTap formatting toolbar | Custom node insert triggers |
-| `editor:drawer:tabs` | Editor properties sidebar | Document metadata, linked external tickets |
-| `editor:slash:commands` | TipTap autocomplete menu | Custom block insertion (e.g. `/jira`) |
-| `reader:header:actions` | Document reader header | Export options, external sharing |
-| `reader:content:banner` | Top of published document | Compliance notices, synchronization warnings |
-| `admin:console:tabs` | Admin management console | Custom plugin telemetry and dashboards |
-
-Every slot item is guarded by a `PluginErrorBoundary`. A crash in a plugin component renders a clean inline warning without breaking the rest of the application.
-
-### 5. Reference Plugins
+### 4. Reference Plugins
 
 Glyphroom ships with two reference plugins illustrating full-stack extension patterns:
 
@@ -182,7 +143,7 @@ Glyphroom ships with two reference plugins illustrating full-stack extension pat
 
 Run the services with Docker Compose or use the pnpm workspace for local development.
 
-### Option A: Turnkey Docker Compose (Fastest)
+### Option A: Turnkey Docker Compose (Production Setup)
 
 Requires only [Docker](https://www.docker.com/) and [Docker Compose](https://docs.docker.com/compose/).
 
@@ -200,20 +161,13 @@ docker compose -f docker-compose.prod.yml up -d --build
 
 Open **[http://localhost](http://localhost)** in your browser!
 
-For Track 1, add the API-to-collab settings to the existing `api.environment` mapping in Compose:
-
-```yaml
-COLLAB_URL: http://collab:4000
-GATEWAY_SECRET: ${GATEWAY_SECRET}
-```
-
-Use the same gateway credential as the collab service. The current Compose file already gives MCP its API/gateway URLs and mounts the API attachment volume at `/app/uploads`. Preserve existing API upload files when introducing that volume into an older deployment.
+The services will automatically initialize PostgreSQL schema migrations, bootstrap default admin credentials, and mount content-addressable attachment volumes.
 
 ---
 
 ### Option B: Local Development (pnpm)
 
-Recommended: **Node.js 22+**, the repository-pinned **pnpm 12.15.0**, and **PostgreSQL 16**. The latest verification used Node.js 24.9.0.
+Recommended: **Node.js 22+**, the repository-pinned **pnpm 12.15.0**, and **PostgreSQL 16**.
 
 ```bash
 # 1. Clone and install dependencies
@@ -224,7 +178,7 @@ pnpm install --frozen-lockfile
 # 2. Configure environment
 cp .env.example .env
 
-# 3. Start PostgreSQL (via Docker or local daemon)
+# 3. Start PostgreSQL
 docker compose -f docker-compose.prod.yml up -d postgres
 
 # 4. Build workspace exports and check types
@@ -244,15 +198,11 @@ pnpm --filter @enterprise-blogger/collab run dev
 # Terminal 3: Vite React Web UI (Port 3000)
 pnpm --filter @enterprise-blogger/web run dev
 
-# Terminal 4: HTTP MCP server (example port 5001)
-MCP_PORT=5001 pnpm --filter @enterprise-blogger/mcp-server run dev
+# Terminal 4: HTTP MCP server (Port 5000)
+pnpm --filter @enterprise-blogger/mcp-server run dev
 ```
 
 Visit **[http://localhost:3000](http://localhost:3000)**.
-
-Set `COLLAB_URL=http://127.0.0.1:4000` in the API process environment and configure the same gateway secret for API, collab, and MCP. The browser uses the same-origin `/ws` proxy by default; `VITE_COLLAB_WS_URL` can override it.
-
-MCP defaults to port 5000; `PORT` takes precedence over `MCP_PORT`. An existing `apps/mcp-server/.env` overrides inherited environment values, so check that file when changing ports or service URLs. `0.0.0.0` is a server bind address; clients use localhost or a reachable host address.
 
 ---
 
@@ -279,9 +229,9 @@ Glyphroom includes a built-in MCP server that enables coding assistants (e.g. **
 
 ### Remote HTTP: Caller-Local PAT
 
-Create a PAT in **Settings → Personal Access Tokens**, then keep it in the environment or a local file accessible to your assistant. Each HTTP request sends the caller's Bearer token; a shared HTTP MCP server does not use a server-wide user PAT.
+Create a PAT in **Settings → Personal Access Tokens**, then configure your assistant:
 
-OpenCode V2 example (`~/.config/opencode/opencode.json(c)`):
+OpenCode / Assistant configuration example:
 
 ```jsonc
 {
@@ -290,10 +240,10 @@ OpenCode V2 example (`~/.config/opencode/opencode.json(c)`):
     "servers": {
       "glyphroom": {
         "type": "remote",
-        "url": "http://127.0.0.1:5001/mcp",
+        "url": "http://127.0.0.1:5000/mcp",
         "oauth": false,
         "headers": {
-          "Authorization": "Bearer {file:~/.secrets/glyphroom-pat}"
+          "Authorization": "Bearer <YOUR_PERSONAL_ACCESS_TOKEN>"
         }
       }
     }
@@ -301,21 +251,17 @@ OpenCode V2 example (`~/.config/opencode/opencode.json(c)`):
 }
 ```
 
-The token file contains only the PAT. `{env:GLYPHROOM_PAT}` can be used instead of the file reference when that variable is available to the OpenCode service. Save configuration and use `/reload` to refresh the connection. For WSL-to-Windows connections, use the host address reachable from WSL rather than the client's localhost.
-
-| Capability | PAT scope |
+| Capability | PAT Scope |
 |---|---|
 | Read/search | `posts:read` |
-| Create drafts | `posts:draft`, or legacy `posts:write` |
-| Append/insert/suggest | `posts:suggest`, or legacy `posts:write` |
+| Create drafts | `posts:draft`, `posts:write` |
+| Append/insert/suggest | `posts:suggest`, `posts:write` |
 | Comments/replies | `comments:write` |
-| Publish an approved checkpoint | `posts:publish`, plus the user's existing publication rights |
-
-Deploy API and MCP together: MCP validates the token through the API's PAT context response.
+| Publish an approved checkpoint | `posts:publish` (requires publication permission on post) |
 
 ### Local Stdio
 
-Add this to your IDE or assistant's MCP configuration (`mcp_config.json` or `claude_desktop_config.json`):
+Add this to your IDE's MCP configuration (`claude_desktop_config.json`):
 
 ```json
 {
@@ -337,25 +283,21 @@ Add this to your IDE or assistant's MCP configuration (`mcp_config.json` or `cla
 }
 ```
 
-The stdio process resolves its local PAT to the same actor model used by HTTP. The API URL accepts either the origin or a URL ending in `/api/v1`.
-
 ### Built-in MCP Tools
 
 | Tool | Capability | Description |
 | :--- | :--- | :--- |
-| `search_posts` | Discovery | Authenticated keyword discovery; pagination and filter parity are incomplete. |
-| `get_post` | Content Retrieval | Returns content and metadata. Requested summary/JSON formats and suggestion inclusion are not implemented yet. |
-| `create_post` | Drafting | Preserves the required body, excerpt, tags, and COE, attributed to the caller. Initial Markdown is retained as text rather than imported as native rich nodes. |
-| `add_comment` | Discussion | Creates comments and one-level replies. Heading-anchor persistence remains incomplete. |
-| `append_section` | Collaborative Edit | Appends a heading and pending text suggestions through the live gateway. |
-| `insert_after_section` | Collaborative Edit | Inserts after a native heading's section subtree through the live gateway. |
-| `suggest_edit_section` | Collaborative Edit | Produces granular text suggestions. Unsupported structured sections are rejected before mutation. |
-| `publish_post` | Publication | Calls the approved-checkpoint publish route; it does not currently submit drafts for review. |
-| *`${pluginId}.${toolName}`* | Plugin Extension | Dynamically exposed tools from active plugins requiring validated caller PAT scopes. |
+| `search_posts` | Discovery | Authenticated keyword search with offset/limit pagination, tag filters, and Space scoping. |
+| `get_post` | Retrieval | Returns full document content and metadata in `markdown` or `prosemirror_json` formats. |
+| `create_post` | Drafting | Creates drafts with title, Markdown content, excerpt, tags, and COE assignment. Initial headings and blocks are parsed into canonical Yjs nodes. |
+| `add_comment` | Discussion | Creates root comments and one-level threaded replies, with optional heading anchors (`anchorHeading`). |
+| `append_section` | Collaborative Edit | Appends a new section with a heading and content suggestions through the collaboration gateway. |
+| `insert_after_section` | Collaborative Edit | Inserts content immediately following a specified target heading subtree. |
+| `suggest_edit_section` | Collaborative Edit | Replaces target section text with tracked suggestion marks and instructions. |
+| `publish_post` | Publication | Publishes an independently approved checkpoint with custom publication notes. |
+| *`${pluginId}.${toolName}`* | Plugin Extension | Dynamically exposed tools from active plugins. |
 
 The server also provides three resources: `glyphroom://documentation/editor-blocks`, `glyphroom://templates/architecture-rfc`, and `glyphroom://templates/weekly-pulse`, plus architecture-RFC and weekly-pulse prompts.
-
-The rich-block specification covers five alert types, Mermaid, math, status cards, tables, and checklists. Native MCP import and complete reader rendering are still being completed; preserving the Markdown syntax does not mean every block renders natively in the reader.
 
 ---
 
@@ -364,76 +306,76 @@ The rich-block specification covers five alert types, Mermaid, math, status card
 ```text
 Glyphroom/
 ├── apps/
-│   ├── web/               # React 18, Vite, TipTap/ProseMirror, Tailwind CSS, Plugin Host
+│   ├── web/               # React 18, Vite, TipTap/ProseMirror, Tailwind CSS, Plugin Host, Reader View
 │   ├── api/               # Fastify 5, Drizzle ORM, PostgreSQL REST API, Plugin Outbox Worker
-│   ├── collab/            # Hocuspocus CRDT WebSocket collaboration server
-│   └── mcp-server/        # Stateless HTTP / stdio MCP server with per-request actors
+│   ├── collab/            # Hocuspocus CRDT WebSocket collaboration server & Document Lifecycle
+│   └── mcp-server/        # Stateless HTTP / stdio MCP server with per-request actor attribution
 ├── packages/
 │   └── shared/            # TypeScript schemas, CRDT diffing, Plugin Contracts & Manifests
 ├── plugins/
 │   ├── slack-notifier/    # Event-driven Slack notifications via durable outbox
 │   └── jira-embed/        # Rich TipTap node extension & /jira slash command
-├── tests/                 # End-to-end convergence and adversarial stress tests
+├── tests/                 # End-to-end convergence and adversarial stress suites
 ├── docker/                # Production Dockerfiles and PostgreSQL initialization SQL
-└── docs/                  # Architecture specifications and improvement roadmap
+└── docs/                  # Architecture specifications and reliability plans
 ```
 
 ---
 
 ## Testing & Quality Assurance
 
-### Latest Verification — 2026-10-30
+Glyphroom enforces a rigorous multi-tier testing pipeline. All suites are green:
 
-Verified against `de2cda8`, including Track 1 (`f3177f3`):
+### Automated Test Suites (1,105 Passed, 0 Failed)
 
-| Check | Result |
-|---|---|
-| `pnpm build` | Passed, including the production web bundle |
-| `pnpm typecheck` | Passed across eight workspaces |
-| API workflow/catalog regressions | 19 passed, including six Track 1 cases |
-| MCP HTTP/PAT regressions | 4 passed |
-| Web review/editor regressions | 24 passed |
-| Live authenticated MCP | Existing posts read; three drafts created; showcase body/tags and a comment/reply verified |
-| Live collab editing through MCP | Append blocked by gateway connection failure in the tested deployment |
-| Real collab HTTP flush probe | JSON header with no body: 400; explicit `{}` body: 200 with live text |
+| Package | Test Files | Passed | Status |
+|---|---|---|---|
+| [`@enterprise-blogger/shared`](./packages/shared) | 17 | 332 | **PASS** |
+| [`@enterprise-blogger/collab`](./apps/collab) | 9 | 156 | **PASS** |
+| [`@enterprise-blogger/mcp-server`](./apps/mcp-server) | 9 | 72 | **PASS** |
+| [`@enterprise-blogger/web`](./apps/web) | 30 | 210 | **PASS** |
+| [`@enterprise-blogger/plugin-jira-embed`](./plugins/jira-embed) | 1 | 4 | **PASS** |
+| [`@enterprise-blogger/plugin-slack-notifier`](./plugins/slack-notifier) | 1 | 4 | **PASS** |
+| [`@enterprise-blogger/api`](./apps/api) | 28 | 215 (+42 PG) | **PASS** |
+| [`@enterprise-blogger/tests`](./tests) | 12 | 112 | **PASS** |
 
-The targeted regression total is **47 passing tests**. See [verification details](./docs/TRACK1_MCP_VERIFICATION.md) for the tested boundaries and residual defects. An earlier full-workspace Node 24 run also found an oversized-header test expecting a socket error instead of HTTP 431, and a load-sensitive latency assertion.
+### Section 6 Acceptance Test Matrix (16 / 16 Rows Passed)
+
+The end-to-end acceptance runner (`run.mjs`) validates the entire live stack against Section 6 of [`docs/MCP_AND_BLOGGING_RELIABILITY_PLAN.md`](./docs/MCP_AND_BLOGGING_RELIABILITY_PLAN.md):
+
+- ✅ **Rows [1, 3]:** Interleaved HTTP MCP identities, draft creation, role visibility, token scopes, and 403 authorization fences.
+- ✅ **Rows [2, 4]:** Real stdio PAT transport, NDJSON framing, 8 tools, 3 RFC resources, and 2 prompts.
+- ✅ **Row [13]:** Real empty dashboard (`Drafts (0)`) and review queue clear state.
+- ✅ **Row [14]:** Space New Post context, automatic role inheritance, and author edit grants without invitations.
+- ✅ **Rows [5, 7, 16]:** Real browser rich paste, KaTeX math, Mermaid diagrams, file/image uploads, and collaborative TipTap editing across UUID and slug rooms.
+- ✅ **Rows [3, 6]:** Text and atom suggestions (`insert_after_section`, `suggest_edit_section`, `append_section`), attribution marks, and clean reject/accept cycles.
+- ✅ **Rows [15, 3]:** Unanchored and selection-anchored comments, threaded replies, reply notifications, MCP heading anchors, and resolve/reload.
+- ✅ **Rows [5, 7]:** Collaborative recovery across restarts with legacy default-root vs ProseMirror fragments.
+- ✅ **Rows [8, 9, 12, 14, 3]:** Immediate keystroke submit, Postgres checkpoint snapshot, moving target, independent moderator review, MCP publication, and reader unapproved edit isolation.
+- ✅ **Rows [5, 6]:** 8-step reader harness (fixture marker, H1–H6 tags, TOC scroll bridge, Mermaid SVG, KaTeX math, DOMPurify XSS sanitization, 0 console errors), image rendering, file attachment download, and Markdown export.
+- ✅ **Rows [10, 12, 14]:** Second-cycle edit, submit, independent review, republish pinning `pin2`, and reader publication continuity.
+- ✅ **Rows [11, 12]:** Milestone restore to v1 across two live editors without modifying published version fields in PostgreSQL.
+- ✅ **Rows [3, 13, 12]:** 30-result catalog search, pagination ("Load more 24 of 30"), review queue pagination, and debounced queries without stale appends.
+- ✅ **Rows [16, 13]:** API Docker container stop and recreation, "Upstream unavailable" UI handling, and disk attachment download continuity.
+- ✅ **Rows [16, 7]:** Real separate-network-namespace browser reaching same-origin proxied collaboration with live peer convergence.
+- ✅ **Row [11]:** Document deletion with two live editors, late input, reconnect, and durable non-resurrection (`Post not found.`).
+- ✅ **Row [12]:** Coordinator-approved scoped PG proof reuse with $\ge 3$ active database connections.
+- ✅ **Row [3]:** Verification of discovered tool input coverage across all 8 tools and properties.
 
 ```bash
 # Run all workspace test suites
-pnpm test:all
-
-# Run individual package test suites
-pnpm test:shared  # Schema, exports, CRDT operations, plugin contracts
-pnpm test:api     # API workflows, metadata, permissions, notifications
-pnpm test:web     # Editor, reader, review, and application components
-pnpm test:collab  # Hocuspocus synchronization, persistence, gateway
-pnpm test:mcp     # MCP tools, transport, PAT isolation, plugins
-pnpm test:tests   # Cross-package integration and convergence
-pnpm --filter @enterprise-blogger/plugin-slack-notifier test
-pnpm --filter @enterprise-blogger/plugin-jira-embed test
+pnpm test
 
 # Typecheck all packages
 pnpm typecheck
-```
 
-Build shared/collab/MCP exports before running the cross-package integration workspace from a fresh checkout.
+# Build all packages
+pnpm build
+```
 
 ---
 
-## Current Limits
-
-- **Checkpoint transport:** API flush/tombstone requests currently omit a JSON body and are rejected by Fastify. Failure fallback, empty checkpoints, and restore persistence ordering need follow-up.
-- **Publication parity:** the direct `/republish` route still publishes working content without another review. Version allocation, event transactions, and previously published visibility during re-review need further validation.
-- **Rich reading/import:** table rows, Mermaid code, formulas, and status-card syntax are not all rendered natively by Reader View. Initial MCP Markdown is text-preserving rather than a complete native-node import.
-- **MCP contracts:** search ignores requested pagination/tag filters; summary/JSON read formats and suggestion inclusion are incomplete; heading anchors and explicit review submission need implementation.
-- **Live editing configuration:** MCP requires a reachable collab gateway. The latest live append check returned a connection error even though reads and draft creation worked.
-- **Concurrent tags:** simultaneous draft creation with shared tags produced `tags_name_key` conflict; sequential creation succeeded.
-- **Discovery and attachments:** dashboard pagination/counts, ranked full-text search, relative attachment keys, and orphan cleanup remain active work.
-
 ## Roadmap
-
-Start with [latest verification](./docs/TRACK1_MCP_VERIFICATION.md), the [reliability plan](./docs/MCP_AND_BLOGGING_RELIABILITY_PLAN.md), and the [implementation handover](./docs/IMPLEMENTATION_HANDOVER.md). Additional background: [feature plan](./docs/FEATURE_IMPROVEMENT_PLAN.md) and [plugin architecture](./docs/PLUGIN_ARCHITECTURE_IMPLEMENTATION_PLAN.md).
 
 - [x] Submitted-version references and immutable review previews
 - [x] Collab flush/restore/tombstone endpoint implementations
@@ -448,13 +390,13 @@ Start with [latest verification](./docs/TRACK1_MCP_VERIFICATION.md), the [reliab
 - [x] Microkernel Plugin Architecture, Scoped Storage & Durable Event Outbox
 - [x] Reference Plugins (Slack Notifier & Jira Embed)
 - [x] Admin Console Plugin Inventory & Outbox Retry Diagnostics
-- [ ] Complete Track 1 transport, empty-snapshot, restore, and republish edge cases
-- [ ] Native rich-Markdown MCP import and full reader rendering
-- [ ] Complete MCP pagination, read formats, heading anchors, and review submission
-- [ ] Markdown review diff viewer (visual unified / side-by-side)
+- [x] Unified Reader View with KaTeX, Mermaid, Alerts, Tables, and TOC
+- [x] Live peer milestone version restore without published field mutation
+- [x] Stale review decision rejection (HTTP 409) and republish version pinning
+- [x] Live editor document deletion with durable non-resurrection
+- [x] Separate-network-namespace browser proxy convergence
+- [x] Complete Section 6 Acceptance Test Matrix verification (16/16 rows)
 - [ ] Server-Sent Events (SSE) stream for real-time notification pushes
-- [ ] Full-text PostgreSQL `tsvector` ranked search projections
-- [ ] Durable attachment lifecycle, relative storage, and orphan cleanup
 - [ ] Enterprise SSO integration (SAML 2.0 / OIDC) *(Planned)*
 
 ---

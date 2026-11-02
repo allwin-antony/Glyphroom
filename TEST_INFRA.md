@@ -121,7 +121,7 @@ pnpm --filter @enterprise-blogger/tests typecheck
 
 ## 6. Verification & Quality Gates
 
-The test bed acts as the gatekeeper for Phase 0 Spike completion (`TEST_READY.md`):
+The test bed acts as the gatekeeper for Phase 0 Spike completion (current verification status is tracked in [`docs/MCP_AND_BLOGGING_RELIABILITY_PLAN.md`](docs/MCP_AND_BLOGGING_RELIABILITY_PLAN.md)):
 - All 4 Tiers must pass with 100% success rate.
 - Zero document divergence across all 6 clients in the 10,000-op convergence test.
 - Zero keystrokes lost during concurrent human typing in agent suggestion ranges.

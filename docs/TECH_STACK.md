@@ -25,7 +25,6 @@ Enterprise_Blogger/
 ├── packages/
 │   └── shared/       # Zod schemas, TypeScript types, constants shared across apps
 ├── docs/             # This documentation
-├── legacy_docs/      # Scrapped v1 Django implementation reference
 ├── docker/
 │   ├── docker-compose.yml
 │   ├── Dockerfile.web
