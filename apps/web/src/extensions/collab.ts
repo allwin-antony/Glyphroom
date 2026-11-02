@@ -1,5 +1,5 @@
 import { Extension } from '@tiptap/core';
-import { ySyncPlugin, yCursorPlugin, undo, redo } from 'y-prosemirror';
+import { ySyncPlugin, yCursorPlugin, undo, redo, undoCommand, redoCommand } from 'y-prosemirror';
 import * as Y from 'yjs';
 import type { HocuspocusProvider } from '@hocuspocus/provider';
 import { createHumanUndoManager, createHumanUndoPlugin } from '@enterprise-blogger/shared';
@@ -67,9 +67,9 @@ export const Collaboration = Extension.create<CollaborationOptions>({
 
   addKeyboardShortcuts() {
     return {
-      'Mod-z': () => undo(this.editor.state),
-      'Mod-y': () => redo(this.editor.state),
-      'Mod-Shift-z': () => redo(this.editor.state),
+      'Mod-z': () => this.editor.commands.undo(),
+      'Mod-y': () => this.editor.commands.redo(),
+      'Mod-Shift-z': () => this.editor.commands.redo(),
       'Control-End': () => this.editor.commands.focus('end'),
       'Mod-End': () => this.editor.commands.focus('end'),
     };
@@ -77,8 +77,18 @@ export const Collaboration = Extension.create<CollaborationOptions>({
 
   addCommands() {
     return {
-      undo: () => ({ state }) => undo(state),
-      redo: () => ({ state }) => redo(state),
+      undo:
+        () =>
+        ({ tr, state, dispatch }) => {
+          tr.setMeta('preventDispatch', true);
+          return undoCommand(state, dispatch);
+        },
+      redo:
+        () =>
+        ({ tr, state, dispatch }) => {
+          tr.setMeta('preventDispatch', true);
+          return redoCommand(state, dispatch);
+        },
     };
   },
 });

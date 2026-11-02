@@ -28,6 +28,7 @@ import { SlashMenu } from './editor/SlashMenu.js';
 import { TemplatePickerDialog } from './editor/TemplatePickerDialog.js';
 import { acceptSuggestion, rejectSuggestion } from '@enterprise-blogger/shared';
 import { api } from '../lib/api.js';
+import { ReaderPreview } from './ReaderPreview.js';
 import {
   Bold,
   Italic,
@@ -53,6 +54,7 @@ import {
   Sparkles,
   Layers,
   FileText,
+  Eye,
   ChevronUp,
   ChevronDown,
   Loader2,
@@ -62,6 +64,8 @@ import {
   RotateCcw,
   RotateCw,
 } from 'lucide-react';
+
+export type EditorViewMode = 'document' | 'block' | 'preview';
 
 export interface CollaborativeEditorProps {
   ydoc: Y.Doc;
@@ -75,6 +79,9 @@ export interface CollaborativeEditorProps {
   onEditorReady?: (editor: any) => void;
   hideSidebar?: boolean;
   postId?: string;
+  title?: string;
+  viewMode?: EditorViewMode;
+  onViewModeChange?: (mode: EditorViewMode) => void;
 }
 
 export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
@@ -85,6 +92,9 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   onEditorReady,
   hideSidebar = false,
   postId,
+  title,
+  viewMode: controlledViewMode,
+  onViewModeChange,
 }) => {
   // Canonical-root selection: prefer 'prosemirror' (the server-canonical root).
   // Fall back to legacy 'default' root only when 'prosemirror' is absent from the
@@ -112,13 +122,19 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
   // Template picker dialog state
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
 
-  // View Mode: 'document' (flow) vs 'block' (discrete foldable cards)
-  const [viewMode, setViewMode] = useState<'document' | 'block'>(() => {
-    return (localStorage.getItem('glyphroom_view_mode') as 'document' | 'block') || 'document';
+  // View Mode: 'document' (flow) vs 'block' (discrete foldable cards) vs 'preview' (rich reader projection)
+  const [internalViewMode, setInternalViewMode] = useState<EditorViewMode>(() => {
+    return (localStorage.getItem('glyphroom_view_mode') as EditorViewMode) || 'document';
   });
 
-  const handleToggleViewMode = (mode: 'document' | 'block') => {
-    setViewMode(mode);
+  const viewMode = controlledViewMode ?? internalViewMode;
+
+  const handleToggleViewMode = (mode: EditorViewMode) => {
+    if (onViewModeChange) {
+      onViewModeChange(mode);
+    } else {
+      setInternalViewMode(mode);
+    }
     try {
       localStorage.setItem('glyphroom_view_mode', mode);
     } catch {
@@ -1162,7 +1178,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
         <span className="text-border mx-0.5">|</span>
 
-        {/* View Mode Toggle: Document Flow vs Block View */}
+        {/* View Mode Toggle: Document Flow vs Block View vs Preview */}
         <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas mr-1">
           <button
             onClick={() => handleToggleViewMode('document')}
@@ -1188,22 +1204,60 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
             <Layers size={11} />
             <span>Blocks</span>
           </button>
+          <button
+            onClick={() => handleToggleViewMode('preview')}
+            className={`flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-semibold transition-colors ${
+              viewMode === 'preview'
+                ? 'bg-accent text-white shadow-xs'
+                : 'text-text-muted hover:text-foreground'
+            }`}
+            title="Reader Preview (Live rendered markdown, diagrams & math)"
+          >
+            <Eye size={11} />
+            <span>Preview</span>
+          </button>
         </div>
 
-        <span className="text-border mx-0.5">|</span>
+        {viewMode === 'preview' ? (
+          <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-accent/10 border border-accent/20 text-accent text-xs ml-1">
+            <Eye size={13} className="shrink-0" />
+            <span className="font-semibold">Reader Preview Mode</span>
+            <span className="text-[11px] text-text-muted hidden md:inline">
+              • Viewing published reader layout with rendered diagrams, math & callouts
+            </span>
+            <button
+              onClick={() => handleToggleViewMode('document')}
+              className="ml-auto text-[11px] font-semibold underline hover:opacity-80 transition-opacity"
+            >
+              Exit Preview
+            </button>
+          </div>
+        ) : (
+          <>
+            <span className="text-border mx-0.5">|</span>
 
         {/* Text styling */}
         {/* Undo & Redo History Triggers */}
         <button
           onClick={() => editor.chain().focus().undo().run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          disabled={!editor.can().undo()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            !editor.can().undo()
+              ? 'border-border/40 bg-surface/40 text-text-muted/40 cursor-not-allowed'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
           title="Undo (Ctrl+Z)"
         >
           <RotateCcw size={13} />
         </button>
         <button
           onClick={() => editor.chain().focus().redo().run()}
-          className="p-1.5 rounded-lg border border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated transition-colors"
+          disabled={!editor.can().redo()}
+          className={`p-1.5 rounded-lg border transition-colors ${
+            !editor.can().redo()
+              ? 'border-border/40 bg-surface/40 text-text-muted/40 cursor-not-allowed'
+              : 'border-border bg-surface text-text-secondary hover:text-foreground hover:bg-elevated'
+          }`}
           title="Redo (Ctrl+Y / Ctrl+Shift+Z)"
         >
           <RotateCw size={13} />
@@ -1454,6 +1508,8 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         >
           {isUploading ? <Loader2 size={13} className="animate-spin text-accent" /> : <Paperclip size={13} />}
         </button>
+          </>
+        )}
 
         {allSuggestions.length > 0 && (
           <div className="ml-auto inline-flex items-center gap-1.5 text-xs text-text-secondary bg-elevated border border-border px-2.5 py-0.5 rounded-full font-medium shadow-xs">
@@ -1584,15 +1640,23 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           ref={scrollContainerRef}
           className="flex-1 overflow-y-auto p-4 sm:p-8 flex justify-center min-w-0 relative"
         >
-          <div
-            ref={editorWrapperRef}
-            className={`w-full max-w-[820px] transition-all my-2 relative ${
-              viewMode === 'block'
-                ? 'enterprise-block-mode pb-12'
-                : 'min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40'
-            }`}
-          >
-            {/* Active Cell Floating Action Pill (Directly on the active cell in Block View) */}
+          {viewMode === 'preview' ? (
+            <div className="w-full max-w-[820px] transition-all my-2">
+              <ReaderPreview
+                prosemirrorDocJSON={editor.getJSON()}
+                title={title || ''}
+              />
+            </div>
+          ) : (
+            <div
+              ref={editorWrapperRef}
+              className={`w-full max-w-[820px] transition-all my-2 relative ${
+                viewMode === 'block'
+                  ? 'enterprise-block-mode pb-12'
+                  : 'min-h-[700px] h-fit bg-surface border border-border rounded-2xl p-6 sm:p-10 shadow-sm text-foreground focus-within:border-accent-main/40'
+              }`}
+            >
+              {/* Active Cell Floating Action Pill (Directly on the active cell in Block View) */}
             {viewMode === 'block' && floatingCellPos && currentBlockInfo && (
               <div
                 style={{
@@ -1741,6 +1805,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
               </div>
             )}
           </div>
+        )}
         </div>
 
         {!hideSidebar && (

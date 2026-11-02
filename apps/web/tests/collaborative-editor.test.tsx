@@ -166,6 +166,32 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
       );
       expect(undoPlugin).toBeDefined();
 
+      // Test undo functionality
+      editor.commands.insertContent(' added text');
+      expect(editor.getText()).toContain('added text');
+      expect(editor.can().undo()).toBe(true);
+      const undoRes = editor.commands.undo();
+      expect(undoRes).toBe(true);
+      expect(editor.getText()).not.toContain('added text');
+
+      // Test redo functionality
+      expect(editor.can().redo()).toBe(true);
+      const redoRes = editor.commands.redo();
+      expect(redoRes).toBe(true);
+      expect(editor.getText()).toContain('added text');
+
+      // Test toolbar chain focus().undo().run()
+      expect(editor.can().undo()).toBe(true);
+      const chainUndoRes = editor.chain().focus().undo().run();
+      expect(chainUndoRes).toBe(true);
+      expect(editor.getText()).not.toContain('added text');
+
+      // Test toolbar chain focus().redo().run()
+      expect(editor.can().redo()).toBe(true);
+      const chainRedoRes = editor.chain().focus().redo().run();
+      expect(chainRedoRes).toBe(true);
+      expect(editor.getText()).toContain('added text');
+
       editor.destroy();
       ydoc.destroy();
     });

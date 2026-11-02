@@ -19,6 +19,8 @@ import {
   AlertCircle,
   PanelRightOpen,
   PanelRightClose,
+  Eye,
+  Edit3,
 } from 'lucide-react';
 
 type PendingTitle = { postId: string; userId: string; title: string };
@@ -34,7 +36,10 @@ export const EditorView: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  // Editor instance and provider state
+  // Editor instance, view mode, and provider state
+  const [viewMode, setViewMode] = useState<'document' | 'block' | 'preview'>(() => {
+    return (localStorage.getItem('glyphroom_view_mode') as 'document' | 'block' | 'preview') || 'document';
+  });
   const [editor, setEditor] = useState<any | null>(null);
   const [editAccess, setEditAccess] = useState<{ routeId: string; userId: string; post: any } | null>(null);
   const [collaboration, setCollaboration] = useState<{
@@ -291,6 +296,23 @@ export const EditorView: React.FC = () => {
         </div>
 
         <div className="flex items-center gap-2.5 sm:gap-3">
+          {/* Edit / Reader Preview Mode Toggle */}
+          <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas">
+            <button
+              onClick={() => setViewMode(viewMode === 'preview' ? 'document' : 'preview')}
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md text-xs font-semibold transition-colors ${
+                viewMode === 'preview'
+                  ? 'bg-accent text-white shadow-xs'
+                  : 'text-text-secondary hover:text-foreground hover:bg-elevated'
+              }`}
+              title={viewMode === 'preview' ? "Switch to Edit mode" : "Preview published reader layout"}
+              aria-label={viewMode === 'preview' ? "Switch to Edit mode" : "Preview published reader layout"}
+            >
+              {viewMode === 'preview' ? <Edit3 size={13} /> : <Eye size={13} />}
+              <span>{viewMode === 'preview' ? 'Edit' : 'Preview'}</span>
+            </button>
+          </div>
+
           {/* Live Dynamic Word & Character Count */}
           <WordCountIndicator editor={editor} className="hidden lg:flex" />
 
@@ -358,6 +380,9 @@ export const EditorView: React.FC = () => {
             hideSidebar={true}
             onDocChange={() => {}}
             postId={postId}
+            title={title}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
           />
         </main>
 
