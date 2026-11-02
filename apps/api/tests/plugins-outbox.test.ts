@@ -58,7 +58,7 @@ describe('Phase 2: Durable Domain Events & Outbox Suite', () => {
     const [author] = await db
       .insert(users)
       .values({
-        email: 'author@enterprise.local',
+        email: 'author@glyphroom.local',
         fullName: 'Test Author',
         role: 'author',
         isActive: true,
@@ -235,7 +235,7 @@ describe('Phase 2: Durable Domain Events & Outbox Suite', () => {
     const [adminUser] = await db
       .insert(users)
       .values({
-        email: 'admin@enterprise.local',
+        email: 'admin@glyphroom.local',
         fullName: 'Admin User',
         role: 'admin',
         isActive: true,
@@ -317,7 +317,7 @@ describe('Phase 2: Durable Domain Events & Outbox Suite', () => {
     const [author] = await db
       .insert(users)
       .values({
-        email: 'author@enterprise.local',
+        email: 'author@glyphroom.local',
         fullName: 'Author User',
         role: 'author',
         isActive: true,
@@ -327,7 +327,7 @@ describe('Phase 2: Durable Domain Events & Outbox Suite', () => {
     const [reviewer] = await db
       .insert(users)
       .values({
-        email: 'reviewer@enterprise.local',
+        email: 'reviewer@glyphroom.local',
         fullName: 'Reviewer Admin',
         role: 'admin',
         isActive: true,

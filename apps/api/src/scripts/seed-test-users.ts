@@ -19,27 +19,27 @@ async function seedTestUsers() {
       role: 'admin',
     },
     {
-      email: 'arjun.maintainer@enterprise.internal',
+      email: 'arjun.maintainer@glyphroom.internal',
       fullName: 'Arjun Maintainer',
       role: 'author',
     },
     {
-      email: 'priya.sharma@enterprise.internal',
+      email: 'priya.sharma@glyphroom.internal',
       fullName: 'Priya Sharma (Author)',
       role: 'author',
     },
     {
-      email: 'marcus.chen@enterprise.internal',
+      email: 'marcus.chen@glyphroom.internal',
       fullName: 'Marcus Chen (Moderator)',
       role: 'moderator',
     },
     {
-      email: 'rahul.viewer@enterprise.internal',
+      email: 'rahul.viewer@glyphroom.internal',
       fullName: 'Rahul Verma (Viewer)',
       role: 'reader',
     },
     {
-      email: 'elena.rostova@enterprise.internal',
+      email: 'elena.rostova@glyphroom.internal',
       fullName: 'Elena Rostova (Staff SRE)',
       role: 'author',
     },
@@ -88,7 +88,7 @@ async function seedTestUsers() {
     `INSERT INTO space_members (space_id, user_id, role)
      VALUES ($1, $2, 'owner')
      ON CONFLICT (space_id, user_id) DO UPDATE SET role = 'owner'`,
-    [paymentsSpaceId, userIds['arjun.maintainer@enterprise.internal']]
+    [paymentsSpaceId, userIds['arjun.maintainer@glyphroom.internal']]
   );
 
   // Priya -> Author
@@ -96,7 +96,7 @@ async function seedTestUsers() {
     `INSERT INTO space_members (space_id, user_id, role)
      VALUES ($1, $2, 'author')
      ON CONFLICT (space_id, user_id) DO UPDATE SET role = 'author'`,
-    [paymentsSpaceId, userIds['priya.sharma@enterprise.internal']]
+    [paymentsSpaceId, userIds['priya.sharma@glyphroom.internal']]
   );
 
   // Rahul -> Viewer
@@ -104,7 +104,7 @@ async function seedTestUsers() {
     `INSERT INTO space_members (space_id, user_id, role)
      VALUES ($1, $2, 'viewer')
      ON CONFLICT (space_id, user_id) DO UPDATE SET role = 'viewer'`,
-    [paymentsSpaceId, userIds['rahul.viewer@enterprise.internal']]
+    [paymentsSpaceId, userIds['rahul.viewer@glyphroom.internal']]
   );
 
   // Marcus -> Maintainer in Platform Security
@@ -112,7 +112,7 @@ async function seedTestUsers() {
     `INSERT INTO space_members (space_id, user_id, role)
      VALUES ($1, $2, 'maintainer')
      ON CONFLICT (space_id, user_id) DO UPDATE SET role = 'maintainer'`,
-    [securitySpaceId, userIds['marcus.chen@enterprise.internal']]
+    [securitySpaceId, userIds['marcus.chen@glyphroom.internal']]
   );
 
   console.log('✓ Space memberships assigned successfully!');

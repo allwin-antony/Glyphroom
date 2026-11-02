@@ -1,5 +1,5 @@
 /**
- * Enterprise Blogger 2.0 — Schema Round-Trip Test Suite (Tier 1: Feature Coverage)
+ * Glyphroom — Schema Round-Trip Test Suite (Tier 1: Feature Coverage)
  * Validates >=5 test cases per schema feature: GFM tables, alerts, KaTeX math, Mermaid diagrams, fenced code blocks.
  * Asserts lossless ProseMirror JSON and Yjs CRDT round-tripping.
  */

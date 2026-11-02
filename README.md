@@ -215,11 +215,11 @@ The sign-in page at `/signin` includes **one-click autofill buttons** for rapid 
 | User | Email | System Role | Default Context |
 | :--- | :--- | :--- | :--- |
 | **Maya (Admin)** | `admin@glyphroom.local` | System Admin | Global admin access, user/PAT directory, plugin diagnostics |
-| **Arjun** | `arjun.maintainer@enterprise.internal` | Member | Owner / Maintainer of *Payments Revamp* |
-| **Priya** | `priya.sharma@enterprise.internal` | Member | Author in *Payments Revamp* |
-| **Rahul** | `rahul.viewer@enterprise.internal` | Member | Viewer in *Payments Revamp* |
-| **Marcus** | `marcus.chen@enterprise.internal` | Moderator | Maintainer in *Platform Security* |
-| **Elena** | `elena.rostova@enterprise.internal` | Member | Staff SRE (independent author) |
+| **Arjun** | `arjun.maintainer@glyphroom.internal` | Member | Owner / Maintainer of *Payments Revamp* |
+| **Priya** | `priya.sharma@glyphroom.internal` | Member | Author in *Payments Revamp* |
+| **Rahul** | `rahul.viewer@glyphroom.internal` | Member | Viewer in *Payments Revamp* |
+| **Marcus** | `marcus.chen@glyphroom.internal` | Moderator | Maintainer in *Platform Security* |
+| **Elena** | `elena.rostova@glyphroom.internal` | Member | Staff SRE (independent author) |
 
 ---
 

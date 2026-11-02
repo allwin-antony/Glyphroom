@@ -12,10 +12,10 @@ interface DemoUser {
 }
 
 const DEMO_ACCOUNTS: DemoUser[] = [
-  { name: 'Arjun', email: 'arjun.maintainer@enterprise.internal', role: 'Maintainer', badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
-  { name: 'Priya', email: 'priya.sharma@enterprise.internal', role: 'Author', badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
-  { name: 'Rahul', email: 'rahul.viewer@enterprise.internal', role: 'Viewer', badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
-  { name: 'Marcus', email: 'marcus.chen@enterprise.internal', role: 'Moderator', badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
+  { name: 'Arjun', email: 'arjun.maintainer@glyphroom.internal', role: 'Maintainer', badgeColor: 'bg-purple-500/20 text-purple-300 border-purple-500/30' },
+  { name: 'Priya', email: 'priya.sharma@glyphroom.internal', role: 'Author', badgeColor: 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30' },
+  { name: 'Rahul', email: 'rahul.viewer@glyphroom.internal', role: 'Viewer', badgeColor: 'bg-sky-500/20 text-sky-300 border-sky-500/30' },
+  { name: 'Marcus', email: 'marcus.chen@glyphroom.internal', role: 'Moderator', badgeColor: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30' },
 ];
 
 export const SignInView: React.FC = () => {

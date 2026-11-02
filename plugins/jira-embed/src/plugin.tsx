@@ -23,7 +23,7 @@ const JiraToolbarButton: React.FC<{ editor?: any }> = ({ editor }) => {
           issueKey: 'ENG-101',
           summary: 'Platform Security Review',
           status: 'In Progress',
-          url: 'https://jira.enterprise.local/browse/ENG-101',
+          url: 'https://jira.glyphroom.local/browse/ENG-101',
         });
       }}
       className="flex items-center gap-1 px-2 py-1 rounded-md border border-blue-300 dark:border-blue-800 bg-blue-50/80 dark:bg-blue-950/40 text-blue-700 dark:text-blue-300 hover:bg-blue-100 text-xs font-semibold mr-1 shadow-xs transition-colors"
@@ -52,7 +52,7 @@ export const jiraEmbedPlugin = {
             issueKey: 'ENG-101',
             summary: 'Platform Security Review',
             status: 'In Progress',
-            url: 'https://jira.enterprise.local/browse/ENG-101',
+            url: 'https://jira.glyphroom.local/browse/ENG-101',
           })
           .run();
       },

@@ -20,7 +20,7 @@ describe('Jira Embed Reference Web Plugin', () => {
         issueKey: 'ENG-404',
         summary: 'Database Failover Drill',
         status: 'In Progress',
-        url: 'https://jira.enterprise.local/browse/ENG-404',
+        url: 'https://jira.glyphroom.local/browse/ENG-404',
       },
     } as any;
 

@@ -39,7 +39,7 @@ export const JiraIssueNode = Node.create({
         renderHTML: (attrs) => ({ 'data-status': attrs.status }),
       },
       url: {
-        default: 'https://jira.enterprise.local/browse/PROJ-101',
+        default: 'https://jira.glyphroom.local/browse/PROJ-101',
         parseHTML: (el) => el.getAttribute('data-url'),
         renderHTML: (attrs) => ({ 'data-url': attrs.url }),
       },

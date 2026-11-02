@@ -41,7 +41,7 @@ describe('Phase 6: Admin Operations & Plugin Diagnostics Suite', () => {
         description: 'Audits published articles',
         capabilities: ['api:events'],
       },
-      registerEvents: () => {},
+      registerEvents: () => { },
     };
 
     registry.register(samplePlugin);
@@ -49,7 +49,7 @@ describe('Phase 6: Admin Operations & Plugin Diagnostics Suite', () => {
     const [adminUser] = await db
       .insert(users)
       .values({
-        email: 'admin@enterprise.local',
+        email: 'admin@glyphroom.local',
         fullName: 'Admin User',
         role: 'admin',
         isActive: true,
@@ -59,7 +59,7 @@ describe('Phase 6: Admin Operations & Plugin Diagnostics Suite', () => {
     const [authorUser] = await db
       .insert(users)
       .values({
-        email: 'author@enterprise.local',
+        email: 'author@glyphroom.local',
         fullName: 'Author User',
         role: 'author',
         isActive: true,

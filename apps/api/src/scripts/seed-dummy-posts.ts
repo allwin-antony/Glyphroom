@@ -190,21 +190,21 @@ async function seed() {
       isActive: true,
     },
     {
-      email: 'elena.rostova@enterprise.internal',
+      email: 'elena.rostova@glyphroom.internal',
       fullName: 'Elena Rostova',
       role: 'author' as const,
       passwordHash: defaultPasswordHash,
       isActive: true,
     },
     {
-      email: 'marcus.chen@enterprise.internal',
+      email: 'marcus.chen@glyphroom.internal',
       fullName: 'Marcus Chen',
       role: 'moderator' as const,
       passwordHash: defaultPasswordHash,
       isActive: true,
     },
     {
-      email: 'priya.sharma@enterprise.internal',
+      email: 'priya.sharma@glyphroom.internal',
       fullName: 'Priya Sharma',
       role: 'author' as const,
       passwordHash: defaultPasswordHash,
@@ -404,7 +404,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
   // POST 2: Authored by NEW USER (Elena Rostova - Staff SRE)
   // Status: in_review
   // =========================================================================
-  const elenaId = userMap.get('elena.rostova@enterprise.internal')!;
+  const elenaId = userMap.get('elena.rostova@glyphroom.internal')!;
   const sreCoeId = coeMap.get('SRE')!;
 
   const sampleFile2 = await createSampleAttachmentFile(
@@ -553,7 +553,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
   // POST 3: Authored by MARCUS CHEN (Security Moderator)
   // Status: published
   // =========================================================================
-  const marcusId = userMap.get('marcus.chen@enterprise.internal')!;
+  const marcusId = userMap.get('marcus.chen@glyphroom.internal')!;
   const secCoeId = coeMap.get('SEC')!;
 
   const sampleFile3 = await createSampleAttachmentFile(
@@ -711,7 +711,7 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
   // POST 4: Authored by PRIYA SHARMA (Frontend Lead)
   // Status: draft
   // =========================================================================
-  const priyaId = userMap.get('priya.sharma@enterprise.internal')!;
+  const priyaId = userMap.get('priya.sharma@glyphroom.internal')!;
   const feCoeId = coeMap.get('FRONTEND')!;
 
   const post4Data = buildRichYDoc((frag) => {
@@ -829,9 +829,9 @@ curl -sSf -H "Authorization: Bearer $SYSTEM_PAT" \\
     totalPostsCreated: 4,
     authors: [
       'admin@glyphroom.local',
-      'elena.rostova@enterprise.internal',
-      'marcus.chen@enterprise.internal',
-      'priya.sharma@enterprise.internal',
+      'elena.rostova@glyphroom.internal',
+      'marcus.chen@glyphroom.internal',
+      'priya.sharma@glyphroom.internal',
     ],
   });
 

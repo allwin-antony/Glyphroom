@@ -38,7 +38,7 @@ describe('Attachment Upload & Magic-Byte Security Suite', () => {
     const [author] = await db
       .insert(users)
       .values({
-        email: 'author@enterprise.local',
+        email: 'author@glyphroom.local',
         fullName: 'Jane Author',
         role: 'author',
         ssoProvider: 'local',
@@ -70,7 +70,7 @@ describe('Attachment Upload & Magic-Byte Security Suite', () => {
       method: 'POST',
       url: '/api/v1/auth/login',
       payload: {
-        email: 'author@enterprise.local',
+        email: 'author@glyphroom.local',
         password: 'AuthorPass123!',
       },
     });
