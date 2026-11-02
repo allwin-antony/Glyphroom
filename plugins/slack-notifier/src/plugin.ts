@@ -15,7 +15,7 @@ export const slackNotifierManifest: PluginManifest = {
   version: '1.0.0',
   description:
     'Durable domain event notifier dispatching published articles to corporate Slack channels.',
-  author: 'Enterprise Blogger Engineering',
+  author: 'Glyphroom Engineering',
   capabilities: ['api:events', 'api:routes', 'api:storage'],
 };
 

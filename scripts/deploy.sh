@@ -187,7 +187,7 @@ prepare_storage() {
 # 4. Service Launch
 # ------------------------------------------------------------------------------
 deploy_services() {
-    log_info "Building and launching Enterprise Blogger containers..."
+    log_info "Building and launching Glyphroom containers..."
     cd "${ROOT_DIR}"
     ${COMPOSE_CMD} -f "${COMPOSE_FILE}" up -d --build --remove-orphans
     log_success "Containers launched."
@@ -299,7 +299,7 @@ case "${1:-}" in
         ;;
     --stop)
         check_prerequisites
-        log_info "Stopping Enterprise Blogger containers gracefully..."
+        log_info "Stopping Glyphroom containers gracefully..."
         cd "${ROOT_DIR}" && ${COMPOSE_CMD} -f "${COMPOSE_FILE}" down
         log_success "All containers stopped."
         ;;

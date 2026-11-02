@@ -8,7 +8,7 @@ export const jiraEmbedManifest: PluginManifest = {
   version: '1.0.0',
   description:
     'Renders safe, declarative Jira issue status cards in collaborative documents.',
-  author: 'Enterprise Blogger Engineering',
+  author: 'Glyphroom Engineering',
   capabilities: ['ui:editor', 'ui:slots'],
 };
 

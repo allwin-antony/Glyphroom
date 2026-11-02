@@ -291,5 +291,5 @@ A single helper command installs a standard `systemd` service:
 ```bash
 ./scripts/install-systemd.sh
 ```
-Ensures Enterprise Blogger restarts automatically if the physical server reboots or crashes (`Restart=always`).
+Ensures Glyphroom restarts automatically if the physical server reboots or crashes (`Restart=always`).
 

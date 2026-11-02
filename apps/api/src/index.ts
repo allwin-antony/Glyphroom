@@ -25,7 +25,7 @@ async function bootstrap() {
     }
 
     const shutdown = async (signal: string) => {
-      console.log(`Received ${signal}, shutting down Enterprise Blogger API...`);
+      console.log(`Received ${signal}, shutting down Glyphroom API...`);
       await close!();
       process.exit(0);
     };
@@ -34,7 +34,7 @@ async function bootstrap() {
     process.on('SIGINT', () => shutdown('SIGINT'));
 
     await app.listen({ port, host });
-    console.log(`🚀 Enterprise Blogger API running on http://${host}:${port}`);
+    console.log(`🚀 Glyphroom API running on http://${host}:${port}`);
   } catch (err) {
     console.error('Failed to start API server:', err);
     if (close) {

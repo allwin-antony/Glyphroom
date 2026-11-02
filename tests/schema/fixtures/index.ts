@@ -38,7 +38,7 @@ export const largeSectionFixture: ProseMirrorDocJSON = {
       content: [
         {
           type: 'text',
-          text: 'Enterprise Blogger CRDT convergence engine stress test payload. '.repeat(1500),
+          text: 'Glyphroom CRDT convergence engine stress test payload. '.repeat(1500),
         },
       ],
     },

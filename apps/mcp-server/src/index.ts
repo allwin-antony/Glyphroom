@@ -20,7 +20,7 @@ export async function startMcpServer() {
     config.transport === 'stdio' ? process.stderr : process.stdout
   );
 
-  logger.info({ transport: config.transport }, 'Starting Enterprise Blogger MCP Server');
+  logger.info({ transport: config.transport }, 'Starting Glyphroom MCP Server');
 
   const apiUrl = process.env.GLYPHROOM_API_URL || process.env.API_URL || 'http://127.0.0.1:4001';
   const serverForToken = async (token?: string) => {

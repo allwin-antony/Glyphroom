@@ -181,7 +181,7 @@ function Ensure-Env {
 Check-Prerequisites
 
 if ($Stop) {
-    Write-Info 'Stopping Enterprise Blogger stack...'
+    Write-Info 'Stopping Glyphroom stack...'
     docker compose -f $ComposeFile down
     Write-Success 'All services stopped.'
     exit 0
@@ -200,7 +200,7 @@ if ($Logs) {
 
 if ($Restart) {
     Ensure-Env
-    Write-Info 'Restarting Enterprise Blogger stack...'
+    Write-Info 'Restarting Glyphroom stack...'
     docker compose -f $ComposeFile down
     docker compose -f $ComposeFile up -d --build --remove-orphans
     Write-Success 'Restart complete.'
@@ -210,7 +210,7 @@ if ($Restart) {
 # Default Deploy Flow
 Ensure-Env
 
-Write-Info 'Building and launching Enterprise Blogger containers...'
+Write-Info 'Building and launching Glyphroom containers...'
 docker compose -f $ComposeFile up -d --build --remove-orphans
 if ($LASTEXITCODE -ne 0) {
     Write-Err "docker compose up failed with exit code $LASTEXITCODE"
