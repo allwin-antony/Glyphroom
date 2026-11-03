@@ -101,11 +101,31 @@ export function createHumanUndoManager(
 export function createHumanUndoPlugin(options?: {
   undoManager?: Y.UndoManager | null;
   trackedOrigins?: any[];
+  /** Keep the manager alive when ProseMirror reconfigures its plugins. */
+  destroyUndoManager?: boolean;
 }): Plugin {
-  return yUndoPlugin({
+  const plugin = yUndoPlugin({
     undoManager: options?.undoManager || null,
     trackedOrigins: options?.trackedOrigins || [ySyncPluginKey],
   });
+
+  // y-prosemirror destroys its manager whenever a plugin view is torn down.
+  // ProseMirror also tears plugin views down during harmless reconfiguration
+  // (for example, TipTap React registers its mobile-enter plugin on mount).
+  // Allow the owner to keep the manager alive across that reconfiguration.
+  if (options?.destroyUndoManager === false && plugin.spec.view) {
+    const originalView = plugin.spec.view;
+    plugin.spec.view = (view) => {
+      const pluginView = originalView(view);
+      if (!pluginView) return pluginView;
+      return {
+        ...pluginView,
+        destroy: () => {},
+      };
+    };
+  }
+
+  return plugin;
 }
 
 /**

@@ -532,7 +532,35 @@ describe('Rich Reader / Preview unified renderer (export grammar)', () => {
       const { container, queryByText } = render(<ReaderPreview prosemirrorDocJSON={doc} title="Report" />);
       expect(hasText(container, 'Report')).toBe(true);
       expect(hasText(container, 'See the table.')).toBe(true);
+      expect(container.querySelector('table')).not.toBeNull();
       expect(queryByText('Draft is empty.')).toBeNull();
+    });
+
+    it('renders a four-column TipTap table with empty cells as a table', () => {
+      const cell = (type: 'tableHeader' | 'tableCell', text = '') => ({
+        type,
+        content: [{ type: 'paragraph', content: text ? [{ type: 'text', text }] : [] }],
+      });
+      const row = (content: any[]) => ({ type: 'tableRow', content });
+      const doc = {
+        type: 'doc',
+        content: [{
+          type: 'table',
+          content: [
+            row([cell('tableHeader', 'Col 1'), cell('tableHeader', 'Col 2'), cell('tableHeader'), cell('tableHeader')]),
+            row([cell('tableCell', 'Data 1'), cell('tableCell', 'Data 2'), cell('tableCell'), cell('tableCell')]),
+            row([cell('tableCell'), cell('tableCell'), cell('tableCell', 'ygou'), cell('tableCell')]),
+            row([cell('tableCell'), cell('tableCell'), cell('tableCell'), cell('tableCell')]),
+          ],
+        }],
+      };
+
+      const markdown = exportDerivedMarkdown(doc);
+      expect(markdown.split('\n')).toHaveLength(5);
+      expect(parseMarkdown(markdown).blocks[0]?.type).toBe('table');
+      const { container } = render(<ReaderPreview prosemirrorDocJSON={doc} title="Table Test" />);
+      expect(container.querySelector('table')).not.toBeNull();
+      expect(container.textContent).toContain('ygou');
     });
   });
 });

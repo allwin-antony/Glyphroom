@@ -247,9 +247,12 @@ function serializeTableNode(tableNode: ProseMirrorNode): string {
   if (rows.length === 0) return '';
 
   const colCount = rows[0].length;
-  const header = '| ' + rows[0].join(' | ') + ' |';
+  const normalizeRow = (row: string[]) => Array.from({ length: colCount }, (_, index) => row[index] || '');
+  const escapeCell = (cell: string) => cell.replace(/\|/g, '\\|').replace(/[\r\n]+/g, ' ');
+  const formatRow = (row: string[]) => '| ' + normalizeRow(row).map(escapeCell).join(' | ') + ' |';
+  const header = formatRow(rows[0]);
   const divider = '| ' + Array(colCount).fill('---').join(' | ') + ' |';
-  const bodyRows = rows.slice(1).map((r) => '| ' + r.join(' | ') + ' |');
+  const bodyRows = rows.slice(1).map(formatRow);
 
   return [header, divider, ...bodyRows].join('\n');
 }
@@ -322,7 +325,7 @@ function serializeJsonToMarkdown(json: ProseMirrorNodeJSON): string {
       (cell.content || []).map(serializeJsonToMarkdown).join(' ').replace(/\|/g, '\\|').replace(/\n/g, ' ')
     ));
     if (!rows.length) return '';
-    const width = Math.max(...rows.map((row) => row.length));
+    const width = rows[0]?.length || Math.max(...rows.map((row) => row.length));
     const line = (cells: string[]) => `| ${Array.from({ length: width }, (_, index) => cells[index] || '').join(' | ')} |`;
     return [line(rows[0]), line(Array(width).fill('---')), ...rows.slice(1).map(line)].join('\n');
   }
@@ -409,6 +412,7 @@ export function normalizeMarkdownInput(raw: string): string {
       .replace(/\\r\\n/g, '\n')
       .replace(/\\n\\n+/g, '\n\n')
       .replace(/(#{1,6}\s+[^\n\\]+)\\n/g, '$1\n')
+      .replace(/\\n(?=\s*\|)/g, '\n')
       .replace(/\\n(?=#{1,6}\s+|>\s*\[!|>\s+|\s*[-*+]\s+|\s*\d+\.\s+|```|\$\$)/g, '\n');
   }
 

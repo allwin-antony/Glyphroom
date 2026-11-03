@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import * as Y from 'yjs';
 import { Editor } from '@tiptap/core';
 import StarterKit from '@tiptap/starter-kit';
@@ -8,6 +8,7 @@ import { BrowserRouter } from 'react-router-dom';
 
 import { SuggestionInsert, SuggestionDelete } from '../src/extensions/suggestion.js';
 import { Collaboration } from '../src/extensions/collab.js';
+import { CollaborativeEditor } from '../src/components/Editor.js';
 import { OutlineRail } from '../src/components/editor/OutlineRail.js';
 import { SaveStatusBadge } from '../src/components/editor/SaveStatusBadge.js';
 import { AgentPresenceChip } from '../src/components/editor/AgentPresenceChip.js';
@@ -192,6 +193,35 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
       const chainRedoRes = editor.chain().focus().redo().run();
       expect(chainRedoRes).toBe(true);
       expect(editor.getText()).toContain('added text');
+
+      editor.destroy();
+      ydoc.destroy();
+    });
+
+    it('keeps undo and redo working after the React editor mounts its plugins', async () => {
+      const ydoc = new Y.Doc();
+      let editor: any;
+      const onEditorReady = (instance: any) => { editor = instance; };
+
+      render(<CollaborativeEditor ydoc={ydoc} onEditorReady={onEditorReady} />);
+      await waitFor(() => expect(editor).toBeDefined());
+
+      await act(async () => {
+        editor.commands.insertContent(' mounted edit');
+      });
+      expect(editor.getText()).toContain('mounted edit');
+      expect(editor.can().undo()).toBe(true);
+
+      await act(async () => {
+        expect(editor.commands.undo()).toBe(true);
+      });
+      expect(editor.getText()).not.toContain('mounted edit');
+      expect(editor.can().redo()).toBe(true);
+
+      await act(async () => {
+        expect(editor.commands.redo()).toBe(true);
+      });
+      expect(editor.getText()).toContain('mounted edit');
 
       editor.destroy();
       ydoc.destroy();

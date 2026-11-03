@@ -397,7 +397,7 @@ export const ReaderView: React.FC = () => {
               <span>Comfort</span>
             </button>
 
-            {/* View Mode Switcher: Article Flow vs Notebook Blocks */}
+            {/* View Mode Switcher: Document vs Blocks */}
             <div className="flex items-center rounded-lg border border-border p-0.5 bg-surface mr-1">
               <button
                 onClick={() => handleToggleReaderViewMode('flow')}
@@ -406,10 +406,10 @@ export const ReaderView: React.FC = () => {
                     ? 'bg-elevated text-foreground shadow-xs'
                     : 'text-text-muted hover:text-foreground'
                 }`}
-                title="Continuous Article Flow"
+                title="Document View"
               >
                 <FileText className="w-3.5 h-3.5" />
-                <span>Flow</span>
+                <span>Document</span>
               </button>
               <button
                 onClick={() => handleToggleReaderViewMode('block')}
@@ -418,7 +418,7 @@ export const ReaderView: React.FC = () => {
                     ? 'bg-elevated text-accent shadow-xs'
                     : 'text-text-muted hover:text-foreground'
                 }`}
-                title="Notebook Block Cards (.ipynb Mode)"
+                title="Blocks View"
               >
                 <Layers className="w-3.5 h-3.5" />
                 <span>Blocks</span>
@@ -602,7 +602,11 @@ export const ReaderView: React.FC = () => {
 
           {/* Reader Prose Content */}
           <article className={`space-y-4 ${fontSizeClass}`}>
-            <MarkdownRenderer markdown={rawMarkdown} mode={readerViewMode} />
+            <MarkdownRenderer
+              markdown={rawMarkdown}
+              mode={readerViewMode}
+              suppressFirstHeading={Boolean(post.title?.trim())}
+            />
           </article>
         </div>
 

@@ -21,6 +21,7 @@ import { ProjectStatusBlock } from '../extensions/status-block.js';
 import { FileAttachmentBlock } from '../extensions/attachment.js';
 import { Collaboration } from '../extensions/collab.js';
 import { TextSelection } from '@tiptap/pm/state';
+import { undoCommand, redoCommand } from 'y-prosemirror';
 import { AwarenessBar } from './AwarenessBar.js';
 import { SuggestionActionMenu, type ActiveSuggestionInfo } from './SuggestionActionMenu.js';
 import { SuggestionSidebar } from './SuggestionSidebar.js';
@@ -142,6 +143,9 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     }
   };
   const [reorderConflictMessage, setReorderConflictMessage] = useState<string | null>(null);
+  // Keep the live reader projection in React. The editor mutates outside React,
+  // so reading editor.getJSON() directly during render otherwise stays stale.
+  const [previewDocJSON, setPreviewDocJSON] = useState<any>(null);
   const [currentBlockInfo, setCurrentBlockInfo] = useState<{
     index: number;
     total: number;
@@ -417,6 +421,21 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           }`,
       },
       handleKeyDown: (view, event) => {
+        // Route browser history shortcuts to the Yjs history manager. This
+        // prevents native contenteditable history from competing with Yjs.
+        if ((event.ctrlKey || event.metaKey) && !event.altKey) {
+          const key = event.key.toLowerCase();
+          const isUndo = key === 'z' && !event.shiftKey;
+          const isRedo = key === 'y' || (key === 'z' && event.shiftKey);
+          if (isUndo || isRedo) {
+            event.preventDefault();
+            event.stopPropagation();
+            return isUndo
+              ? undoCommand(view.state, view.dispatch)
+              : redoCommand(view.state, view.dispatch);
+          }
+        }
+
         // Mod-/ : Keyboard shortcut to open Slash Menu (Bug #18)
         if ((event.metaKey || event.ctrlKey) && event.key === '/') {
           event.preventDefault();
@@ -541,7 +560,9 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
       },
     },
     onUpdate: ({ editor }) => {
-      onDocChange?.(editor.getJSON());
+      const json = editor.getJSON();
+      setPreviewDocJSON(json);
+      onDocChange?.(json);
       scanSuggestions(editor);
       updateCurrentBlockInfo(editor);
       updateFloatingCellPos(editor);
@@ -553,8 +574,38 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
     },
   });
 
+  // Yjs updates the undo/redo stacks outside React. Subscribe directly to
+  // editor transactions so the toolbar always reflects the current stacks.
+  const [, setHistoryVersion] = useState(0);
+  useEffect(() => {
+    if (!editor) return;
+    const refreshHistoryControls = () => setHistoryVersion((version) => version + 1);
+    editor.on('transaction', refreshHistoryControls);
+    return () => {
+      editor.off('transaction', refreshHistoryControls);
+    };
+  }, [editor]);
+
+  // Undo/redo and collaborative updates can be applied through a transaction
+  // without firing the normal local `update` callback. Mirror every document
+  // transaction into React so preview always reflects the current document.
+  useEffect(() => {
+    if (!editor) return;
+    const refreshPreview = ({ transaction }: { transaction: any }) => {
+      if (transaction.docChanged) {
+        setPreviewDocJSON(editor.getJSON());
+        onDocChange?.(editor.getJSON());
+      }
+    };
+    editor.on('transaction', refreshPreview);
+    return () => {
+      editor.off('transaction', refreshPreview);
+    };
+  }, [editor, onDocChange]);
+
   useEffect(() => {
     if (editor) {
+      setPreviewDocJSON(editor.getJSON());
       onEditorReady?.(editor);
       scanSuggestions(editor);
       updateCurrentBlockInfo(editor);
@@ -1177,7 +1228,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
 
         <span className="text-border mx-0.5">|</span>
 
-        {/* View Mode Toggle: Document Flow vs Block View vs Preview */}
+         {/* View Mode Toggle: Document vs Blocks vs Preview */}
         <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas mr-1">
           <button
             onClick={() => handleToggleViewMode('document')}
@@ -1185,10 +1236,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                 ? 'bg-elevated text-foreground shadow-xs'
                 : 'text-text-muted hover:text-foreground'
               }`}
-            title="Document View (Continuous prose)"
+             title="Document View"
           >
             <FileText size={11} />
-            <span>Doc</span>
+             <span>Document</span>
           </button>
           <button
             onClick={() => handleToggleViewMode('block')}
@@ -1196,10 +1247,10 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
                 ? 'bg-elevated text-accent shadow-xs'
                 : 'text-text-muted hover:text-foreground'
               }`}
-            title="Block View (Discrete foldable section cards)"
+             title="Blocks View"
           >
             <Layers size={11} />
-            <span>Blocks</span>
+             <span>Blocks</span>
           </button>
           <button
             onClick={() => handleToggleViewMode('preview')}
@@ -1217,9 +1268,9 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
         {viewMode === 'preview' ? (
           <div className="flex items-center gap-2 px-2.5 py-1 rounded-md bg-accent/10 border border-accent/20 text-accent text-xs ml-1">
             <Eye size={13} className="shrink-0" />
-            <span className="font-semibold">Reader Preview Mode</span>
+             <span className="font-semibold">Working Preview Mode</span>
             <span className="text-[11px] text-text-muted hidden md:inline">
-              • Viewing published reader layout with rendered diagrams, math & callouts
+               • Viewing current edits in reader layout with rendered diagrams, math & callouts
             </span>
             <button
               onClick={() => handleToggleViewMode('document')}
@@ -1632,7 +1683,7 @@ export const CollaborativeEditor: React.FC<CollaborativeEditorProps> = ({
           {viewMode === 'preview' ? (
             <div className="w-full max-w-[820px] transition-all my-2">
               <ReaderPreview
-                prosemirrorDocJSON={editor.getJSON()}
+                prosemirrorDocJSON={previewDocJSON ?? editor.getJSON()}
                 title={title || ''}
               />
             </div>

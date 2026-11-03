@@ -179,11 +179,11 @@ Each user keeps a Personal Access Token in their local assistant configuration.
     expect(container.textContent).toContain('Working content may differ from the last published snapshot.');
 
     // Verify Flow to Cards presentation toggle
-    const cardsBtn = screen.getByTitle('Notebook Block Cards');
+    const cardsBtn = screen.getByTitle('Blocks View');
     expect(cardsBtn).toBeDefined();
     fireEvent.click(cardsBtn);
 
-    const flowBtn = screen.getByTitle('Continuous Article Flow');
+    const flowBtn = screen.getByTitle('Document View');
     expect(flowBtn).toBeDefined();
     fireEvent.click(flowBtn);
   });

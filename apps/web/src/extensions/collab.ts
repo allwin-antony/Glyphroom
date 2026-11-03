@@ -37,6 +37,13 @@ declare module '@tiptap/core' {
 export const Collaboration = Extension.create<CollaborationOptions>({
   name: 'enterpriseCollaboration',
 
+  addStorage() {
+    return {
+      undoManager: null as Y.UndoManager | null,
+      ownsUndoManager: false,
+    };
+  },
+
   addOptions() {
     return {
       fragment: undefined,
@@ -62,7 +69,15 @@ export const Collaboration = Extension.create<CollaborationOptions>({
           additionalTrackedOrigins: [ySyncPluginKey],
           deleteFilter: (item) => defaultDeleteFilter(item, defaultProtectedNodes),
         });
-      plugins.push(createHumanUndoPlugin({ undoManager, trackedOrigins: [ySyncPluginKey] }));
+      this.storage.undoManager = undoManager;
+      this.storage.ownsUndoManager = !this.options.undoManager;
+      plugins.push(createHumanUndoPlugin({
+        undoManager,
+        trackedOrigins: [ySyncPluginKey],
+        // TipTap React reconfigures plugins when EditorContent mounts. The
+        // manager is explicitly cleaned up in onDestroy instead.
+        destroyUndoManager: false,
+      }));
     }
 
     // 3. Collaborative Cursors & Awareness (Feature 15)
@@ -74,6 +89,13 @@ export const Collaboration = Extension.create<CollaborationOptions>({
     }
 
     return plugins;
+  },
+
+  onDestroy() {
+    if (this.storage.ownsUndoManager) {
+      this.storage.undoManager?.destroy();
+    }
+    this.storage.undoManager = null;
   },
 
   addKeyboardShortcuts() {

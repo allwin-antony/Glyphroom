@@ -80,8 +80,10 @@ const ALERT_RE = /^>\s*\[!(NOTE|TIP|IMPORTANT|WARNING|CAUTION)\](.*)$/i;
 const BLOCKQUOTE_RE = /^>\s?(.*)$/;
 const HR_RE = /^(---|\*\*\*|___)\s*$/;
 const STATUS_BLOCK_RE = /^<!--\s*status-block\s+([\s\S]+?)\s*-->\s*$/;
-const TABLE_ROW_RE = /^\s*\|(.+)\|\s*$/;
-const TABLE_DIVIDER_RE = /^\s*\|?\s*:?-{3,}\s*(\|(?:\s*:?-{3,}\s*)*)\|?\s*$/;
+const TABLE_ROW_RE = /^\s*\|(?:.*\|)\s*$/;
+// Accept any number of Markdown table columns, including the four-column
+// tables produced by TipTap when users leave cells empty.
+const TABLE_DIVIDER_RE = /^\s*\|?\s*:?-{3,}(?:\s*\|\s*:?-{3,})*\s*\|?\s*$/;
 const TASK_RE = /^([*\-])\s+\[([ xX])\]\s+(.*)$/s;
 const ORDERED_RE = /^(\d+)\.\s+(.*)$/s;
 const UNORDERED_RE = /^([*\-])\s+(.*)$/s;
@@ -387,7 +389,11 @@ export function parseMarkdown(markdown: string): ParseResult {
         }
         flushPara();
         flushList();
-        blocks.push({ type: 'table', rows });
+        const columnCount = rows[0]?.length ?? 0;
+        blocks.push({
+          type: 'table',
+          rows: rows.map((row) => Array.from({ length: columnCount }, (_, index) => row[index] ?? '')),
+        });
         i = j;
         continue;
       }

@@ -7,7 +7,6 @@ import {
   FileText,
   Sparkles,
   Edit3,
-  Eye,
   Send,
   AlertCircle,
   Calendar,
@@ -144,6 +143,10 @@ export const MyWorkView: React.FC = () => {
   const totalTabPages = Math.max(1, Math.ceil(currentTabPosts.length / TAB_LIMIT));
   const tabStart = (tabPage - 1) * TAB_LIMIT;
   const displayedTabPosts = currentTabPosts.slice(tabStart, tabStart + TAB_LIMIT);
+
+  const getPostDestination = (post: CatalogPost) => {
+    return `/posts/${post.slug || post.id}`;
+  };
 
   const handleSubmitForReview = async (postId: string) => {
     setSubmittingPostId(postId);
@@ -288,7 +291,18 @@ export const MyWorkView: React.FC = () => {
             </thead>
             <tbody className="divide-y divide-border text-text-secondary">
               {displayedTabPosts.map((post) => (
-                <tr key={post.id} className="hover:bg-canvas/50 transition-colors">
+                <tr
+                  key={post.id}
+                  onClick={() => navigate(getPostDestination(post))}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      navigate(getPostDestination(post));
+                    }
+                  }}
+                  tabIndex={0}
+                  className="hover:bg-canvas/50 focus-within:bg-canvas/50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-accent-main cursor-pointer transition-colors"
+                >
                   <td className="px-5 py-4 font-medium text-foreground">
                     <div className="flex items-center gap-2">
                       <span className="font-semibold">{post.title}</span>
@@ -336,21 +350,13 @@ export const MyWorkView: React.FC = () => {
                   <td className="px-5 py-4 text-text-muted text-[11px]">
                     {formatDate(post.updatedAt || post.createdAt)}
                   </td>
-                  <td className="px-5 py-4 text-right space-x-2">
+                  <td className="px-5 py-4 text-right space-x-2" onClick={(event) => event.stopPropagation()}>
                     <button
                       onClick={() => navigate(`/posts/${post.id}/edit`)}
                       className="px-2.5 py-1 rounded bg-canvas hover:bg-elevated text-foreground text-[11px] font-medium border border-border transition-colors inline-flex items-center gap-1"
                     >
                       <Edit3 className="w-3 h-3 text-accent-main" />
                       <span>Edit</span>
-                    </button>
-
-                    <button
-                      onClick={() => navigate(`/posts/${post.slug || post.id}`)}
-                      className="px-2.5 py-1 rounded bg-accent-bg text-accent-main hover:opacity-80 text-[11px] font-semibold transition-colors inline-flex items-center gap-1"
-                    >
-                      <Eye className="w-3 h-3" />
-                      <span>View</span>
                     </button>
 
                     {post.status === 'draft' && (

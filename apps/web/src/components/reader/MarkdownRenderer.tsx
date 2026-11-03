@@ -33,6 +33,7 @@ interface MarkdownRendererProps {
   markdown: string;
   mode?: ReaderMode;
   className?: string;
+  suppressFirstHeading?: boolean;
 }
 
 function renderBlock(block: BlockNode, mode: ReaderMode, idx: number): React.ReactNode {
@@ -73,11 +74,23 @@ function renderBlock(block: BlockNode, mode: ReaderMode, idx: number): React.Rea
   }
 }
 
-export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ markdown = '', mode = 'flow', className }) => {
+export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
+  markdown = '',
+  mode = 'flow',
+  className,
+  suppressFirstHeading = false,
+}) => {
   const { blocks } = parseMarkdown(markdown);
+  let suppressedFirstHeading = false;
   return (
     <div className={className}>
-      {blocks.map((block, idx) => renderBlock(block, mode, idx))}
+      {blocks.map((block, idx) => {
+        if (suppressFirstHeading && !suppressedFirstHeading && block.type === 'heading' && block.level === 1) {
+          suppressedFirstHeading = true;
+          return null;
+        }
+        return renderBlock(block, mode, idx);
+      })}
     </div>
   );
 };

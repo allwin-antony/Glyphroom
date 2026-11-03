@@ -305,8 +305,8 @@ export const EditorView: React.FC = () => {
                   ? 'bg-accent text-white shadow-xs'
                   : 'text-text-secondary hover:text-foreground hover:bg-elevated'
               }`}
-              title={viewMode === 'preview' ? "Switch to Edit mode" : "Preview published reader layout"}
-              aria-label={viewMode === 'preview' ? "Switch to Edit mode" : "Preview published reader layout"}
+               title={viewMode === 'preview' ? "Switch to Edit mode" : "Preview current edits"}
+               aria-label={viewMode === 'preview' ? "Switch to Edit mode" : "Preview current edits"}
             >
               {viewMode === 'preview' ? <Edit3 size={13} /> : <Eye size={13} />}
               <span>{viewMode === 'preview' ? 'Edit' : 'Preview'}</span>

@@ -28,6 +28,7 @@ export interface CatalogPost {
   authorId: string;
   authorName?: string;
   authorEmail?: string;
+  collaboratorPermission?: 'view' | 'review' | 'edit';
   coeId?: string;
   coeName?: string;
   publishedMarkdown?: string;

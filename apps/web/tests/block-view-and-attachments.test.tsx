@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import * as Y from 'yjs';
 import { CollaborativeEditor } from '../src/components/Editor.js';
 import { api } from '../src/lib/api.js';
@@ -31,8 +31,8 @@ describe('Tier 1: Structured Documentation, Block View & Attachment Pipeline', (
     );
 
     // Initial state: Doc button is active
-    const docBtn = screen.getByTitle('Document View (Continuous prose)');
-    const blockBtn = screen.getByTitle('Block View (Discrete foldable section cards)');
+    const docBtn = screen.getByTitle('Document View');
+    const blockBtn = screen.getByTitle('Blocks View');
     expect(docBtn).toBeDefined();
     expect(blockBtn).toBeDefined();
 
@@ -48,6 +48,23 @@ describe('Tier 1: Structured Documentation, Block View & Attachment Pipeline', (
     const regularContent = document.querySelector('.enterprise-editor-content');
     expect(regularContent).toBeDefined();
 
+    ydoc.destroy();
+  });
+
+  it('shows the latest editor content in live Preview mode', async () => {
+    const ydoc = new Y.Doc();
+    let editor: any;
+    const onEditorReady = (instance: any) => { editor = instance; };
+    render(<CollaborativeEditor ydoc={ydoc} onEditorReady={onEditorReady} />);
+
+    await waitFor(() => expect(editor).toBeDefined());
+    await act(async () => {
+      editor.commands.insertContent('Live preview edit');
+    });
+    fireEvent.click(screen.getByTitle('Reader Preview (Live rendered markdown, diagrams & math)'));
+
+    expect(await screen.findByText('Live preview edit')).toBeDefined();
+    editor.destroy();
     ydoc.destroy();
   });
 
@@ -148,7 +165,7 @@ describe('Tier 1: Structured Documentation, Block View & Attachment Pipeline', (
     );
 
     // Switch to Block View
-    const blockBtn = screen.getByTitle('Block View (Discrete foldable section cards)');
+    const blockBtn = screen.getByTitle('Blocks View');
     fireEvent.click(blockBtn);
 
     // Verify Block Title (H1) inserter exists in the notebook dock

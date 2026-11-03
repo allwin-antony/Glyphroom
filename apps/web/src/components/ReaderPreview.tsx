@@ -24,24 +24,14 @@ export const ReaderPreview: React.FC<ReaderPreviewProps> = ({
         ? exportDerivedMarkdown(prosemirrorDocJSON)
         : '';
 
-  const hasMatchingFirstHeading = React.useMemo(() => {
-    if (!title?.trim() || !derivedMarkdown.trim()) return false;
-    const lines = derivedMarkdown.trim().split('\n');
-    const firstNonEmpty = lines.find((l) => l.trim().length > 0);
-    if (!firstNonEmpty) return false;
-    const match = firstNonEmpty.match(/^#\s+(.+)$/);
-    if (!match) return false;
-    return match[1].trim().toLowerCase() === title.trim().toLowerCase();
-  }, [title, derivedMarkdown]);
-
   if (!derivedMarkdown.trim()) {
     return (
       <div className="max-w-3xl mx-auto my-6 p-6 sm:p-10 rounded-2xl bg-surface border border-border shadow-xs text-foreground">
         <div className="flex items-center justify-between pb-4 mb-6 border-b border-border text-xs text-text-muted">
           <div className="flex items-center gap-2">
             <BookOpen size={16} className="text-accent shrink-0" />
-            <span className="font-semibold text-foreground">Published Reader Projection</span>
-            <span className="hidden sm:inline">• Pending AI insertions are excluded, pending deletions retain original text</span>
+             <span className="font-semibold text-foreground">Working Preview</span>
+             <span className="hidden sm:inline">• Shows the current edits as readers will see them</span>
           </div>
         </div>
         {title?.trim() && (
@@ -59,11 +49,11 @@ export const ReaderPreview: React.FC<ReaderPreviewProps> = ({
       <div className="flex items-center justify-between pb-4 mb-6 border-b border-border text-xs text-text-muted">
         <div className="flex items-center gap-2">
           <BookOpen size={16} className="text-accent shrink-0" />
-          <span className="font-semibold text-foreground">Published Reader Projection</span>
-          <span className="hidden sm:inline">• Pending AI insertions are excluded, pending deletions retain original text</span>
+          <span className="font-semibold text-foreground">Working Preview</span>
+          <span className="hidden sm:inline">• Shows the current edits as readers will see them</span>
         </div>
 
-        {/* Presentation mode toggle: Flow vs Block */}
+        {/* Presentation mode toggle: Document vs Blocks */}
         <div className="flex items-center rounded-lg border border-border p-0.5 bg-canvas shrink-0">
           <button
             onClick={() => setPreviewMode('flow')}
@@ -71,10 +61,10 @@ export const ReaderPreview: React.FC<ReaderPreviewProps> = ({
                 ? 'bg-elevated text-foreground shadow-xs'
                 : 'text-text-muted hover:text-foreground'
               }`}
-            title="Continuous Article Flow"
+             title="Document View"
           >
             <FileText size={11} />
-            <span>Flow</span>
+             <span>Document</span>
           </button>
           <button
             onClick={() => setPreviewMode('block')}
@@ -82,22 +72,26 @@ export const ReaderPreview: React.FC<ReaderPreviewProps> = ({
                 ? 'bg-elevated text-accent shadow-xs'
                 : 'text-text-muted hover:text-foreground'
               }`}
-            title="Notebook Block Cards"
+             title="Blocks View"
           >
             <Layers size={11} />
-            <span>Cards</span>
+             <span>Blocks</span>
           </button>
         </div>
       </div>
 
-      {!hasMatchingFirstHeading && title?.trim() && (
+      {title?.trim() && (
         <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-foreground mb-6">
           {title}
         </h1>
       )}
 
       <div className="space-y-1">
-        <MarkdownRenderer markdown={derivedMarkdown} mode={previewMode} />
+        <MarkdownRenderer
+          markdown={derivedMarkdown}
+          mode={previewMode}
+          suppressFirstHeading={Boolean(title?.trim())}
+        />
       </div>
     </div>
   );

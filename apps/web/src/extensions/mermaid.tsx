@@ -1,8 +1,8 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import React, { useState, useEffect, useRef } from 'react';
-import DOMPurify from 'dompurify';
 import { GitGraph, Edit3, Check, RefreshCw } from 'lucide-react';
+import { sanitizeSvg } from '../components/reader/security.js';
 
 interface MermaidComponentProps {
   node: {
@@ -52,14 +52,14 @@ const MermaidComponent: React.FC<MermaidComponentProps> = ({ node, updateAttribu
         const { svg } = await mermaid.render(id, node.attrs.code);
 
         if (!isCancelled) {
-          // Sanitize SVG while allowing foreignObject and its HTML container elements so node labels render
-          const sanitized = DOMPurify.sanitize(svg, {
-            USE_PROFILES: { svg: true, svgFilters: true, html: true },
-            ADD_TAGS: ['foreignObject'],
-            ADD_ATTR: ['dominant-baseline'],
-          });
-          setSvgHtml(sanitized || svg);
-          setRenderError(null);
+           const sanitized = sanitizeSvg(svg);
+           if (!sanitized) {
+             setSvgHtml('');
+             setRenderError('Diagram output could not be rendered safely');
+           } else {
+             setSvgHtml(sanitized);
+             setRenderError(null);
+           }
         }
       } catch (err: any) {
         if (!isCancelled) {

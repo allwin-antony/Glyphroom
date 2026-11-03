@@ -352,6 +352,9 @@ describe('Phase C & E: Knowledge Catalog & Reader View Suite', () => {
     it('toggles between Flow and Notebook Blocks in ReaderView', async () => {
       const mockPostDetails = {
         ...mockPosts[0],
+        // Keep the fixture focused on block presentation; the reader's
+        // separate metadata title intentionally suppresses the first H1.
+        title: '',
         derivedMarkdown: '# Architecture Overview\n\nSystem paragraph.\n\n```typescript\nconst a = 1;\n```',
       };
 
@@ -373,7 +376,7 @@ describe('Phase C & E: Knowledge Catalog & Reader View Suite', () => {
       );
 
       await waitFor(() => {
-        expect(screen.getByTitle('Notebook Block Cards (.ipynb Mode)')).toBeDefined();
+        expect(screen.getByTitle('Blocks View')).toBeDefined();
       });
 
       // Default is Notebook Blocks: verify Block Title and cells appear
@@ -382,11 +385,11 @@ describe('Phase C & E: Knowledge Catalog & Reader View Suite', () => {
       expect(screen.getAllByText('Code Cell').length).toBeGreaterThan(0);
 
       // Toggle to Flow mode
-      const flowBtn = screen.getByTitle('Continuous Article Flow');
+      const flowBtn = screen.getByTitle('Document View');
       fireEvent.click(flowBtn);
 
       // Toggle back to Blocks
-      const blocksBtn = screen.getByTitle('Notebook Block Cards (.ipynb Mode)');
+      const blocksBtn = screen.getByTitle('Blocks View');
       fireEvent.click(blocksBtn);
       expect(screen.getAllByText('Block Title').length).toBeGreaterThan(0);
     });
