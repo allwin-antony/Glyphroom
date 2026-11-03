@@ -1,7 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import React from 'react';
-import { FileText, Download, ShieldCheck, ShieldAlert, Clock } from 'lucide-react';
+import { AttachmentCard, formatAttachmentBytes } from '../components/AttachmentCard.js';
 
 interface AttachmentComponentProps {
   node: {
@@ -15,15 +15,6 @@ interface AttachmentComponentProps {
     };
   };
   selected: boolean;
-}
-
-function formatBytes(bytes: number, decimals = 1): string {
-  if (bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const dm = decimals < 0 ? 0 : decimals;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
 }
 
 const AttachmentComponent: React.FC<AttachmentComponentProps> = ({ node, selected }) => {
@@ -42,43 +33,11 @@ const AttachmentComponent: React.FC<AttachmentComponentProps> = ({ node, selecte
           />
           <div className="flex items-center justify-between px-2 pt-1 text-[11px] text-text-muted">
             <span className="truncate">{fileName}</span>
-            <span>{formatBytes(fileSize)}</span>
+            <span>{formatAttachmentBytes(fileSize)}</span>
           </div>
         </div>
       ) : (
-        <div
-          className={`flex items-center justify-between p-3 rounded-xl border bg-surface transition-all ${
-            selected ? 'border-accent shadow-xs ring-1 ring-accent/20' : 'border-border shadow-xs'
-          }`}
-        >
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="p-2 rounded-lg bg-canvas border border-border text-accent shrink-0">
-              <FileText className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-              <div className="font-semibold text-xs text-foreground truncate max-w-sm">
-                {fileName}
-              </div>
-              <div className="flex items-center gap-2 text-[10px] text-text-muted mt-0.5">
-                <span>{formatBytes(fileSize)}</span>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1 font-medium text-status-success">
-                  <ShieldCheck className="w-3 h-3" />
-                  <span>Scan: Clean</span>
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <a
-            href={url}
-            download={fileName}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-elevated border border-border hover:bg-canvas text-foreground text-xs font-semibold shadow-xs shrink-0 transition-colors"
-          >
-            <Download className="w-3.5 h-3.5 text-accent" />
-            <span>Download</span>
-          </a>
-        </div>
+        <AttachmentCard fileName={fileName} fileSize={fileSize} mimeType={mimeType} url={url} scanStatus={scanStatus} selected={selected} />
       )}
     </NodeViewWrapper>
   );

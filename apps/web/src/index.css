@@ -317,6 +317,36 @@
   color: var(--text);
 }
 
+/* Reader tables intentionally share the same geometry and palette as the
+   editable TipTap table above, so Preview does not change the document's
+   visual structure. */
+.reader-table {
+  border-collapse: collapse;
+  table-layout: fixed;
+  width: 100%;
+  margin: 1.5rem 0;
+  overflow: hidden;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-strong);
+  color: var(--text);
+}
+
+.reader-table td,
+.reader-table th {
+  min-width: 1em;
+  border: 1px solid var(--border-strong);
+  padding: 6px 10px;
+  vertical-align: top;
+  box-sizing: border-box;
+  position: relative;
+  text-align: left;
+}
+
+.reader-table th {
+  font-weight: 600;
+  background-color: var(--code-bg);
+}
+
 .ProseMirror table .selectedCell:after {
   z-index: 2;
   position: absolute;
@@ -630,6 +660,4 @@ ul[data-type="taskList"] li[data-checked="true"] > div {
   color: var(--danger);
   background: color-mix(in srgb, var(--danger) 12%, transparent);
 }
-
-
 

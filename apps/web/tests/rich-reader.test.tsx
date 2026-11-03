@@ -532,7 +532,7 @@ describe('Rich Reader / Preview unified renderer (export grammar)', () => {
       const { container, queryByText } = render(<ReaderPreview prosemirrorDocJSON={doc} title="Report" />);
       expect(hasText(container, 'Report')).toBe(true);
       expect(hasText(container, 'See the table.')).toBe(true);
-      expect(container.querySelector('table')).not.toBeNull();
+      expect(container.querySelector('table.reader-table')).not.toBeNull();
       expect(queryByText('Draft is empty.')).toBeNull();
     });
 
@@ -559,8 +559,31 @@ describe('Rich Reader / Preview unified renderer (export grammar)', () => {
       expect(markdown.split('\n')).toHaveLength(5);
       expect(parseMarkdown(markdown).blocks[0]?.type).toBe('table');
       const { container } = render(<ReaderPreview prosemirrorDocJSON={doc} title="Table Test" />);
-      expect(container.querySelector('table')).not.toBeNull();
+      expect(container.querySelector('table.reader-table')).not.toBeNull();
       expect(container.textContent).toContain('ygou');
+    });
+
+    it('renders file attachments with the same download card in Preview', () => {
+      const doc = {
+        type: 'doc',
+        content: [{
+          type: 'fileAttachmentBlock',
+          attrs: {
+            fileName: 'Cloudflare.pdf',
+            fileSize: 64 * 1024,
+            mimeType: 'application/pdf',
+            url: '/api/v1/attachments/cloudflare-pdf',
+            scanStatus: 'clean',
+          },
+        }],
+      };
+
+      const { container } = render(<ReaderPreview prosemirrorDocJSON={doc} title="Attachments" />);
+      expect(container.querySelector('.reader-attachment-card')).not.toBeNull();
+      expect(container.textContent).toContain("Cloudflare.pdf");
+      expect(container.textContent).toContain('64 KB');
+      expect(container.textContent).toContain('Scan: Clean');
+      expect(container.querySelector('a[download="Cloudflare.pdf"]')).not.toBeNull();
     });
   });
 });

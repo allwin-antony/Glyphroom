@@ -13,6 +13,7 @@
 
 import { isAllowedUrl } from './security.js';
 import { normalizeMarkdownInput } from '@glyphroom/shared';
+import type { AttachmentCardData } from '../AttachmentCard.js';
 
 export interface InlineNode {
   type:
@@ -53,6 +54,7 @@ export interface BlockNode {
     | 'table'
     | 'hr'
     | 'statusBlock'
+    | 'attachment'
     | 'text';
   level?: 1 | 2 | 3 | 4 | 5 | 6;
   id?: string;
@@ -65,6 +67,7 @@ export interface BlockNode {
   rows?: string[][]; // table cells (raw text, pipes already unescaped)
   attrs?: StatusAttrs;
   text?: string;
+  attachment?: AttachmentCardData;
 }
 
 interface ListItem {
@@ -224,7 +227,7 @@ export interface ParseResult {
 }
 
 /** Parse a full Markdown document into presentation blocks. */
-export function parseMarkdown(markdown: string): ParseResult {
+export function parseMarkdown(markdown: string, attachments: AttachmentCardData[] = []): ParseResult {
   const normalized = normalizeMarkdownInput(markdown);
   const lines = normalized.split('\n');
   const blocks: BlockNode[] = [];
@@ -334,6 +337,20 @@ export function parseMarkdown(markdown: string): ParseResult {
       blocks.push({ type: 'statusBlock', attrs: parseStatusAttrs(sb[1]) });
       i++;
       continue;
+    }
+
+    // Attachment blocks are exported as ordinary Markdown links. When the
+    // source document is available, restore their rich card presentation.
+    const attachmentLink = line.trim().match(/^\[([^\]]+)\]\(([^)]+)\)$/);
+    if (attachmentLink) {
+      const attachment = attachments.find((item) => item.url === attachmentLink[2]);
+      if (attachment) {
+        flushPara();
+        flushList();
+        blocks.push({ type: 'attachment', attachment: { ...attachment, fileName: attachment.fileName || attachmentLink[1] } });
+        i++;
+        continue;
+      }
     }
 
     // --- Alerts > [!TYPE] ---

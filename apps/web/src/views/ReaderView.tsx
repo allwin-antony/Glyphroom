@@ -25,6 +25,7 @@ import {
 } from 'lucide-react';
 import { api } from '../lib/api.js';
 import { useAuth } from '../context/AuthContext.js';
+import type { AttachmentCardData } from '../components/AttachmentCard.js';
 
 interface PostDetails {
   id: string;
@@ -47,6 +48,7 @@ interface PostDetails {
   contentVersionId?: string | null;
   createdAt: string;
   updatedAt: string;
+  documentJson?: any;
 }
 
 interface CommentItem {
@@ -89,6 +91,25 @@ export const ReaderView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [isBookmarked, setIsBookmarked] = useState(false);
   const [isBookmarking, setIsBookmarking] = useState(false);
+
+  const attachments = useMemo<AttachmentCardData[]>(() => {
+    const result: AttachmentCardData[] = [];
+    const visit = (node: any) => {
+      if (!node || typeof node !== 'object') return;
+      if (node.type === 'fileAttachmentBlock' && node.attrs) {
+        result.push({
+          fileName: node.attrs.fileName || 'Attachment',
+          fileSize: Number(node.attrs.fileSize) || 0,
+          mimeType: node.attrs.mimeType || 'application/octet-stream',
+          url: node.attrs.url || '',
+          scanStatus: node.attrs.scanStatus || 'clean',
+        });
+      }
+      node.content?.forEach(visit);
+    };
+    visit(post?.documentJson);
+    return result;
+  }, [post?.documentJson]);
 
   // Comments state
   const [comments, setComments] = useState<CommentItem[]>([]);
@@ -605,6 +626,7 @@ export const ReaderView: React.FC = () => {
             <MarkdownRenderer
               markdown={rawMarkdown}
               mode={readerViewMode}
+              attachments={attachments}
               suppressFirstHeading={Boolean(post.title?.trim())}
             />
           </article>

@@ -2,6 +2,22 @@ import React, { useState } from 'react';
 import { exportDerivedMarkdown } from '@glyphroom/shared';
 import { BookOpen, FileText, Layers } from 'lucide-react';
 import { MarkdownRenderer, type ReaderMode } from '../components/reader/MarkdownRenderer.js';
+import type { AttachmentCardData } from './AttachmentCard.js';
+
+function findAttachments(node: any, result: AttachmentCardData[] = []): AttachmentCardData[] {
+  if (!node || typeof node !== 'object') return result;
+  if (node.type === 'fileAttachmentBlock' && node.attrs) {
+    result.push({
+      fileName: node.attrs.fileName || 'Attachment',
+      fileSize: Number(node.attrs.fileSize) || 0,
+      mimeType: node.attrs.mimeType || 'application/octet-stream',
+      url: node.attrs.url || '',
+      scanStatus: node.attrs.scanStatus || 'clean',
+    });
+  }
+  node.content?.forEach((child: any) => findAttachments(child, result));
+  return result;
+}
 
 export interface ReaderPreviewProps {
   prosemirrorDocJSON?: any;
@@ -87,10 +103,11 @@ export const ReaderPreview: React.FC<ReaderPreviewProps> = ({
       )}
 
       <div className="space-y-1">
-        <MarkdownRenderer
-          markdown={derivedMarkdown}
-          mode={previewMode}
-          suppressFirstHeading={Boolean(title?.trim())}
+          <MarkdownRenderer
+            markdown={derivedMarkdown}
+            mode={previewMode}
+            attachments={findAttachments(prosemirrorDocJSON)}
+            suppressFirstHeading={Boolean(title?.trim())}
         />
       </div>
     </div>

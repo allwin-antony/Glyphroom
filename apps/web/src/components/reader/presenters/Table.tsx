@@ -26,11 +26,11 @@ export const Table: React.FC<TableProps> = ({ block, mode }) => {
 
   const table = (
     <div className="overflow-x-auto my-4">
-      <table className="w-full text-sm text-text-secondary border-collapse border border-border">
+      <table className="reader-table">
         <thead>
           <tr>
             {header.map((cell, idx) => (
-              <th key={idx} className="border border-border bg-surface text-left text-xs font-semibold text-foreground p-2">
+              <th key={idx} scope="col">
                 {cell}
               </th>
             ))}
@@ -38,9 +38,9 @@ export const Table: React.FC<TableProps> = ({ block, mode }) => {
         </thead>
         <tbody>
           {body.map((row, rowIdx) => (
-            <tr key={rowIdx} className="text-xs">
+            <tr key={rowIdx}>
               {row.map((cell, cellIdx) => (
-                <td key={cellIdx} className="border border-border p-2 text-foreground">
+                <td key={cellIdx}>
                   {cell}
                 </td>
               ))}

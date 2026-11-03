@@ -26,6 +26,8 @@ import { MathBlock } from './presenters/MathBlock.js';
 import { StatusBlock } from './presenters/StatusBlock.js';
 import { HorizontalRule } from './presenters/HorizontalRule.js';
 import { Inline } from './presenters/Inline.js';
+import { Attachment } from './presenters/Attachment.js';
+import type { AttachmentCardData } from '../AttachmentCard.js';
 
 export type ReaderMode = 'flow' | 'block';
 
@@ -34,6 +36,7 @@ interface MarkdownRendererProps {
   mode?: ReaderMode;
   className?: string;
   suppressFirstHeading?: boolean;
+  attachments?: AttachmentCardData[];
 }
 
 function renderBlock(block: BlockNode, mode: ReaderMode, idx: number): React.ReactNode {
@@ -65,6 +68,8 @@ function renderBlock(block: BlockNode, mode: ReaderMode, idx: number): React.Rea
       return <MathBlock tex={block.tex ?? ''} displayMode key={key} className="my-4" />;
     case 'statusBlock':
       return <StatusBlock block={block} key={key} />;
+    case 'attachment':
+      return <Attachment block={block} key={key} />;
     case 'hr':
       return <HorizontalRule key={key} />;
     case 'text':
@@ -79,8 +84,9 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({
   mode = 'flow',
   className,
   suppressFirstHeading = false,
+  attachments = [],
 }) => {
-  const { blocks } = parseMarkdown(markdown);
+  const { blocks } = parseMarkdown(markdown, attachments);
   let suppressedFirstHeading = false;
   return (
     <div className={className}>
