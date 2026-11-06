@@ -135,6 +135,7 @@ export const CatalogQuerySchema = z.object({
     .optional(),
   coe: z.string().trim().min(1).max(255).optional(),
   coeId: z.string().uuid().optional(),
+  spaceId: z.string().uuid().optional(),
   status: z.union([CatalogStatusSchema, z.array(CatalogStatusSchema).min(1)])
     .transform((value) => [...new Set(Array.isArray(value) ? value : [value])])
     .optional(),
@@ -627,6 +628,7 @@ export const postRoutes: FastifyPluginAsync<{
     }
     if (query.coeId) filters.push(eq(posts.coeId, query.coeId));
     if (query.coe) filters.push(eq(centersOfExcellence.name, query.coe));
+    if (query.spaceId) filters.push(eq(posts.spaceId, query.spaceId));
     if (query.search) {
       const pattern = `%${escapeSearchTerm(query.search)}%`;
       filters.push(or(

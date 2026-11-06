@@ -4,6 +4,7 @@ import { createApiApp } from '../src/app.js';
 import { users, spaces, spaceMembers, posts, personalAccessTokens } from '../src/db/schema.js';
 import { eq } from 'drizzle-orm';
 import crypto from 'node:crypto';
+import * as Y from 'yjs';
 
 describe('Spaces, Access Model & MCP Bearer PAT Integration Suite', () => {
   let appInstance: any;
@@ -302,6 +303,42 @@ describe('Spaces, Access Model & MCP Bearer PAT Integration Suite', () => {
       headers: { cookie: authorAuth.cookie },
     });
     expect(JSON.parse(checkRes.body).post.isPromoted).toBe(true);
+  });
+
+  it('lists all authorized space pages with server-side filtering and pagination', async () => {
+    const authorAuth = createSessionCookie(authorUser);
+    const state = Buffer.from(Y.encodeStateAsUpdate(new Y.Doc()));
+    await db.insert(posts).values(Array.from({ length: 3 }, (_, index) => ({
+      title: `Paged Space Page ${index + 1}`,
+      slug: `paged-space-page-${index + 1}-${Date.now()}`,
+      status: 'draft' as const,
+      authorId: authorUser.id,
+      spaceId: testSpace.id,
+      visibility: 'space' as const,
+      yjsState: state,
+    })));
+
+    const first = await appInstance.app.inject({
+      method: 'GET',
+      url: `/api/v1/posts?spaceId=${testSpace.id}&page=1&limit=2&sort=title`,
+      headers: { cookie: authorAuth.cookie },
+    });
+    expect(first.statusCode).toBe(200);
+    expect(first.json()).toMatchObject({
+      posts: [{ title: 'Paged Space Page 1' }, { title: 'Paged Space Page 2' }],
+      pagination: { page: 1, limit: 2, total: 3, totalPages: 2, hasNextPage: true },
+    });
+
+    const second = await appInstance.app.inject({
+      method: 'GET',
+      url: `/api/v1/posts?spaceId=${testSpace.id}&page=2&limit=2&sort=title`,
+      headers: { cookie: authorAuth.cookie },
+    });
+    expect(second.statusCode).toBe(200);
+    expect(second.json()).toMatchObject({
+      posts: [{ title: 'Paged Space Page 3' }],
+      pagination: { page: 2, limit: 2, total: 3, totalPages: 2, hasNextPage: false },
+    });
   });
 
   it('5. Standalone Page Promotion: Author CAN self-promote an independent document', async () => {

@@ -15,6 +15,7 @@ import {
   X 
 } from 'lucide-react';
 import { api, ApiError } from '../../../lib/api.js';
+import { MarkdownRenderer } from '../../reader/MarkdownRenderer.js';
 import {
   Dialog,
   DialogContent,
@@ -215,26 +216,9 @@ export const VersionsTab: React.FC<VersionsTabProps> = ({ postId, ydoc, editor }
             </div>
           ) : (
             <>
-              <div className="max-h-56 overflow-y-auto p-3 bg-surface rounded-lg border border-border text-xs text-foreground space-y-2">
+              <div className="max-h-56 overflow-y-auto p-3 bg-surface rounded-lg border border-border text-xs text-foreground">
                 {snapshotContent ? (
-                  snapshotContent.split('\n').map((line, idx) => {
-                    if (line.startsWith('# ')) {
-                      return <h1 key={idx} className="text-base font-bold text-foreground border-b border-border pb-1">{line.slice(2)}</h1>;
-                    }
-                    if (line.startsWith('## ')) {
-                      return <h2 key={idx} className="text-sm font-bold text-foreground mt-2">{line.slice(3)}</h2>;
-                    }
-                    if (line.startsWith('### ')) {
-                      return <h3 key={idx} className="text-xs font-bold text-foreground mt-1.5">{line.slice(4)}</h3>;
-                    }
-                    if (line.startsWith('- ') || line.startsWith('* ')) {
-                      return <li key={idx} className="ml-4 list-disc text-text-secondary">{line.slice(2)}</li>;
-                    }
-                    if (!line.trim()) {
-                      return <div key={idx} className="h-1" />;
-                    }
-                    return <p key={idx} className="text-text-secondary leading-relaxed">{line}</p>;
-                  })
+                  <MarkdownRenderer markdown={snapshotContent} mode="flow" />
                 ) : (
                   <span className="text-text-muted italic">No content recorded.</span>
                 )}

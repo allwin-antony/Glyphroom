@@ -3,11 +3,15 @@ import type { HocuspocusProvider } from '@hocuspocus/provider';
 import { Check, Loader2, Radio, WifiOff } from 'lucide-react';
 import { cn } from '../../lib/utils.js';
 
-export type SaveStatusState = 'saved' | 'saving' | 'reconnecting' | 'offline';
+export type SaveStatusState = 'saved' | 'synced' | 'saving' | 'reconnecting' | 'offline' | 'failed';
 
 export interface SaveStatusBadgeProps {
   provider?: HocuspocusProvider | null;
   hasUnsavedChanges?: boolean;
+  /** A durable server checkpoint, rather than only WebSocket sync, was confirmed. */
+  durableSaveConfirmed?: boolean;
+  saveError?: string | null;
+  onRetry?: () => void;
   className?: string;
 }
 
@@ -27,9 +31,14 @@ function getProviderStatus(provider?: HocuspocusProvider | null): string | undef
 export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
   provider,
   hasUnsavedChanges = false,
+  durableSaveConfirmed = false,
+  saveError = null,
+  onRetry,
   className,
 }) => {
-  const [status, setStatus] = useState<SaveStatusState>('saved');
+  const [status, setStatus] = useState<SaveStatusState>(provider ? 'synced' : 'saved');
+
+  const settledStatus = () => durableSaveConfirmed ? 'saved' as const : 'synced' as const;
 
   useEffect(() => {
     // 1. Check offline status first
@@ -39,7 +48,7 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
 
     const handleOnline = () => {
       const currentStatus = getProviderStatus(provider);
-      setStatus(currentStatus === 'connected' ? (provider?.hasUnsyncedChanges ? 'saving' : 'saved') : 'reconnecting');
+      setStatus(currentStatus === 'connected' ? (provider?.hasUnsyncedChanges ? 'saving' : settledStatus()) : 'reconnecting');
     };
     const handleOffline = () => setStatus('offline');
 
@@ -62,7 +71,7 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
       } else if (wsStatus === 'connecting') {
         setStatus('reconnecting');
       } else if (wsStatus === 'connected') {
-        setStatus(provider.hasUnsyncedChanges ? 'saving' : 'saved');
+        setStatus(provider.hasUnsyncedChanges ? 'saving' : settledStatus());
       }
     };
 
@@ -70,7 +79,7 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
       if (state && !provider.hasUnsyncedChanges) {
         clearTimeout(saveDebounceTimer);
         saveDebounceTimer = setTimeout(() => {
-          setStatus('saved');
+          setStatus(settledStatus());
         }, 300);
       }
     };
@@ -82,7 +91,7 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
       } else {
         clearTimeout(saveDebounceTimer);
         saveDebounceTimer = setTimeout(() => {
-          setStatus('saved');
+          setStatus(settledStatus());
         }, 300);
       }
     };
@@ -96,7 +105,7 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
     if ((typeof navigator !== 'undefined' && !navigator.onLine) || currentStatus === 'disconnected') {
       setStatus('offline');
     } else if (currentStatus === 'connected') {
-      setStatus(provider.hasUnsyncedChanges ? 'saving' : 'saved');
+      setStatus(provider.hasUnsyncedChanges ? 'saving' : settledStatus());
     } else if (currentStatus === 'connecting') {
       setStatus('reconnecting');
     }
@@ -109,7 +118,15 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [provider]);
+  }, [provider, durableSaveConfirmed]);
+
+  useEffect(() => {
+    if (saveError) {
+      setStatus('failed');
+    } else if (status === 'failed') {
+      setStatus(provider?.hasUnsyncedChanges ? 'saving' : (provider ? settledStatus() : 'saved'));
+    }
+  }, [saveError, provider, status, durableSaveConfirmed]);
 
   // Fallback to prop override if external state triggers saving
   useEffect(() => {
@@ -124,6 +141,11 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
       icon: <Check className="w-3 h-3 text-status-success shrink-0" />,
       classes: 'bg-status-success/15 text-status-success border-status-success/30',
     },
+    synced: {
+      label: 'Synced',
+      icon: <Check className="w-3 h-3 text-status-info shrink-0" />,
+      classes: 'bg-status-info/15 text-status-info border-status-info/30',
+    },
     saving: {
       label: 'Saving...',
       icon: <Loader2 className="w-3 h-3 animate-spin text-status-info shrink-0" />,
@@ -136,6 +158,11 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
     },
     offline: {
       label: 'Offline',
+      icon: <WifiOff className="w-3 h-3 text-status-danger shrink-0" />,
+      classes: 'bg-status-danger/15 text-status-danger border-status-danger/30',
+    },
+    failed: {
+      label: 'Save failed',
       icon: <WifiOff className="w-3 h-3 text-status-danger shrink-0" />,
       classes: 'bg-status-danger/15 text-status-danger border-status-danger/30',
     },
@@ -155,6 +182,11 @@ export const SaveStatusBadge: React.FC<SaveStatusBadgeProps> = ({
     >
       {current.icon}
       <span>{current.label}</span>
+      {status === 'failed' && onRetry && (
+        <button type="button" onClick={onRetry} className="ml-1 underline underline-offset-2 hover:no-underline">
+          Retry
+        </button>
+      )}
     </div>
   );
 };

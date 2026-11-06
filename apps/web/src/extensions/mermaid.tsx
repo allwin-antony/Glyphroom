@@ -2,7 +2,7 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
 import React, { useState, useEffect, useRef } from 'react';
 import { GitGraph, Edit3, Check, RefreshCw } from 'lucide-react';
-import { sanitizeSvg } from '../components/reader/security.js';
+import { MERMAID_CONFIG, sanitizeSvg } from '../components/reader/security.js';
 
 interface MermaidComponentProps {
   node: {
@@ -41,12 +41,7 @@ const MermaidComponent: React.FC<MermaidComponentProps> = ({ node, updateAttribu
 
       try {
         const mermaid = (await import('mermaid')).default;
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'antiscript',
-          theme: 'neutral',
-          fontFamily: 'inherit',
-        });
+        mermaid.initialize(MERMAID_CONFIG);
 
         const id = `mermaid-${Math.random().toString(36).substring(2, 9)}`;
         const { svg } = await mermaid.render(id, node.attrs.code);

@@ -11,6 +11,7 @@ import { ReaderPreview } from '../src/components/ReaderPreview.js';
 import { parseMarkdown, parseInline } from '../src/components/reader/markdown.js';
 import { AuthContext, type AuthContextValue } from '../src/context/AuthContext.js';
 import { api } from '../src/lib/api.js';
+import { sanitizeSvg } from '../src/components/reader/security.js';
 
 vi.mock('../src/lib/api.js', () => ({
   api: { get: vi.fn(), post: vi.fn(), patch: vi.fn(), delete: vi.fn() },
@@ -311,6 +312,16 @@ describe('Rich Reader / Preview unified renderer (export grammar)', () => {
   });
 
   describe('MarkdownRenderer - rich blocks (Mermaid, math, status)', () => {
+    it('preserves Mermaid foreignObject labels while removing executable content', () => {
+      const clean = sanitizeSvg(
+        '<svg><foreignObject><div class="label">Gateway API</div><script>bad()</script></foreignObject></svg>'
+      );
+
+      expect(clean).toContain('Gateway API');
+      expect(clean).not.toMatch(/<script/i);
+      expect(clean).not.toMatch(/javascript:/i);
+    });
+
     it('renders Mermaid diagrams with strict sanitization and unique ids', async () => {
       const code = "graph TD\n  A-->B\n";
       const { container } = render(<MermaidBlock code={code} />);

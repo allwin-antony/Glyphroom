@@ -35,6 +35,7 @@ export const EditorView: React.FC = () => {
   const [postStatus, setPostStatus] = useState<'draft' | 'in_review' | 'approved' | 'published' | 'changes_requested'>('draft');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [titleSaveError, setTitleSaveError] = useState<string | null>(null);
 
   // Editor instance, view mode, and provider state
   const [viewMode, setViewMode] = useState<'document' | 'block' | 'preview'>(() => {
@@ -79,6 +80,10 @@ export const EditorView: React.FC = () => {
     titleSaveRef.current = save;
     try {
       await promise;
+      if (pendingTitleRef.current === pending) setTitleSaveError(null);
+    } catch (error: any) {
+      if (pendingTitleRef.current === pending) setTitleSaveError(error?.message || 'Title save failed.');
+      throw error;
     } finally {
       if (titleSaveRef.current === save) titleSaveRef.current = null;
     }
@@ -224,6 +229,7 @@ export const EditorView: React.FC = () => {
   // 5. Handle Title Editing with debounced PATCH
   const handleTitleChange = (newTitle: string) => {
     setTitle(newTitle);
+    setTitleSaveError(null);
     if (titleTimerRef.current) clearTimeout(titleTimerRef.current);
     if (!postId || !user) return;
     pendingTitleRef.current = { postId, userId: user.userId, title: newTitle };
@@ -317,7 +323,12 @@ export const EditorView: React.FC = () => {
           <WordCountIndicator editor={editor} className="hidden lg:flex" />
 
           {/* Real-time Save Status Badge */}
-          <SaveStatusBadge provider={provider} />
+          <SaveStatusBadge
+            provider={provider}
+            durableSaveConfirmed={false}
+            saveError={titleSaveError}
+            onRetry={() => { void savePendingTitle(postId).catch(() => {}); }}
+          />
 
           {/* AI Agent Presence Chip */}
           <AgentPresenceChip provider={provider} />

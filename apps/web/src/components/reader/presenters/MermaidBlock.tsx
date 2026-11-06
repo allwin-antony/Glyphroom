@@ -15,7 +15,7 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import DOMPurify from 'dompurify';
-import { sanitizeSvg } from '../security.js';
+import { MERMAID_CONFIG, sanitizeSvg } from '../security.js';
 
 interface MermaidBlockProps {
   code: string;
@@ -63,12 +63,7 @@ export const MermaidBlock: React.FC<MermaidBlockProps> = ({ code, className }) =
       }
 
       try {
-        mermaid.initialize({
-          startOnLoad: false,
-          securityLevel: 'strict',
-          theme: 'neutral',
-          fontFamily: 'inherit',
-        });
+        mermaid.initialize(MERMAID_CONFIG);
         const id = `mermaid-${localInstance}-${seq}`;
         const { svg: raw } = await mermaid.render(id, code);
         if (cancelled || seq !== renderSeq.current || !mounted.current) return;

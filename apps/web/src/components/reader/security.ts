@@ -40,9 +40,20 @@ export function safeUrl(url: unknown): string {
 
 /** DOMPurify config for Mermaid SVG output. SVG profile only, no raw-SVG fallback. */
 export const DOMPURIFY_SVG_CONFIG = {
-  USE_PROFILES: { svg: true, svgFilters: true },
-  ADD_TAGS: ['foreignObject'],
+  // Mermaid flowchart and sequence labels may be emitted as HTML inside an
+  // SVG foreignObject. Keep that label content while still sanitizing the
+  // complete SVG document.
+  USE_PROFILES: { svg: true, svgFilters: true, html: true },
+  ADD_TAGS: ['foreignObject', 'div', 'span', 'p', 'br'],
   ADD_ATTR: ['dominant-baseline'],
+};
+
+/** One Mermaid configuration shared by editor and read-only rendering. */
+export const MERMAID_CONFIG = {
+  startOnLoad: false,
+  securityLevel: 'strict' as const,
+  theme: 'neutral' as const,
+  fontFamily: 'inherit',
 };
 
 /** Sanitize Mermaid SVG. Returns '' when sanitization yields nothing (never raw SVG). */
@@ -50,7 +61,25 @@ export function sanitizeSvg(svg: unknown): string {
   if (typeof svg !== 'string' || !svg.trim()) return '';
   const clean = DOMPurify.sanitize(svg, DOMPURIFY_SVG_CONFIG);
   if (!clean || typeof clean !== 'string' || !clean.trim()) return '';
-  return clean;
+
+  // DOMPurify sanitizes the complete document in SVG namespace, which keeps
+  // foreignObject but drops its nested HTML label nodes. Mermaid uses those
+  // nodes for many flowchart and sequence labels. Sanitize each original
+  // label as HTML, then put only that safe content back into the corresponding
+  // foreignObject retained by the SVG sanitizer.
+  const originalLabels = Array.from(svg.matchAll(/<foreignObject\b[^>]*>([\s\S]*?)<\/foreignObject>/gi));
+  if (originalLabels.length === 0) return clean;
+
+  let labelIndex = 0;
+  return clean.replace(
+    /(<foreignObject\b[^>]*>)([\s\S]*?)(<\/foreignObject>)/gi,
+    (whole, opening, _content, closing) => {
+      const source = originalLabels[labelIndex++]?.[1];
+      if (source === undefined) return whole;
+      const safeLabel = DOMPurify.sanitize(source, DOMPURIFY_HTML_CONFIG);
+      return `${opening}${safeLabel}${closing}`;
+    },
+  );
 }
 
 /** DOMPurify config for KaTeX-produced HTML (defence-in-depth). */

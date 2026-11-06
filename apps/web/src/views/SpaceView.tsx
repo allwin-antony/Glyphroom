@@ -94,9 +94,22 @@ export const SpaceView: React.FC = () => {
         setMembers(memRes.members || []);
       }
 
-      // Fetch posts for this space
-      const postsRes = await api.get<{ posts: SpacePost[] }>('/posts');
-      const spacePages = (postsRes.posts || []).filter((p: any) => p.spaceId === res.space.id);
+      // Fetch every authorized page for this space. The catalog endpoint
+      // applies the space filter before pagination, so older pages cannot be
+      // hidden by the default catalog limit or leaked from another space.
+      const spacePages: SpacePost[] = [];
+      let page = 1;
+      let hasNextPage = true;
+      while (hasNextPage) {
+        const postsRes = await api.get<{
+          posts: SpacePost[];
+          pagination?: { hasNextPage: boolean };
+        }>(`/posts?spaceId=${encodeURIComponent(res.space.id)}&page=${page}&limit=100`);
+        if (!postsRes.pagination) throw new Error('Unable to verify the complete Space document list.');
+        spacePages.push(...(postsRes.posts || []));
+        hasNextPage = postsRes.pagination.hasNextPage;
+        page += 1;
+      }
       setPosts(spacePages);
     } catch (err: any) {
       console.error('Failed to load space:', err);

@@ -291,6 +291,26 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
       render(<SaveStatusBadge provider={mockProvider} />);
       expect(screen.getByText('Reconnecting...')).toBeDefined();
     });
+
+    it('labels transport synchronization separately from durable saving', () => {
+      const mockProvider: any = {
+        status: 'connected',
+        hasUnsyncedChanges: false,
+        on: vi.fn(),
+        off: vi.fn(),
+      };
+      render(<SaveStatusBadge provider={mockProvider} />);
+      expect(screen.getByText('Synced')).toBeDefined();
+      expect(screen.queryByText('Saved ✓')).toBeNull();
+    });
+
+    it('shows a retry action when metadata persistence fails', () => {
+      const retry = vi.fn();
+      render(<SaveStatusBadge saveError="Title save failed" onRetry={retry} />);
+      expect(screen.getByText('Save failed')).toBeDefined();
+      fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+      expect(retry).toHaveBeenCalledOnce();
+    });
   });
 
   describe('Feature 22: AI Agent Presence Chip (AgentPresenceChip)', () => {
@@ -493,6 +513,55 @@ describe('Milestone M2: Live Collaborative Editor Integration Suite', () => {
         expect(screen.getByText('Published Snapshot')).toBeDefined();
         expect(screen.getByText('v1')).toBeDefined();
         expect(screen.getByText('Review Submission')).toBeDefined();
+      });
+    });
+
+    it('renders rich version snapshots through the shared reader renderer', async () => {
+      (api.get as any)
+        .mockResolvedValueOnce({
+          versions: [{
+            id: 'ver-rich',
+            postId: 'post-1',
+            versionNumber: 3,
+            triggerReason: 'manual_save',
+            createdAt: '2026-10-24T12:00:00Z',
+            createdBy: 'user-1',
+            authorName: 'Lead Architect',
+          }],
+        })
+        .mockResolvedValueOnce({
+          version: {
+            id: 'ver-rich',
+            versionNumber: 3,
+            markdownSnapshot: [
+              '# Snapshot',
+              '',
+              'A rich version preview.',
+              '',
+              '| A | B |',
+              '| --- | --- |',
+              '| One | Two |',
+              '',
+              '```typescript',
+              'const answer = 42;',
+              '```',
+              '',
+              '> [!TIP]',
+              '> Keep the checkpoint readable.',
+            ].join('\n'),
+          },
+        });
+
+      render(<VersionsTab postId="post-1" />);
+
+      await waitFor(() => expect(screen.getByText('v3')).toBeDefined());
+      fireEvent.click(screen.getByText('v3'));
+
+      await waitFor(() => {
+        expect(screen.getByText('Snapshot')).toBeDefined();
+        expect(screen.getByRole('table')).toBeDefined();
+        expect(screen.getByText('const answer = 42;')).toBeDefined();
+        expect(screen.getByText('Keep the checkpoint readable.')).toBeDefined();
       });
     });
   });
